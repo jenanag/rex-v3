@@ -20,7 +20,7 @@ after and only wires the finished tools together.
 to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the superseded
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
 Phase 1 was completed on 2026-11-22. Phase 2 has started. Jay accepted ADRs 0025
-and 0026 on 2026-11-22. Jay accepted ADR 0027 on 2026-11-23.
+and 0026 on 2026-11-22. Jay accepted ADR 0027 and ADR 0028 on 2026-11-23.
 Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
 
 - [README](../README.md), [architecture](architecture.md), [conventions](conventions.md),
@@ -290,14 +290,18 @@ template, 1.5 lane) with their done criteria above.
 [Direct smoke check](services/schema-generator.md#direct-smoke-check) ·
 [Request body decision](services/schema-generator.md#limits).
 
+[ADR 0028](adr/0028-llms-txt-generator-language.md), accepted by Jay on 2026-11-23,
+selects TypeScript for `llms-txt-generator`. Scaffolding is the next step for this tool.
+
 Built in this order, each started with its language ADR and `scripts/new-tool --lang
 <language>` and finished (definition of done below) before the next one starts. The order goes from no LLM to
 LLM-heavy, so the template is hardened on the simple tools first:
 
 1. `schema-generator`: language ADR (TypeScript), then JSON-LD generation and validation from data, HTML or JSON-LD
    (no LLM, no network).
-2. `llms-txt-generator`: language ADR (TypeScript), then validation, then generation with the `extractive`
-   summarizer; the `llm` summarizer last.
+2. `llms-txt-generator`: language ADR (TypeScript), then `validateLlmsTxt`, followed by
+   deterministic file assembly and extractive page descriptions, with LLM-assisted page
+   descriptions last through the tool's LLM adapter.
 3. `content-auditor`: language ADR (TypeScript), then page audit and crawler access check, using the vendored
    `ai-crawlers.yaml` (no LLM).
 4. `citation-extractor`: language ADR (TypeScript), then sources and inline links from answer text (no LLM, no
