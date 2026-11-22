@@ -251,9 +251,9 @@ Deliverables (GitHub Actions, reusable workflows):
 - `jscpd`: one run across all languages; per-folder threshold 3 % and 50 tokens;
   cross-tool run that ignores files listed in `.template.json`, `contract/**`, test
   fixtures and reports any clone of domain code.
-- Branch protection: require the CI workflow's `Required` check on `main`. It
-  collects the contract, matrix, portability and duplication results. Enable it in
-  the GitHub branch rules once the remote exists and the check has run.
+- The CI workflow's `Required` check collects the contract, matrix, portability,
+  and duplication results. Follow the [Git workflow](../AGENTS.md#git-workflow)
+  before merging to `main`.
 
 The workflow selects the matrix with `scripts/tool-ci matrix --base <commit-sha>`.
 The same comparison scopes `scripts/tool-ci duplicates --base <commit-sha>`.

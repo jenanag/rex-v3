@@ -92,6 +92,11 @@ Breaking one of these fails review even if CI is green.
 | Why something is the way it is | [ADR index](docs/adr/README.md) |
 | An open question | [deferred decisions](docs/roadmap.md#deferred-decisions) |
 
+## Git workflow
+
+Work on a branch and open a pull request. Merge to `main` only when CI is green.
+Never force-push or delete `main`.
+
 ## Commands
 
 ### Works today (Phase 1)

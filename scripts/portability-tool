@@ -25,8 +25,8 @@ git -C "$root" archive HEAD "services/$tool" |
   tar -x -C "$scratch/$tool" --strip-components=2
 cd "$scratch/$tool"
 export REX_TOOL_NPM_CACHE="$scratch/npm-cache"
-NPM_CONFIG_CACHE="$REX_TOOL_NPM_CACHE" NPM_CONFIG_USERCONFIG=/dev/null \
-  NPM_CONFIG_GLOBALCONFIG=/dev/null npm ci --no-audit --no-fund
+NPM_CONFIG_CACHE="$REX_TOOL_NPM_CACHE" NPM_CONFIG_USERCONFIG="$REX_TOOL_NPM_CACHE/user.npmrc" \
+  NPM_CONFIG_GLOBALCONFIG="$REX_TOOL_NPM_CACHE/global.npmrc" npm ci --no-audit --no-fund
 "$root/scripts/offline-tool" npm run build
 "$root/scripts/offline-tool" npm test
 
