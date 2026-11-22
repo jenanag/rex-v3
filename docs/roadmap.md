@@ -19,7 +19,8 @@ after and only wires the finished tools together.
 **Status:** Phase 0 (docs and contracts) was accepted by Jay on 2026-11-22. ADRs 0001
 to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the superseded
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
-Phase 1 was completed on 2026-11-22. Docs and contracts change at Jay’s request.
+Phase 1 was completed on 2026-11-22. Phase 2 has started. Jay accepted ADRs 0025
+and 0026 on 2026-11-22. Docs and contracts change at Jay’s request.
 A new ADR amends or supersedes an Accepted decision.
 
 - [README](../README.md), [architecture](architecture.md), [conventions](conventions.md),
@@ -58,7 +59,7 @@ validates on its own; Jay has reviewed and the ADRs are moved from Proposed to A
 
 ## Phase 1: Tool factory: contracts vendoring, tool template, portability CI
 
-**Current phase:** 1 (done 2026-11-22)
+**Completed:** 2026-11-22
 
 The TypeScript spike is recorded in [Accepted ADR 0020](adr/0020-fastify-openapi-validation.md).
 
@@ -172,8 +173,8 @@ Deliverables:
 Done when (per spike): the same table of 25 request cases (valid and invalid, one per
 feature above, shared as a JSON file by all three spikes) gives the expected 200 or 400
 with correct pointers on the chosen option; a valid response fails contract validation
-when a required field is removed, and its ADR is accepted. TypeScript validation
-budget tuning is deferred until tools can be measured ([ADR 0020](adr/0020-fastify-openapi-validation.md)).
+when a required field is removed, and its ADR is accepted. [ADR 0026](adr/0026-typescript-validation-budget.md)
+sets the TypeScript validation budget.
 The Python and Go bring-up spikes use the budgets in [ADR 0024](adr/0024-per-tool-language.md). Each spike is a gate: the first tool in its
 language starts only after it passes. A Python or Go spike that fails, with its fallback
 too, leaves that tool in TypeScript (its tool ADR says so); ADR 0020 is required for
@@ -279,6 +280,11 @@ Go parts are written down as bring-up checklists (1.2 generator, 1.3 spike, 1.4
 template, 1.5 lane) with their done criteria above.
 
 ## Phase 2: Tool services, one at a time, each built and tested in isolation
+
+**Current phase:** 2
+
+[ADR 0025](adr/0025-schema-generator-language.md) selects TypeScript for
+`schema-generator`. Scaffolding awaits Jay's decision on the request body limit.
 
 Built in this order, each started with its language ADR and `scripts/new-tool --lang
 <language>` and finished (definition of done below) before the next one starts. The order goes from no LLM to

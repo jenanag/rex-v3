@@ -7,6 +7,24 @@ except ImportError:
 import re,glob,json,hashlib,subprocess
 R=os.path.abspath(os.environ.get('REX',REPO)); os.chdir(R)
 errs=[];warn=[]
+SCAN_EXCLUDES = {'node_modules', '.git', '.venv', 'dist'}
+
+def scan_walk(root, *, include_hidden=False):
+    for directory, subdirs, files in os.walk(root):
+        subdirs[:] = [
+            name for name in subdirs
+            if name not in SCAN_EXCLUDES and (include_hidden or not name.startswith('.'))
+        ]
+        yield directory, files
+
+def scan_files(root):
+    return [
+        os.path.normpath(os.path.join(directory, name))
+        for directory, files in scan_walk(root)
+        for name in files
+        if not name.startswith('.')
+    ]
+
 TOOLS=['engine-query','answer-analysis','citation-extractor','content-auditor','schema-generator','llms-txt-generator']
 FUTURE_TOOLS=['notifier','report-renderer','query-discovery','content-rewriter','entity-optimizer','ai-traffic-analyzer']
 KIND={'gateway':'gateway','orchestrator':'orchestrator','workers':'workers',**{t:'tool' for t in TOOLS+FUTURE_TOOLS},'content-extractor':'external','sitemap-extractor':'external','seo-auditor':'external','data-aggregator':'external'}
@@ -46,8 +64,20 @@ def collect_props(sp,sch,seen=None):
         for x in sch.get(k,[]): out|=collect_props(sp,x,seen)
     return out
 # 1 service dirs
-if sorted(os.listdir('packages/contracts/openapi/services'))!=sorted(f'{x}.yaml' for x in SPEC_SVCS): errs.append(f'contract sources {sorted(os.listdir("packages/contracts/openapi/services"))}')
-for d in (os.listdir('services') if os.path.isdir('services') else []):
+spec_entries = sorted(
+    entry.name for entry in os.scandir('packages/contracts/openapi/services')
+    if not (entry.name in SCAN_EXCLUDES and entry.is_dir())
+)
+if spec_entries!=sorted(f'{x}.yaml' for x in SPEC_SVCS): errs.append(f'contract sources {spec_entries}')
+service_dirs = [
+    entry.name for entry in os.scandir('services')
+    if entry.name not in SCAN_EXCLUDES and entry.is_dir()
+] if os.path.isdir('services') else []
+service_agents = sorted(
+    f'services/{name}/AGENTS.md' for name in service_dirs
+    if not name.startswith('.') and os.path.isfile(f'services/{name}/AGENTS.md')
+)
+for d in service_dirs:
     if d not in SERVICES and d!='_template': errs.append(f'services/{d}: unknown service folder')
 for t in TOOLS:
     if not os.path.isdir(f'services/{t}'): errs.append(f'services/{t}: tool folder (vendored contract) missing')
@@ -255,10 +285,13 @@ for t in TOOLS:
             if f not in props: errs.append(f'policy {t}.{oid}: normalize field {f} not in request')
         for x in o.get('extraKeyInputs',[]):
             if x not in EXTRA_OK: errs.append(f'policy {t}.{oid}: unknown extraKeyInput {x}')
-md=[f for f in glob.glob('**/*.md',recursive=True)]
+repo_files = scan_files('.')
+md = [f for f in repo_files if f.endswith('.md')]
+yaml_files = [f for f in repo_files if f.endswith('.yaml')]
+contract_yaml = [f for f in yaml_files if f.startswith('packages/contracts/')]
 SUPERSEDED=['docs/adr/0003-postgres-schema-per-service.md','docs/adr/0004-redis-bullmq-queues.md','docs/adr/0005-auth.md','docs/adr/0008-event-contracts.md']
 KEYDERIV=re.compile(r'RFC 8785|SHA-256|\bJCS\b|sha256')
-for f in md+glob.glob('**/*.yaml',recursive=True):
+for f in md+yaml_files:
     if f=='packages/contracts/cache/policy.yaml': continue
     for mm in KEYDERIV.finditer(open(f).read()): errs.append(f'{f}: cache key derivation restated ({mm.group(0)}); link policy.yaml instead')
 PRECEDENCE=re.compile(r'(customer|tenant|org)[^\n|]{0,60}>\s*(the\s+)?(environment|env)\b|(environment|env)\s*>\s*(policy|default)|t-\{orgId')
@@ -335,7 +368,6 @@ for n,cs in matched.items():
 PLANNED={'notification','report-render','query-discovery','content-rewrite','entity-audit','traffic-classification'}
 MSG=re.compile(r'`([a-z][a-z-]*)\.(requested|completed|failed)(\.[a-z{}<>-]+)?`')
 SUPERSEDED=['docs/adr/0003-postgres-schema-per-service.md','docs/adr/0004-redis-bullmq-queues.md','docs/adr/0005-auth.md','docs/adr/0008-event-contracts.md']
-md=[f for f in glob.glob('**/*.md',recursive=True)]
 for f in md+glob.glob('packages/contracts/openapi/services/*.yaml'):
     if f in SUPERSEDED: continue
     for j,k,_ in MSG.findall(open(f).read()):
@@ -344,7 +376,7 @@ for f in md+glob.glob('packages/contracts/openapi/services/*.yaml'):
 STALE=re.compile(r'(?<![A-Z_])REDIS_URL` only in the gateway|Redis only at the edge|retryTiers|retry tiers?\b|the only Redis user|prompt-tracker|citation-tracker|ai-traffic-analytics|BullMQ|Redis Streams|services/accounts|accounts service|`scheduler`|packages/queue|packages/events|gatewayPrefixes|usage\.recorded|answer\.captured|prompt_run\.|events\.[a-z_.]+\.v1|tools/scripts|_tool-template|packages/(sdk|http|auth|config|observability|llm-clients|scraper|db-client|ui)\b|REX_JWT_PUBLIC_KEYS')
 # history and rename notes may name v1 terms
 ALLOW_STALE=SUPERSEDED+['docs/adr/0009-stateless-tool-services.md','docs/adr/0011-rabbitmq-bus.md','docs/adr/README.md','docs/services/engine-query.md','docs/services/citation-extractor.md']
-for f in md+glob.glob('**/*.yaml',recursive=True):
+for f in md+yaml_files:
     if f in ALLOW_STALE: continue
     for mm in STALE.finditer(open(f).read()): errs.append(f'{f}: stale v1 term {mm.group(0)!r}')
 # 9 links + anchors
@@ -448,9 +480,9 @@ if 'content-auditor' in man['services'] and not any(e['from']=='data/ai-crawlers
 r=subprocess.run([sys.executable,os.path.join(HERE,'vendor.py'),R,'--check','--phase',str(CURRENT_PHASE)],capture_output=True,text=True)
 if r.returncode: errs+= [l for l in r.stdout.strip().split('\n') if l]
 REL=re.compile(r'(?<![\w.])((?:\.\./)+)[\w./-]*')
-for t in os.listdir('services') if os.path.isdir('services') else []:
+for t in service_dirs:
     base=os.path.realpath(f'services/{t}')
-    for dp,_,fns in os.walk(f'services/{t}'):
+    for dp,fns in scan_walk(f'services/{t}', include_hidden=True):
         for fn in fns:
             f=os.path.join(dp,fn); txt=open(f,errors='ignore').read()
             for mm in REL.finditer(txt):
@@ -540,7 +572,7 @@ for c in planned:
     tok=c.split()
     if os.path.exists(tok[0]): errs.append(f'AGENTS.md lists as planned a command that exists now (move it to "Works today"): {tok[0]}')
     if f'`{tok[0]}' not in p1txt and tok[0] not in p1txt: errs.append(f'AGENTS.md planned command {tok[0]} is not a roadmap Phase 1 deliverable')
-agent_files=([AG] if ag else [])+sorted(glob.glob('services/*/AGENTS.md'))
+agent_files=([AG] if ag else [])+service_agents
 for f in agent_files:
     for i,l in enumerate(open(f).read().splitlines(),1):
         for sc in [x.rstrip('.') for x in re.findall(r'scripts/[a-z0-9.-]+',l)]:
@@ -626,7 +658,7 @@ if os.path.exists('scripts/vendor-contracts-phase0.sh') and os.environ.get('REX_
     r=subprocess.run(['bash','scripts/vendor-contracts-phase0.sh','--check'],capture_output=True,text=True)
     if r.returncode: errs+= ['vendor-contracts-phase0.sh --check: '+l for l in r.stdout.strip().split('\n') if l]
 # every scripts/<name> mentioned anywhere exists or is planned in the roadmap
-for f in md+([AG] if ag else [])+glob.glob('packages/contracts/**/*.yaml',recursive=True):
+for f in md+([AG] if ag else [])+contract_yaml:
     if f in SUPERSEDED or not os.path.exists(f): continue
     for sc in set(x.rstrip('.') for x in re.findall(r'scripts/[a-z0-9.-]+[a-z0-9]',open(f).read())):
         if not os.path.exists(sc) and sc not in rm: errs.append(f'{f}: {sc} neither exists nor is planned in the roadmap')
@@ -790,11 +822,12 @@ if not ext_nodes: errs.append('architecture service map lacks the content-extrac
 _cv12=flat(open('docs/conventions.md').read())
 if not all(f'`{v_}`' in _cv12 for v_ in EXT_ENV.values()) or 'exist only in workers' not in _cv12: errs.append('conventions §12 must say CONTENT_EXTRACTOR_URL, DATA_AGGREGATOR_URL and SEO_AUDITOR_URL exist only in workers')
 _envok=('docs/services/workers.md','docs/architecture.md','docs/roadmap.md','docs/conventions.md','docs/dry-rule.md')+tuple(f'docs/services/{e_}.md' for e_ in EXT_ALL)+tuple(glob.glob('docs/adr/002[123]-*.md'))
-for f in md+glob.glob('packages/contracts/**/*.yaml',recursive=True)+glob.glob('services/**/*',recursive=True):
-    if os.path.isdir(f) or f.endswith(('.png','.jpg')) or f in _envok: continue
-    t=open(f).read()
+for f in md+contract_yaml+[f for f in repo_files if f.startswith('services/')]:
+    if f.endswith(('.png','.jpg')) or f in _envok: continue
+    with open(f, 'rb') as source:
+        contents = source.read()
     for e_,v_ in EXT_ENV.items():
-        if v_ in t: errs.append(f'{f}: {v_} outside workers')
+        if v_.encode('ascii') in contents: errs.append(f'{f}: {v_} outside workers')
 _wk=open('docs/services/workers.md').read()
 for e_,v_ in EXT_ENV.items():
     if v_ not in _wk: errs.append(f'workers doc lacks {v_}')
@@ -1035,7 +1068,7 @@ if re.search(r'^\| sitemap-extractor deployment',_lr,re.M|re.I): errs.append('ro
 # wording: services fetch and extract; workers only call them
 _WP=re.compile(r"\bworkers?'?s?\b[^.\n|;:]{0,20}?\b(extracts?|extracting|extracted|fetch|fetches|fetching|fetched|crawls?)\b",re.I)
 _WN=re.compile(r"\b(never|not|no|nor|only call|only makes|without|instead)\b",re.I)
-_wf=[f_ for f_ in glob.glob('docs/**/*.md',recursive=True) if not f_.startswith('docs/adr/') or re.match(r'docs/adr/002[23]-',f_)]+['AGENTS.md','README.md']+glob.glob('packages/contracts/**/*.yaml',recursive=True)+glob.glob('services/*/AGENTS.md')
+_wf=[f_ for f_ in md if f_.startswith('docs/') and (not f_.startswith('docs/adr/') or re.match(r'docs/adr/002[23]-',f_))]+['AGENTS.md','README.md']+contract_yaml+service_agents
 for f_ in _wf:
     for sn in re.split(r'(?<=[.;!?])\s+|\s-\s|\|',flat(rd(f_))):
         if _WP.search(sn) and not _WN.search(sn): errs.append(f'{f_}: says a worker extracts or fetches ("{sn.strip()[:80]}"); the service does, the worker only calls it')

@@ -1,9 +1,8 @@
 # AGENTS.md: start here (coding agents)
 
-The canonical entry point for any coding agent (Cursor, Claude Code, Codex, Copilot,
-...). `CLAUDE.md`, `.cursor/rules/rex.mdc` and `.github/copilot-instructions.md` only
-point here. This file links to the docs instead of restating them; when a link and
-this file disagree, the linked doc wins, and you should flag the mismatch.
+The canonical entry point for any coding agent (Cursor, Claude Code, Codex, Copilot, ...).
+`CLAUDE.md`, `.cursor/rules/rex.mdc` and `.github/copilot-instructions.md` only point here. This file links
+to the docs instead of restating them; when a link and this file disagree, the linked doc wins, and you should flag the mismatch.
 
 ## What REx is
 
@@ -13,12 +12,13 @@ page); one stateful **orchestrator** owns all data; stateless **workers** chain 
 through a self-hosted RabbitMQ bus; a thin **gateway** sits at the edge. Details:
 [README](README.md), [architecture](docs/architecture.md).
 
-**Current phase:** 1
+**Current phase:** 2
 
 **Status:** Phase 0 (docs and contracts) was accepted by Jay on 2026-11-22. ADRs 0001
 to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the superseded
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
-Phase 1 was completed on 2026-11-22. Docs and contracts change at Jay’s request.
+Phase 1 was completed on 2026-11-22. Phase 2 has started. Jay accepted ADRs 0025
+and 0026 on 2026-11-22. Docs and contracts change at Jay’s request.
 A new ADR amends or supersedes an Accepted decision.
 
 See the [roadmap](docs/roadmap.md) for the build order and review gates.
@@ -38,9 +38,8 @@ Breaking one of these fails review even if CI is green.
    callers own retries ([conventions §16](docs/conventions.md#16-tool-portability)).
    Tools never touch the network except LLM APIs: only workers call the external
    services (content-extractor, sitemap-extractor, data-aggregator, seo-auditor), no
-   service touches the bus, and only external
-   services read websites; the orchestrator, gateway and tools never do
-   ([ADR 0021](docs/adr/0021-content-extraction.md),
+   service touches the bus, and only external services read websites; the
+   orchestrator, gateway and tools never do ([ADR 0021](docs/adr/0021-content-extraction.md),
    [ADR 0022](docs/adr/0022-page-archive.md)).
 3. **No imports outside a tool's folder**, not even types or test helpers.
 4. **No `workspace:`, `file:`, `link:` or `portal:` dependencies and no `@rex/*`
@@ -94,8 +93,7 @@ Breaking one of these fails review even if CI is green.
 
 ## Git workflow
 
-Work on a branch and open a pull request. Merge to `main` only when CI is green.
-Never force-push or delete `main`.
+Work on a branch and open a pull request. Merge to `main` only when CI is green. Never force-push or delete `main`.
 
 ## Commands
 
@@ -118,8 +116,7 @@ scripts/checks/run-all.sh --negative      # plus its eight negative suites (GNU 
 ```
 
 For contract changes, edit the source in `packages/contracts`, run both validators,
-regenerate vendored files and docs, then run the checks. See the
-[contracts README](packages/contracts/README.md).
+regenerate vendored files and docs, then run the checks. See the [contracts README](packages/contracts/README.md).
 
 The TypeScript tool factory lives in `services/_template`. Its commands are:
 
@@ -191,8 +188,7 @@ Today a tool folder contains only `AGENTS.md` and its vendored `contract/`.
    **Accepted** and is never rewritten, so write a new ADR that amends or supersedes it
    and add a dated "Amended by NNNN" or "Superseded by NNNN" line to the old ADR's
    header (nothing else in it changes). A **Proposed** ADR may still be amended in place
-   with a dated "Amended" line. Agents never change an ADR's status
-   ([authority](docs/adr/README.md)).
+   with a dated "Amended" line. Agents never change an ADR's status ([authority](docs/adr/README.md)).
 
 ## When unsure
 

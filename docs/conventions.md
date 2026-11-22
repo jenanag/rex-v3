@@ -326,13 +326,9 @@ the tool's own language ADR, accepted by Jay; `ts` until then); the rules below 
   0), not a whole operation. A failed upstream call becomes an error
   response (`503` with `Retry-After` when the upstream said so); callers own retries
   (workers through the bus retry policy, the gateway not at all).
-- **Request validation budget (Proposed in
-  [ADR 0020](adr/0020-fastify-openapi-validation.md); applies only if Jay accepts it):**
-  p99 validator time ≤ 1 ms for bodies of 16 KiB or less; above that, 1 ms per 100 KiB
-  of body, capped at 15 ms. Both are measured on CI hardware in the 1.5 lane, which is
-  the gate; local numbers are for information only. Until then
-  [ADR 0024](adr/0024-per-tool-language.md) applies: 1 ms for TypeScript and Go,
-  5 ms for Python.
+- **Request validation budget:** TypeScript 1 ms p99 at every valid body size up to
+  the tool's body limit ([ADR 0026](adr/0026-typescript-validation-budget.md)).
+  Python 5 ms and Go 1 ms ([ADR 0024](adr/0024-per-tool-language.md)).
 
 ### Approved tool dependencies
 
