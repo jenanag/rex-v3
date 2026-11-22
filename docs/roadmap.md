@@ -285,8 +285,10 @@ template, 1.5 lane) with their done criteria above.
 **Current phase:** 2
 
 [ADR 0025](adr/0025-schema-generator-language.md) selects TypeScript for
-`schema-generator`. The scaffold and validation benchmark are in place. JSON-LD
-generation and validation are next. [Request body decision](services/schema-generator.md#limits).
+`schema-generator`. Its JSON-LD generation and validation routes shipped in
+[PR #5](https://github.com/jenanag/rex-v3/pull/5).
+[Direct smoke check](services/schema-generator.md#direct-smoke-check) ·
+[Request body decision](services/schema-generator.md#limits).
 
 Built in this order, each started with its language ADR and `scripts/new-tool --lang
 <language>` and finished (definition of done below) before the next one starts. The order goes from no LLM to
