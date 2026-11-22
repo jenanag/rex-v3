@@ -55,11 +55,30 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 See [the tool's operation limits](../../services/llms-txt-generator/AGENTS.md#limits).
 <!-- GENERATED:limits END -->
 
-Jay accepted the tool-wide 12 MiB (12,582,912 bytes) Fastify request body ceiling
-on 2026-11-23. It applies to public validation and retains the current OpenAPI
-request schemas. Scaffolding will set `BODY_LIMIT_BYTES=12582912` and verify the
-60 ms validator-only p99 target in CI with valid bodies at the exact limit.
+The scaffold defaults `BODY_LIMIT_BYTES` to `12582912` (12 MiB) through the tool's
+configuration loader. The ceiling applies to all routes, including public
+validation, and requests above it receive HTTP 413. The current OpenAPI request
+schemas still apply.
 [ADR 0029](../adr/0029-llms-txt-generator-body-limit.md).
+
+### Request validation benchmark
+
+From `services/llms-txt-generator/`, using the Node version in the root `.nvmrc`:
+
+```sh
+npm ci
+npm run build
+node scripts/benchmark-validation.mjs
+```
+
+The benchmark uses the scaffold's Fastify application and needs no running server,
+network, or credentials. The shared tool workflow runs it offline. It checks the
+12 MiB effective limit and fails if any workload reaches 60 ms p99 for the warmed
+validator. It also checks that each exact-limit request reaches its scaffold
+handler and that adding one byte returns HTTP 413. Exact-limit fixtures exercise
+bounded content fields at their schema maxima and use trailing JSON whitespace
+where needed.
+[ADR 0027](../adr/0027-scale-typescript-validation-budget.md).
 
 ## Shared schemas
 

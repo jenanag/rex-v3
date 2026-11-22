@@ -141,10 +141,7 @@ descriptions last through the tool's LLM adapter.
 
 ## Build and test standalone
 
-Not scaffolded yet: today this folder holds only this file and `contract/`.
-`scripts/new-tool` (built in Phase 1) scaffolds the rest at the start of this tool's
-Phase 2 step, with `--lang` as its language ADR decides and `--llm`. Then these commands
-work (for the language above):
+Scaffolded: these commands work in this folder.
 
 ```bash
 cp -r services/llms-txt-generator /tmp/llms-txt-generator && cd /tmp/llms-txt-generator   # any folder outside the repo
