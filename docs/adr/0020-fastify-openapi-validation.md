@@ -37,6 +37,17 @@ informational. The template will use Fastify's default `bodyLimit` of 1 MiB
 (1,048,576 bytes) and allow a per-tool override. Body-size limits can be revisited
 when tools exist and can be measured.
 
+
+CI measured the warmed request validator on 2026-11-22 using Node.js 26.13.1,
+Linux x64, and an AMD EPYC 7763 runner. The measurement excludes JSON parsing,
+startup, the handler, and serialization. These observations inform future
+budget tuning. [GitHub Actions run](https://github.com/jenanag/rex-v3/actions/runs/45027669319).
+
+| Candidate | Representative p99 (5,000 samples) | Large request p99 (1,000 samples) |
+|---|---:|---:|
+| `fastify-openapi-glue` 4.12.0 | 0.0143 ms | 0.7924 ms |
+| OperationId loader | 0.0114 ms | 0.6329 ms |
+
 ## Consequences
 
 Both candidates passed the same [25 request cases](../../spikes/openapi-validation/request-cases.json),

@@ -3,8 +3,9 @@ set -euo pipefail
 
 # Start a fresh Linux network namespace, then run as the runner user with a
 # minimal environment. The package install runs before calling this script.
+npm_cache="${REX_TOOL_NPM_CACHE:-${RUNNER_TEMP:-/tmp}/rex-tool-npm}"
 exec sudo unshare --net -- setpriv --reuid "$(id -u)" --regid "$(id -g)" --init-groups \
   env -i PATH="$PATH" NODE_ENV=test LLM_MODE=mock CI=true \
-  NPM_CONFIG_USERCONFIG=/dev/null NPM_CONFIG_GLOBALCONFIG=/dev/null \
-  NPM_CONFIG_CACHE="${REX_TOOL_NPM_CACHE:-${RUNNER_TEMP:-/tmp}/rex-tool-npm}" \
+  NPM_CONFIG_USERCONFIG="$npm_cache/user.npmrc" NPM_CONFIG_GLOBALCONFIG="$npm_cache/global.npmrc" \
+  NPM_CONFIG_CACHE="$npm_cache" \
   "$@"

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { cpus, platform, arch } from "node:os";
+import { parseArgs } from "node:util";
 import { analysisPath } from "./contract.ts";
 import { server, type Candidate } from "./spike.ts";
 
+const { values } = parseArgs({ options: { "report-only": { type: "boolean" } } });
 const budgetMs = 1;
 const ordinaryBrand = {
   key: "acme",
@@ -72,6 +74,6 @@ for (const candidate of ["glue", "loader"] as const) {
         " | p99 " +
         p99.toFixed(4),
     );
-    if (candidate === "loader" && p99 >= budgetMs) process.exitCode = 1;
+    if (!values["report-only"] && candidate === "loader" && p99 >= budgetMs) process.exitCode = 1;
   }
 }
