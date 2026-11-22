@@ -15,6 +15,33 @@ and validates JSON-LD given inline or found in HTML. Both operations are public 
 tools and take content only: no network
 ([ADR 0021](../adr/0021-content-extraction.md)).
 
+## JSON-LD behavior
+
+Validation expands an inline object or every HTML JSON-LD block in source order.
+Malformed embedded JSON, blocked remote contexts, failed expansion, and HTML
+without a JSON-LD block are errors. Unknown Schema.org classes or properties
+and nonempty graphs without a typed node are warnings. The response is HTTP 200
+with `valid: false` when any error is present. HTML findings locate the script
+element by line, and inline findings use JSON Pointers into the request.
+Malformed or schema-invalid API requests return HTTP 400.
+
+For HTML generation, the first usable node of the exact requested expanded
+type takes priority. Open Graph tags and then ordinary HTML metadata fill
+missing values. Titles fill `headline` for Article and `name` for the other
+supported types. A supplied `source.pageUrl` sets the output `url` and resolves relative
+URL values. Without it, unresolved relative URLs are omitted with a warning.
+Generation returns HTTP 422 if the source supplies no usable content fields.
+Generated markup includes the shared validation result and an HTML-safe script tag.
+
+Expansion uses the vendored context from [Schema.org release 30.1](https://schema.org/version/30.1/)
+through an offline loader. The packaged vocabulary index extracts Schema.org
+classes, properties, and URL ranges from the same release. The context and
+derived data are attributed to Schema.org and its sponsors under CC BY-SA 3.0.
+[Context source](https://schema.org/version/30.1/schemaorgcontext.jsonld) ·
+[Vocabulary source](https://schema.org/version/30.1/schemaorg-current-https.jsonld) ·
+[Schema.org terms](https://schema.org/docs/terms.html) ·
+[CC BY-SA 3.0](https://creativecommons.org/licenses/by-sa/3.0/).
+
 ## Endpoints
 
 <!-- GENERATED:endpoints START (source: packages/contracts/openapi/services/schema-generator.yaml) -->
@@ -28,7 +55,7 @@ tools and take content only: no network
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `1`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `2`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |

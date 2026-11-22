@@ -55,7 +55,16 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Generate JSON-LD from structured input or from a page's existing metadata */
+        /**
+         * Generate JSON-LD from structured input or from a page's existing metadata
+         * @description Generates the requested schema type from the supplied data or HTML. For HTML,
+         *     uses the first usable exact type match after offline JSON-LD expansion, in
+         *     block and node order. Open Graph tags, then ordinary HTML metadata, fill
+         *     missing fields. A supplied pageUrl sets the output url and resolves relative
+         *     URL values. Without pageUrl, absolute URLs are kept and unresolved relative
+         *     URLs are omitted with a warning. Returns 422 if no usable content fields
+         *     remain, including empty data or HTML where pageUrl is the only usable value.
+         */
         post: operations["generateSchemaMarkup"];
         delete?: never;
         options?: never;
@@ -72,7 +81,16 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Validate JSON-LD given inline or found in a page's HTML */
+        /**
+         * Validate JSON-LD given inline or found in a page's HTML
+         * @description Expands inline JSON-LD or each HTML block independently in document order,
+         *     using only the vendored Schema.org context for remote context resolution.
+         *     Malformed embedded JSON, disallowed remote contexts, expansion failures, and
+         *     missing HTML blocks are errors. Unknown Schema.org types and properties and
+         *     a nonempty expanded graph without a typed node are warnings. Content
+         *     findings return 200 even when every block fails. Findings use line:<n> for
+         *     HTML or a JSON Pointer into the original inline input.
+         */
         post: operations["validateSchemaMarkup"];
         delete?: never;
         options?: never;

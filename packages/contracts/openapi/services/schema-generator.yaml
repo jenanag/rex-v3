@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: REx schema-generator service
-  version: 2.0.0
+  version: 2.0.1
   description: |
     Stateless tool: generates and validates schema.org JSON-LD. Deterministic, no
     LLM, no network: a page is passed in as its HTML (ADR 0021).
@@ -29,6 +29,14 @@ paths:
       x-rex-limits: {p99: PT2S, llm: none, outboundFetch: none, notes: 'parses the data or HTML in the request; fetches nothing'}
       x-rex-public: true
       summary: Generate JSON-LD from structured input or from a page's existing metadata
+      description: |
+        Generates the requested schema type from the supplied data or HTML. For HTML,
+        uses the first usable exact type match after offline JSON-LD expansion, in
+        block and node order. Open Graph tags, then ordinary HTML metadata, fill
+        missing fields. A supplied pageUrl sets the output url and resolves relative
+        URL values. Without pageUrl, absolute URLs are kept and unresolved relative
+        URLs are omitted with a warning. Returns 422 if no usable content fields
+        remain, including empty data or HTML where pageUrl is the only usable value.
       tags: [Schema markup]
       requestBody:
         required: true
@@ -55,6 +63,14 @@ paths:
       x-rex-limits: {p99: PT2S, llm: none, outboundFetch: none, notes: 'parses the JSON-LD or HTML in the request; fetches nothing'}
       x-rex-public: true
       summary: Validate JSON-LD given inline or found in a page's HTML
+      description: |
+        Expands inline JSON-LD or each HTML block independently in document order,
+        using only the vendored Schema.org context for remote context resolution.
+        Malformed embedded JSON, disallowed remote contexts, expansion failures, and
+        missing HTML blocks are errors. Unknown Schema.org types and properties and
+        a nonempty expanded graph without a typed node are warnings. Content
+        findings return 200 even when every block fails. Findings use line:<n> for
+        HTML or a JSON Pointer into the original inline input.
       tags: [Schema markup]
       requestBody:
         required: true
