@@ -55,6 +55,12 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 See [the tool's operation limits](../../services/llms-txt-generator/AGENTS.md#limits).
 <!-- GENERATED:limits END -->
 
+Jay accepted the tool-wide 12 MiB (12,582,912 bytes) Fastify request body ceiling
+on 2026-11-23. It applies to public validation and retains the current OpenAPI
+request schemas. Scaffolding will set `BODY_LIMIT_BYTES=12582912` and verify the
+60 ms validator-only p99 target in CI with valid bodies at the exact limit.
+[ADR 0029](../adr/0029-llms-txt-generator-body-limit.md).
+
 ## Shared schemas
 
 <!-- GENERATED:shared START (source: packages/contracts/openapi/services/llms-txt-generator.yaml + common.yaml) -->

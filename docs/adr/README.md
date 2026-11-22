@@ -49,6 +49,8 @@ It amends ADR 0026 to scale the TypeScript validation budget with each tool's
 effective request body limit.
 Jay accepted [ADR 0028](0028-llms-txt-generator-language.md) on 2026-11-23. It selects
 TypeScript for `llms-txt-generator` and records its Phase 2 build order.
+Jay accepted [ADR 0029](0029-llms-txt-generator-body-limit.md) on 2026-11-23. It sets
+the 12 MiB request body ceiling for `llms-txt-generator` and retains its request schemas.
 
 | ADR | Title | Status |
 |---|---|---|
@@ -80,5 +82,6 @@ TypeScript for `llms-txt-generator` and records its Phase 2 build order.
 | [0026](0026-typescript-validation-budget.md) | Keep one TypeScript request validation budget | Accepted (amended) |
 | [0027](0027-scale-typescript-validation-budget.md) | Scale the TypeScript validation budget with the body limit | Accepted |
 | [0028](0028-llms-txt-generator-language.md) | Use TypeScript for llms-txt-generator | Accepted |
+| [0029](0029-llms-txt-generator-body-limit.md) | Set the llms-txt-generator request body limit to 12 MiB | Accepted |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.

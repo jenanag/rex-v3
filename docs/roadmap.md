@@ -20,7 +20,7 @@ after and only wires the finished tools together.
 to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the superseded
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
 Phase 1 was completed on 2026-11-22. Phase 2 has started. Jay accepted ADRs 0025
-and 0026 on 2026-11-22. Jay accepted ADR 0027 and ADR 0028 on 2026-11-23.
+and 0026 on 2026-11-22. Jay accepted ADR 0027, ADR 0028, and ADR 0029 on 2026-11-23.
 Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
 
 - [README](../README.md), [architecture](architecture.md), [conventions](conventions.md),
@@ -291,7 +291,11 @@ template, 1.5 lane) with their done criteria above.
 [Request body decision](services/schema-generator.md#limits).
 
 [ADR 0028](adr/0028-llms-txt-generator-language.md), accepted by Jay on 2026-11-23,
-selects TypeScript for `llms-txt-generator`. Scaffolding is the next step for this tool.
+selects TypeScript for `llms-txt-generator`. [ADR 0029](adr/0029-llms-txt-generator-body-limit.md)
+was accepted the same day. It retains the current request schemas and sets a
+12 MiB (12,582,912 bytes) request body ceiling. During scaffolding, configure the
+limit and verify the 60 ms validator-only p99 target in CI with valid bodies at
+the exact limit.
 
 Built in this order, each started with its language ADR and `scripts/new-tool --lang
 <language>` and finished (definition of done below) before the next one starts. The order goes from no LLM to
