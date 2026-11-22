@@ -1,0 +1,601 @@
+# GENERATED - DO NOT EDIT. Vendored by scripts/vendor-contracts (ADR 0018) from
+# packages/contracts/openapi/services/answer-analysis.yaml. Change the source and re-run the script; CI fails on drift.
+openapi: 3.1.0
+info:
+  title: REx answer-analysis tool
+  version: 1.0.0
+  description: |
+    Stateless tool: finds tracked brands in one answer text and returns, per
+    mentioned brand, its position, occurrences, a snippet and sentiment. Brands are
+    passed in the request. Aggregate metrics (mention rate, share of voice) are
+    computed by the orchestrator (docs/glossary.md).
+
+    Deterministic first (ADR 0017): mention detection and position are always
+    deterministic (name and alias matching). Sentiment can come from several
+    analyzers in one call, deterministic (lexicon or rule based, no LLM) and LLM
+    based (any listed provider and model), returned side by side with an agreement
+    summary so they can be compared. The `primary` analyzer feeds `sentiment` and
+    `sentimentScore`, which the metrics use.
+
+    Languages: requests and responses carry a BCP 47 language tag. Deterministic
+    analyzers use a per-language lexicon registry (English only today); what is
+    supported is published by `listAnalyzers`. Unsupported languages fall back or
+    fail as the caller chooses (`onUnsupportedLanguage`).
+    No database, no queues, no bus, no calls to other tools.
+    Service doc: docs/services/answer-analysis.md
+    No authentication in the tool: only workers and the gateway can reach it (network
+    policy), and the gateway exposes only `x-rex-public` operations (ADR 0014).
+security: []
+tags:
+  - name: Analysis
+  - name: Health
+paths:
+  /healthz:
+    get:
+      operationId: getLiveness
+      summary: Liveness probe
+      description: Returns 200 while the process is running. Never checks dependencies.
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Readiness probe
+      description: 'Returns 200 when the service can serve traffic: required config loaded and its own dependencies reachable (orchestrator: Postgres and RabbitMQ; workers: RabbitMQ; gateway: Redis; tools: signing keys loaded).'
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/analyzers:
+    get:
+      operationId: listAnalyzers
+      x-rex-limits:
+        llm: none
+        outboundFetch: none
+      summary: List the sentiment analyzers this deployment offers
+      tags:
+        - Analysis
+      responses:
+        '200':
+          description: Available analyzers, deterministic ones first.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Analyzer'
+        default:
+          $ref: '#/components/responses/InternalError'
+  /v1/answer-analyses:
+    post:
+      operationId: analyzeAnswer
+      x-rex-limits:
+        llm: optional
+        llmCallTimeout: PT60S
+        outboundFetch: none
+        notes: 'LLM only for llm: analyzers; each adds one batched call'
+      summary: Detect brand mentions and position, and classify sentiment with one or more analyzers
+      description: |
+        Synchronous. Deterministic analyzers answer in milliseconds; each LLM
+        analyzer adds one batched call (up to 60 s). An LLM analyzer that fails is
+        reported with `status: failed` while the others are still returned. If the
+        primary analyzer fails, the call answers 503 so the caller retries.
+
+        422 codes: `invalid_primary` (`primary` is not in `analyzers`) and
+        `unsupported_language` (with `onUnsupportedLanguage: error`, a requested
+        analyzer does not support the language; `detail` names the analyzer and its
+        supported languages).
+      tags:
+        - Analysis
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AnswerAnalysisRequest'
+      responses:
+        '200':
+          description: One entry per mentioned brand (unmentioned brands are omitted).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnswerAnalysis'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/InternalError'
+components:
+  schemas:
+    AnalyzerId:
+      type: string
+      description: |
+        `det:<method>` for deterministic analyzers (for example `det:lexicon`,
+        `det:rules`) or `llm:<provider>/<model>` for LLM analyzers (for example
+        `llm:openai/gpt-4o-mini`). The available set comes from `listAnalyzers`.
+      pattern: ^(det:[a-z][a-z0-9_]*|llm:[a-z][a-z0-9_-]*/[A-Za-z0-9._:-]+)$
+      maxLength: 120
+    AnalyzerKind:
+      type: string
+      enum:
+        - deterministic
+        - llm
+    Analyzer:
+      type: object
+      required:
+        - id
+        - kind
+        - languages
+        - description
+      properties:
+        id:
+          $ref: '#/components/schemas/AnalyzerId'
+        kind:
+          $ref: '#/components/schemas/AnalyzerKind'
+        languages:
+          type: array
+          description: Primary language subtags supported, e.g. `en`; `*` means any language (LLM analyzers). For deterministic analyzers this is the set of languages in the lexicon registry.
+          items:
+            type: string
+            pattern: ^(\*|[a-z]{2,3})$
+        description:
+          type: string
+    SentimentOptions:
+      type: object
+      unevaluatedProperties: false
+      properties:
+        analyzers:
+          type: array
+          description: 'Analyzers to run side by side. Empty disables sentiment. Default: `[det:lexicon]`.'
+          maxItems: 5
+          uniqueItems: true
+          default:
+            - det:lexicon
+          items:
+            $ref: '#/components/schemas/AnalyzerId'
+        primary:
+          description: 'Analyzer whose result fills `sentiment` and `sentimentScore`; must be in `analyzers` (otherwise 422 `invalid_primary`). Default: the first deterministic analyzer that supports the language, else the first analyzer that does.'
+          $ref: '#/components/schemas/AnalyzerId'
+        language:
+          description: 'Language of the text. Default: detected deterministically from the text.'
+          $ref: '#/components/schemas/LanguageTag'
+        onUnsupportedLanguage:
+          type: string
+          description: |
+            What happens when a requested analyzer does not support the language.
+            `fallback` (default): that analyzer reports `unsupported`; if it was the
+            primary, the first requested analyzer that supports the language becomes
+            primary (`primaryFallback: true`); if none does, sentiment is null and
+            mentions are still returned. `error`: the call answers 422
+            `unsupported_language`. Callers set it from their configuration (for
+            example per prompt run).
+          enum:
+            - fallback
+            - error
+          default: fallback
+    AnswerAnalysisOptions:
+      type: object
+      description: Everything except the text, for callers that know the options before the text exists (they add the text later).
+      required:
+        - brands
+      properties:
+        brands:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/TrackedBrand'
+        sentiment:
+          $ref: '#/components/schemas/SentimentOptions'
+    AnswerAnalysisRequest:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/AnswerAnalysisOptions'
+        - type: object
+          required:
+            - text
+          properties:
+            text:
+              type: string
+              maxLength: 200000
+      unevaluatedProperties: false
+    AnalyzerStatus:
+      type: string
+      description: '`ok`; `unsupported` (the analyzer does not support the language); `failed` (provider error or timeout, LLM only).'
+      enum:
+        - ok
+        - unsupported
+        - failed
+    AnalyzerSentiment:
+      type: object
+      description: One analyzer's verdict for one mention.
+      required:
+        - analyzer
+        - status
+        - label
+        - score
+      properties:
+        analyzer:
+          $ref: '#/components/schemas/AnalyzerId'
+        status:
+          $ref: '#/components/schemas/AnalyzerStatus'
+        label:
+          description: Null unless `status` is `ok`.
+          oneOf:
+            - $ref: '#/components/schemas/Sentiment'
+            - type: 'null'
+        score:
+          type:
+            - number
+            - 'null'
+          minimum: -1
+          maximum: 1
+        rationale:
+          type:
+            - string
+            - 'null'
+          maxLength: 300
+          description: Short reason given by an LLM analyzer, or the matched cue words of a deterministic one.
+    SentimentAgreement:
+      type: object
+      description: How the `ok` analyzers compare on one mention. Present when two or more analyzers returned `ok`.
+      required:
+        - analyzerCount
+        - majorityLabel
+        - agreeingCount
+        - unanimous
+        - scoreSpread
+      properties:
+        analyzerCount:
+          type: integer
+          minimum: 2
+        majorityLabel:
+          description: Most frequent label; null on a tie.
+          oneOf:
+            - $ref: '#/components/schemas/Sentiment'
+            - type: 'null'
+        agreeingCount:
+          type: integer
+          minimum: 1
+          description: Analyzers whose label equals the most frequent label.
+        unanimous:
+          type: boolean
+        scoreSpread:
+          type: number
+          minimum: 0
+          maximum: 2
+          description: Max score minus min score.
+    MentionDetail:
+      type: object
+      description: What was found for one brand in one answer. The orchestrator's Mention resource reuses it.
+      required:
+        - position
+        - occurrences
+        - sentiment
+        - sentimentScore
+        - sentimentByAnalyzer
+        - agreement
+        - snippet
+      properties:
+        position:
+          type: integer
+          minimum: 1
+          description: 1-based rank of this brand's first mention among the given brands in the answer.
+        occurrences:
+          type: integer
+          minimum: 1
+        sentiment:
+          description: Label from the primary analyzer; null when sentiment was disabled or no requested analyzer supports the language.
+          oneOf:
+            - $ref: '#/components/schemas/Sentiment'
+            - type: 'null'
+        sentimentScore:
+          type:
+            - number
+            - 'null'
+          minimum: -1
+          maximum: 1
+          description: Score from the primary analyzer (-1 to 1).
+        sentimentByAnalyzer:
+          type: array
+          description: One entry per requested analyzer, in request order.
+          items:
+            $ref: '#/components/schemas/AnalyzerSentiment'
+        agreement:
+          oneOf:
+            - $ref: '#/components/schemas/SentimentAgreement'
+            - type: 'null'
+        snippet:
+          type: string
+          maxLength: 500
+          description: Text around the first mention.
+    AnalyzerRun:
+      type: object
+      description: Per-analyzer outcome for the whole answer.
+      required:
+        - analyzer
+        - kind
+        - status
+        - primary
+      properties:
+        analyzer:
+          $ref: '#/components/schemas/AnalyzerId'
+        kind:
+          $ref: '#/components/schemas/AnalyzerKind'
+        status:
+          $ref: '#/components/schemas/AnalyzerStatus'
+        primary:
+          type: boolean
+    AnswerAnalysis:
+      type: object
+      required:
+        - language
+        - languageSource
+        - primaryFallback
+        - analyzers
+        - mentions
+        - usage
+      properties:
+        language:
+          description: Language used for sentiment (given or detected); null if undetermined.
+          oneOf:
+            - $ref: '#/components/schemas/LanguageTag'
+            - type: 'null'
+        languageSource:
+          type: string
+          enum:
+            - given
+            - detected
+            - undetermined
+        primaryFallback:
+          type: boolean
+          description: 'True when the requested or default primary did not support the language and another analyzer was used (`onUnsupportedLanguage: fallback`).'
+        analyzers:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnalyzerRun'
+        mentions:
+          type: array
+          items:
+            allOf:
+              - type: object
+                required:
+                  - brandKey
+                properties:
+                  brandKey:
+                    type: string
+                    description: '`key` of the matching TrackedBrand.'
+              - $ref: '#/components/schemas/MentionDetail'
+        usage:
+          $ref: '#/components/schemas/LlmUsageList'
+    Health:
+      type: object
+      required:
+        - status
+        - service
+        - version
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - degraded
+            - down
+        service:
+          type: string
+        version:
+          type: string
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+              - ok
+              - down
+    FieldError:
+      type: object
+      required:
+        - pointer
+        - detail
+      properties:
+        pointer:
+          type: string
+          description: JSON Pointer (RFC 6901) into the request body, or `#/query/<name>` / `#/header/<name>`.
+        detail:
+          type: string
+    Problem:
+      type: object
+      description: RFC 9457 problem details, with REx extension members.
+      required:
+        - type
+        - title
+        - status
+        - code
+      properties:
+        type:
+          type: string
+          format: uri
+          description: 'URI identifying the problem type: `{PROBLEM_BASE_URI}/{code}`. PROBLEM_BASE_URI is a deployment setting; the product domain is deferred, so it is a placeholder until then (docs/roadmap.md#deferred-decisions).'
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          description: Explanation specific to this occurrence.
+        instance:
+          type: string
+          format: uri-reference
+          description: Request path of this occurrence.
+        code:
+          type: string
+          pattern: ^[a-z][a-z0-9_]*$
+          description: Stable machine-readable error code (snake_case), e.g. `validation_failed`.
+        traceId:
+          type: string
+          description: W3C trace ID for support and log correlation.
+        errors:
+          type: array
+          description: Field-level errors; present for `validation_failed`.
+          items:
+            $ref: '#/components/schemas/FieldError'
+    BrandKind:
+      type: string
+      description: Each project has exactly one `primary` brand; all others are `competitor`.
+      enum:
+        - primary
+        - competitor
+    Domain:
+      type: string
+      format: hostname
+      maxLength: 253
+      description: Lower-case host name without scheme or `www.`, e.g. `example.com`.
+    TrackedBrand:
+      type: object
+      description: |
+        A brand as passed to stateless tools (answer-analysis, citation-extractor).
+        `key` is opaque to tools and echoed back; the orchestrator uses brand IDs.
+      required:
+        - key
+        - kind
+        - name
+        - aliases
+        - domains
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 64
+        kind:
+          $ref: '#/components/schemas/BrandKind'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        aliases:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+        domains:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Domain'
+    LanguageTag:
+      type: string
+      description: |
+        BCP 47 language tag, lowercase language subtag first, e.g. `en`, `en-US`,
+        `pt-BR`. Matching against a supported list uses the primary language subtag
+        (`en-US` matches `en`).
+      pattern: ^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$
+      maxLength: 35
+    Sentiment:
+      type: string
+      enum:
+        - positive
+        - neutral
+        - negative
+    LlmUsage:
+      type: object
+      description: One LLM call made while serving a request. Tools report it; the orchestrator meters it.
+      required:
+        - provider
+        - model
+        - operation
+        - inputTokens
+        - outputTokens
+        - costMicrosUsd
+      properties:
+        provider:
+          type: string
+          examples:
+            - openai
+        model:
+          type: string
+        operation:
+          type: string
+          description: What the call was for, e.g. `answer_prompt`, `classify_sentiment`, `summarize_page`.
+        inputTokens:
+          type: integer
+          minimum: 0
+        outputTokens:
+          type: integer
+          minimum: 0
+        costMicrosUsd:
+          type: integer
+          minimum: 0
+          description: Cost in millionths of a US dollar from the provider price table at call time.
+    LlmUsageList:
+      type: array
+      description: Every LLM call made for this response; empty when none.
+      items:
+        $ref: '#/components/schemas/LlmUsage'
+  responses:
+    Health:
+      description: Health status.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Health'
+    ServiceUnavailable:
+      description: A dependency is unavailable; retry later.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    BadRequest:
+      description: The request is malformed or fails schema validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableContent:
+      description: Well-formed but violates a business rule, or an Idempotency-Key was reused with a different body.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  headers:
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+        minimum: 0
+x-rex-service:
+  name: answer-analysis
+  kind: tool

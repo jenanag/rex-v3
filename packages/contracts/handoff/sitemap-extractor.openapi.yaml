@@ -1,0 +1,312 @@
+# GENERATED - DO NOT EDIT. Vendored by scripts/vendor-contracts (ADR 0018) from
+# packages/contracts/openapi/services/sitemap-extractor.yaml. Change the source and re-run the script; CI fails on drift.
+openapi: 3.1.0
+info:
+  title: REx sitemap-extractor service
+  version: 1.0.0
+  description: |
+    External service (ADR 0023): implemented in Go outside this repo; its owner builds
+    to this contract, which REx defines. Deployment is the implementer's choice: a
+    separate service or a second endpoint of the content-extractor both work, with
+    this same contract (ADR 0023 amendment).
+    It finds a site's page URLs for the llms.txt pipeline: every URL in the site's
+    sitemaps (robots.txt `Sitemap:` lines, else /sitemap.xml; sitemap indexes and
+    gzip followed), else the same-host links of the site root, filtered by robots.txt
+    on request. It is the only place that discovers URLs (the content-extractor
+    extracts single pages).
+
+    Called only by REx workers, cache first (cache/policy.yaml `external`). Stateless:
+    no database, no queues, no bus, no calls to REx services. No authentication in the
+    service: it runs on the private network inside the cluster and only workers can
+    reach it (network policy, ADR 0014).
+    Every number marked DEFAULT is a placeholder its owner may tune; changing one is
+    not a contract change.
+    Service doc: docs/services/sitemap-extractor.md
+security: []
+tags:
+  - name: Discovery
+  - name: Health
+paths:
+  /healthz:
+    get:
+      operationId: getLiveness
+      summary: Liveness probe
+      description: Returns 200 while the process is running. Never checks dependencies.
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Readiness probe
+      description: 'Returns 200 when the service can serve traffic: required config loaded and its own dependencies reachable (orchestrator: Postgres and RabbitMQ; workers: RabbitMQ; gateway: Redis; tools: signing keys loaded).'
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/sitemap-extractions:
+    post:
+      operationId: extractSitemapUrls
+      x-rex-limits:
+        maxDuration: PT2M
+        llm: none
+        outboundFetch: crawl
+        fetchTimeout: PT10S
+        fetchMaxBytes: 52428800
+        notes: DEFAULT values; robots.txt, then sitemap files (at most 1000 files, 52428800 bytes each, the sitemaps.org cap), else the site root
+      summary: List a site's page URLs from its sitemaps
+      description: |
+        Synchronous; may take up to 2 minutes (all fetches included). Reads
+        robots.txt (or uses the `robotsTxt` given), then the sitemaps it names, else
+        /sitemap.xml, following sitemap indexes. When no sitemap lists a URL, it reads
+        the site root and returns its same-host `<a href>` links instead (`via:
+        links`). URLs are kept only when they are `http(s)` and on the host of
+        `siteUrl`; they are deduplicated in sitemap order (fragments removed).
+
+        Fetching rules are the content-extractor's (SSRF guard, REx User-Agent, no
+        JavaScript, 5 redirects, DEFAULT). With `respectRobotsTxt: true`, URLs the
+        robots.txt disallows for the service's User-Agent are left out and counted in
+        `disallowed` (RFC 9309, as in the content-extractor).
+
+        422 codes: `target_blocked` (scheme or address of `siteUrl` refused),
+        `target_unreachable` (neither robots.txt, a sitemap nor the site root could be
+        reached). Finding no URL is not an error: `via: none`, empty `urls`.
+      tags:
+        - Discovery
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SitemapExtractionRequest'
+      responses:
+        '200':
+          description: The site's page URLs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SitemapExtraction'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/InternalError'
+components:
+  schemas:
+    SitemapExtractionRequest:
+      type: object
+      unevaluatedProperties: false
+      required:
+        - siteUrl
+      properties:
+        siteUrl:
+          description: The site; its origin gives robots.txt and /sitemap.xml.
+          $ref: '#/components/schemas/Url'
+        respectRobotsTxt:
+          type: boolean
+          default: false
+          description: Leave out URLs robots.txt disallows. REx sets it from the llms.txt setting.
+        robotsTxt:
+          description: The site's robots.txt when the caller already has it; used instead of fetching it.
+          $ref: '#/components/schemas/FetchedFile'
+        maxUrls:
+          type: integer
+          minimum: 1
+          description: Most URLs to return. Default (absent) all of them, within the limits above.
+    SitemapExtraction:
+      type: object
+      required:
+        - siteUrl
+        - via
+        - sources
+        - urls
+        - disallowed
+        - truncated
+        - robotsTxt
+      properties:
+        siteUrl:
+          $ref: '#/components/schemas/Url'
+        via:
+          type: string
+          enum:
+            - sitemap
+            - links
+            - none
+          description: Where the URLs came from.
+        sources:
+          type: array
+          description: 'Sitemap files read in order, or the site root with `via: links`; empty with `via: none`.'
+          items:
+            $ref: '#/components/schemas/Url'
+        urls:
+          type: array
+          description: Same-host page URLs, deduplicated, in sitemap (or document) order.
+          items:
+            $ref: '#/components/schemas/Url'
+        disallowed:
+          type: integer
+          minimum: 0
+          description: URLs left out because robots.txt disallows them (0 unless `respectRobotsTxt`).
+        truncated:
+          type: boolean
+          description: True when `maxUrls` or a DEFAULT limit stopped the listing early.
+        robotsTxt:
+          description: The robots.txt used (fetched or given).
+          $ref: '#/components/schemas/FetchedFile'
+    Health:
+      type: object
+      required:
+        - status
+        - service
+        - version
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - degraded
+            - down
+        service:
+          type: string
+        version:
+          type: string
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+              - ok
+              - down
+    FieldError:
+      type: object
+      required:
+        - pointer
+        - detail
+      properties:
+        pointer:
+          type: string
+          description: JSON Pointer (RFC 6901) into the request body, or `#/query/<name>` / `#/header/<name>`.
+        detail:
+          type: string
+    Problem:
+      type: object
+      description: RFC 9457 problem details, with REx extension members.
+      required:
+        - type
+        - title
+        - status
+        - code
+      properties:
+        type:
+          type: string
+          format: uri
+          description: 'URI identifying the problem type: `{PROBLEM_BASE_URI}/{code}`. PROBLEM_BASE_URI is a deployment setting; the product domain is deferred, so it is a placeholder until then (docs/roadmap.md#deferred-decisions).'
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          description: Explanation specific to this occurrence.
+        instance:
+          type: string
+          format: uri-reference
+          description: Request path of this occurrence.
+        code:
+          type: string
+          pattern: ^[a-z][a-z0-9_]*$
+          description: Stable machine-readable error code (snake_case), e.g. `validation_failed`.
+        traceId:
+          type: string
+          description: W3C trace ID for support and log correlation.
+        errors:
+          type: array
+          description: Field-level errors; present for `validation_failed`.
+          items:
+            $ref: '#/components/schemas/FieldError'
+    Url:
+      type: string
+      format: uri
+      maxLength: 2048
+      pattern: ^https?://
+    FetchedFile:
+      type: object
+      description: One fetched text file, e.g. a site's robots.txt, passed to a tool verbatim.
+      required:
+        - url
+        - status
+        - content
+      properties:
+        url:
+          $ref: '#/components/schemas/Url'
+        status:
+          type:
+            - integer
+            - 'null'
+          description: HTTP status; null on network error or timeout.
+        content:
+          type:
+            - string
+            - 'null'
+          maxLength: 500000
+          description: Body when `status` is 2xx, else null.
+  responses:
+    Health:
+      description: Health status.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Health'
+    ServiceUnavailable:
+      description: A dependency is unavailable; retry later.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    BadRequest:
+      description: The request is malformed or fails schema validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableContent:
+      description: Well-formed but violates a business rule, or an Idempotency-Key was reused with a different body.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  headers:
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+        minimum: 0
+x-rex-service:
+  name: sitemap-extractor
+  kind: external

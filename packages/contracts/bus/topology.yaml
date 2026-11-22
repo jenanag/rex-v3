@@ -1,0 +1,144 @@
+# RabbitMQ topology: the single source of truth for exchanges, queues, bindings,
+# retry delay queues, retry policy and dead-lettering (ADR 0011, ADR 0012). Applied idempotently at
+# deploy time by `packages/bus` (`rex-bus declare`); no service declares topology
+# in code. Message names and payloads live in ../asyncapi/events.yaml, whose
+# channel bindings $ref the exchange objects below (AMQP channel binding 0.3.0 `exchange` shape).
+# Consumers of each message are derived from the queue bindings here.
+version: 1
+vhost: rex
+
+exchanges:
+  events:
+    name: rex.events
+    type: topic
+    durable: true
+    autoDelete: false
+  retry:
+    name: rex.retry
+    type: topic
+    durable: true
+    autoDelete: false
+  requeue:
+    name: rex.requeue
+    type: topic
+    durable: true
+    autoDelete: false
+  deadLetter:
+    name: rex.dlx
+    type: fanout
+    durable: true
+    autoDelete: false
+
+# Defaults applied to every work queue (quorum, manual ack, bounded redelivery).
+workQueueDefaults:
+  arguments:
+    x-queue-type: quorum
+    x-dead-letter-exchange: rex.dlx
+    x-dead-letter-strategy: at-least-once
+    x-overflow: reject-publish
+    x-delivery-limit: 10                 # PLACEHOLDER (retry policy deferred); crash-loop guard
+  # Each work queue is also bound to `requeue` with `*.<queue name>` so retried
+  # messages return to the queue they came from.
+  requeueBinding: '*.{queue}'
+
+# Every message is published persistent, JSON, with publisher confirms.
+publish:
+  deliveryMode: 2
+  contentType: application/json
+  confirms: true
+  # Enforced by packages/bus before publishing (broker default limit is 16 MiB).
+  # Leaves headroom for the 2,000,000-character llms-full.txt after JSON escaping.
+  maxMessageBytes: 8388608
+  properties:
+    messageId: envelope.id
+    type: envelope.type
+    correlationId: envelope.idempotencyKey
+  headers:
+    x-rex-attempt: 'retry count, starts at 0'
+    traceparent: 'W3C trace context (copied from the envelope)'
+
+queues:
+  # {engine} expands to every EngineId value in ../openapi/common.yaml, so each
+  # engine gets its own queue and its own prefetch (LLM concurrency cap).
+  - name: rex.workers.answer-capture.{engine}
+    consumer: workers
+    prefetch: 4
+    bindings:
+      - exchange: events
+        routingKey: answer-capture.requested.{engine}
+  - name: rex.workers.content-extraction
+    consumer: workers
+    prefetch: 2
+    bindings:
+      - exchange: events
+        routingKey: content-extraction.requested
+  - name: rex.workers.content-audit
+    consumer: workers
+    prefetch: 2
+    bindings:
+      - exchange: events
+        routingKey: content-audit.requested
+  - name: rex.workers.sitemap-discovery
+    consumer: workers
+    prefetch: 2
+    bindings:
+      - exchange: events
+        routingKey: sitemap-discovery.requested
+  - name: rex.workers.page-audit
+    consumer: workers
+    prefetch: 4
+    bindings:
+      - exchange: events
+        routingKey: page-audit.requested
+  - name: rex.workers.llms-txt-generation
+    consumer: workers
+    prefetch: 1
+    bindings:
+      - exchange: events
+        routingKey: llms-txt-generation.requested
+  - name: rex.orchestrator.results
+    consumer: orchestrator
+    prefetch: 32
+    bindings:
+      - exchange: events
+        routingKey: '*.completed'
+      - exchange: events
+        routingKey: '*.failed'
+
+# Delayed retries (mechanism fixed, policy configurable). On a retryable failure
+# the consumer republishes the message to `retry` with routing key
+# `<delay>.<source queue>` and header x-rex-attempt + 1, then acks the original.
+# The delay queue rex.retry.<delay> holds it for <delay> (queue TTL), then
+# dead-letters it to `requeue`, which routes it back to the source queue. When
+# the queue's `delays` are used up the worker publishes `<job>.failed`.
+#
+# PLACEHOLDER VALUES: the retry policy is deferred (docs/roadmap.md#deferred-decisions).
+# - `delayPool` lists the delay queues to declare (one per distinct delay; queue
+#   TTLs are immutable, so a new delay means a new queue, never an edit).
+# - `defaults.delays` is the per-attempt delay sequence (its length is the number
+#   of retries); a queue entry may override it with its own `retry` block.
+# - Every value may be overridden per environment with BUS_RETRY_OVERRIDES (same
+#   shape); `packages/bus` rejects delays that are not in delayPool.
+retry:
+  delayPool: [10s, 1m, 5m, 30m]          # PLACEHOLDER
+  defaults:
+    delays: [10s, 1m, 5m, 30m]           # PLACEHOLDER: 4 retries
+  perQueue: {}                           # e.g. {rex.workers.content-audit: {delays: [1m, 5m]}}
+  delayQueue:
+    name: 'rex.retry.{delay}'
+    routingKey: '{delay}.#'
+retryQueueArguments:
+  x-queue-type: quorum
+  x-dead-letter-exchange: rex.requeue
+  x-dead-letter-strategy: at-least-once
+  x-overflow: reject-publish
+
+# Poison messages (rejected, or over x-delivery-limit) land here for inspection
+# and manual re-drive. Alert when depth > 0.
+deadLetterQueue:
+  name: rex.dead-letters
+  arguments:
+    x-queue-type: quorum
+  bindings:
+    - exchange: deadLetter
+      routingKey: ''

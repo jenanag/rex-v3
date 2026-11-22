@@ -1,0 +1,136 @@
+openapi: 3.1.0
+info:
+  title: REx engine-query tool
+  version: 1.0.0
+  description: |
+    Stateless tool: asks one AI answer engine one prompt and returns the normalized
+    answer (Markdown text + engine-reported sources) and the LLM usage. No database,
+    no queues, no bus, no calls to other tools. Called by workers.
+    Service doc: docs/services/engine-query.md
+    No authentication in the tool: only workers and the gateway can reach it (network
+    policy), and the gateway exposes only `x-rex-public` operations (ADR 0014).
+x-rex-service:
+  name: engine-query
+  kind: tool
+security: []   # no auth inside tools: enforced in front of them (ADR 0014, ADR 0018)
+tags:
+  - name: Engines
+  - name: Health
+paths:
+  /healthz:
+    $ref: '../common.yaml#/components/pathItems/Healthz'
+  /readyz:
+    $ref: '../common.yaml#/components/pathItems/Readyz'
+  /v1/engines:
+    get:
+      operationId: listEngines
+      x-rex-limits: {llm: none, outboundFetch: none}
+      summary: Engines this deployment can query and the model each one uses
+      tags: [Engines]
+      responses:
+        '200':
+          description: All engines (small, fixed list; not paginated).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Engine'
+        default:
+          $ref: '../common.yaml#/components/responses/InternalError'
+  /v1/engine-answers:
+    post:
+      operationId: queryEngine
+      x-rex-limits: {maxDuration: PT120S, llm: required, outboundFetch: none}
+      summary: Ask one engine one prompt (one sample) and return its answer
+      description: 'Synchronous; may take up to 120 s. A provider rate limit or outage returns 503 with Retry-After so the caller can retry.'
+      tags: [Engines]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EngineQuery'
+      responses:
+        '200':
+          description: The engine's answer and the LLM usage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngineAnswerResult'
+        '400':
+          $ref: '../common.yaml#/components/responses/BadRequest'
+        '422':
+          $ref: '../common.yaml#/components/responses/UnprocessableContent'
+        '503':
+          $ref: '../common.yaml#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '../common.yaml#/components/responses/InternalError'
+components:
+  schemas:
+    Engine:
+      type: object
+      required: [id, displayName, provider, model, webSearch, enabled]
+      properties:
+        id:
+          $ref: '../common.yaml#/components/schemas/EngineId'
+        displayName:
+          type: string
+          examples: [ChatGPT]
+        provider:
+          type: string
+          description: 'API vendor, e.g. `openai`, `anthropic`, `google`, `perplexity`, `xai`.'
+        model:
+          type: string
+          description: Model ID used for this engine (deployment config, not contract).
+        webSearch:
+          type: boolean
+          description: True when answers use the engine's web search or grounding.
+        enabled:
+          type: boolean
+    EngineQuery:
+      type: object
+      unevaluatedProperties: false
+      required: [engine, prompt]
+      properties:
+        engine:
+          $ref: '../common.yaml#/components/schemas/EngineId'
+        prompt:
+          type: string
+          minLength: 3
+          maxLength: 2000
+        locale:
+          $ref: '../common.yaml#/components/schemas/Locale'
+        country:
+          $ref: '../common.yaml#/components/schemas/CountryCode'
+    EngineAnswer:
+      type: object
+      description: A normalized engine answer. The orchestrator stores it as part of its Answer resource.
+      required: [engine, model, text, sources, latencyMs]
+      properties:
+        engine:
+          $ref: '../common.yaml#/components/schemas/EngineId'
+        model:
+          type: string
+        text:
+          type: string
+          description: Answer text as Markdown, normalized across engines.
+        sources:
+          type: array
+          items:
+            $ref: '../common.yaml#/components/schemas/AnswerSource'
+        latencyMs:
+          type: integer
+          minimum: 0
+    EngineAnswerResult:
+      type: object
+      required: [answer, usage]
+      properties:
+        answer:
+          $ref: '#/components/schemas/EngineAnswer'
+        usage:
+          $ref: '../common.yaml#/components/schemas/LlmUsageList'

@@ -1,0 +1,175 @@
+# Cache policy: the single source of truth for cache-first tool calls (ADR 0016).
+# Every call to a tool service goes through packages/cache, which reads this file,
+# derives the key, checks the cache, and only on a miss calls the tool. Used by
+# workers (every tool call of every flow, and every content-extractor call, ADR 0021)
+# and the gateway (public tool operations).
+# Tools never see the cache. Docs link here instead of restating these rules.
+#
+# Values marked DEFAULT are starting points. They can be overridden per
+# environment and per customer; `resolution` below is the only definition of how.
+version: 1
+
+backend:
+  # Self-hosted Redis 7.x (wire-compatible Valkey also fine), a dedicated
+  # instance "redis-cache": maxmemory-policy allkeys-lru, no AOF (losing the
+  # cache is safe; it is never a source of truth). Values over
+  # compressAboveBytes are gzip-compressed; values over maxValueBytes are not
+  # stored (outcome `uncacheable`).
+  kind: redis
+  instance: redis-cache
+  maxValueBytes: 8388608
+  compressAboveBytes: 1024
+
+key:
+  # Key layout (all parts lowercase, `:`-separated):
+  format: 'rex:c:{tool}:{operationId}:v{specMajor}.{keyVersion}:{scope}:{window}:{variant}:{inputHash}'
+  parts:
+    tool: tool service name, e.g. engine-query; for an external service, its name under `external` (content-extractor).
+    operationId: the operation called, e.g. queryEngine.
+    specMajor: major of the called service's spec info.version (from the caller's vendored copy of the tool or external spec).
+    keyVersion: '`tools.<tool>.keyVersion` (or `external.<service>.keyVersion`) below. Bump it in the same PR whenever a tool change alters the output for the same input (prompt template, engine-to-model mapping, scoring weights, lexicon).'
+    scope: '`shared` when the effective scope is `shared`; `t-{orgId}` (envelope orgId, lowercased) when it is `tenant`. The tenant id is folded into the key only for tenant-scoped calls.'
+    window: '`-`, or for operations with a `window` the UTC start of the current effective window as ISO 8601 (P1D: `2026-11-22`; PT1H: `2026-11-22t06`).'
+    variant: 'CacheDirective.variant from the job message (default 0). Answer capture sets the sample index so samples stay independent.'
+    inputHash: lowercase hex SHA-256 of the canonical input (below).
+  canonicalInput:
+    # Steps applied to the request body, in order, before hashing.
+    - Apply the defaults declared in the tool spec, so an omitted field and its default give the same key.
+    - Add `extraKeyInputs` of the operation as top-level members prefixed with `$`.
+    - Normalize every value whose schema is common.yaml Url or Domain (lowercase scheme and host, drop default port, fragment and trailing dot; keep path and query).
+    - Apply the operation's `normalize` rules (`collapse-whitespace` trims and collapses runs of whitespace).
+    - Sort arrays whose schema has `uniqueItems: true`; keep every other array in order.
+    - Serialize with RFC 8785 JSON Canonicalization Scheme (JCS), UTF-8.
+
+scopes:
+  # Effective scope of an operation = its `scope` after `resolution`.
+  shared: 'One entry per input for every customer (default for all operations). Safe because tool outputs depend only on their input; no tenant data is in the key.'
+  tenant: 'One entry per input per organization. A tenant-scoped call without an orgId (anonymous gateway call) is not cached: outcome `uncacheable`.'
+
+resolution:
+  # How the effective settings of one call are computed. Each field (scope, ttl,
+  # window) is resolved on its own: the first layer in `order` that sets it wins.
+  order: [customer, environment, default]
+  layers:
+    customer: 'CacheDirective.overrides of the job message, filled by the orchestrator from the organization''s settings. An entry for `<tool>.<operationId>` beats the `*` entry. Gateway calls are anonymous, so they have no customer layer.'
+    environment: 'CACHE_POLICY_OVERRIDES (YAML or JSON) of the calling service: a partial `tools` and `external` tree of the same shape as below, merged over it.'
+    default: 'This file.'
+  rules:
+    - 'Only scope, ttl and window can be overridden. keyVersion, extraKeyInputs, normalize, skipWhen, cacheable and archiveTo come only from this file.'
+    - 'A customer override may set scope to `tenant`, never to `shared` (an organization can opt out of sharing, not force sharing of an operation that is tenant-scoped by default or by environment).'
+    - 'An override sets the same kind of freshness the entry has: `ttl` for ttl entries, `window` for window entries.'
+    - 'Durations are clamped to `limits`. The orchestrator validates customer overrides against this file when they are saved; callers clamp and log anything out of range.'
+    - 'Freshness is checked when reading: an entry is a hit only if its age (now - cachedAt) is within the caller''s effective ttl. The Redis expiry is set from the storing caller''s effective ttl, so a customer with a longer ttl gets at most what is stored.'
+  limits:
+    minTtl: PT1M
+    maxTtl: P90D
+    windows: [PT1H, P1D, P7D]
+
+modes:
+  # Selected by CacheDirective.mode (jobs) or Cache-Control on public calls.
+  use: read; on a miss call the tool and store.
+  refresh: skip the read; call the tool and store (overwrites).
+  bypass: skip read and store.
+
+storeRules:
+  # A response is stored only if all hold; otherwise the outcome is `uncacheable`.
+  - The tool answered 2xx within its timeout.
+  - The operation's `skipWhen` (JSON Pointer with `*` wildcards, equals value) does not match.
+  - The serialized value is at most backend.maxValueBytes.
+  - An operation with `archiveTo` was accepted by that archive first (ADR 0022).
+
+byReference:
+  # Results that a later job reads by key instead of receiving them in a message
+  # (page results by reference, ADR 0023; docs/architecture.md#page-results-by-reference).
+  # They are stored even when the job's cache mode is `bypass` (it acts as `refresh`
+  # for these calls), so the reading worker can find them. The store rules still apply,
+  # and a fresh result the data-aggregator did not accept is not used: the producing
+  # step fails retryably (delayed retry queues, then `.failed`) instead of reporting a
+  # reference nobody could read. (An archived result too large for the cache is still
+  # readable from the data-aggregator.)
+  - content-extractor.extractContent
+  - llms-txt-generator.describePage
+
+singleFlight:
+  # Identical concurrent misses (e.g. a redelivered job racing its original) call
+  # the tool once: SET NX `<key>:lock` PX <operation timeout>; others poll the key
+  # every 500 ms until the lock expires, then call the tool themselves.
+  enabled: true
+  pollMs: 500
+
+tools:
+  engine-query:
+    keyVersion: 1
+    operations:
+      listEngines: {ttl: PT5M, scope: shared}                   # DEFAULT
+      queryEngine:
+        # One stored answer per prompt + engine + model + locale + sample per UTC day.
+        window: P1D                                              # DEFAULT
+        scope: shared
+        extraKeyInputs: [engineModel]   # model listEngines reports for the engine
+        normalize: {prompt: collapse-whitespace}
+  answer-analysis:
+    keyVersion: 1
+    operations:
+      listAnalyzers: {ttl: PT5M, scope: shared}                 # DEFAULT
+      analyzeAnswer:
+        ttl: P30D                                                # DEFAULT
+        scope: shared
+        skipWhen: {pointer: /analyzers/*/status, equals: failed}
+  citation-extractor:
+    keyVersion: 1
+    operations:
+      extractCitations: {ttl: P30D, scope: shared}              # DEFAULT
+  content-auditor:
+    keyVersion: 1
+    operations:
+      auditPage: {ttl: P30D, scope: shared}                      # DEFAULT (pure function of its input; page freshness comes from extractContent)
+      checkCrawlerAccess: {ttl: P30D, scope: shared}             # DEFAULT (pure function of the robots.txt passed in)
+  schema-generator:
+    keyVersion: 1
+    operations:
+      # Pure functions of their input (data, HTML or JSON-LD); fetch nothing (ADR 0021).
+      generateSchemaMarkup: {ttl: P30D, scope: shared}           # DEFAULT
+      validateSchemaMarkup: {ttl: P30D, scope: shared}           # DEFAULT
+  llms-txt-generator:
+    keyVersion: 1
+    operations:
+      # Pure functions of the page, entries or file passed in; page freshness comes from extractContent.
+      # describePage results are read back by llms-txt-generation (cache, then data-aggregator; ADR 0023).
+      describePage: {ttl: P30D, scope: shared, archiveTo: data-aggregator}  # DEFAULT
+      generateLlmsTxt: {ttl: P30D, scope: shared}                # DEFAULT
+      validateLlmsTxt: {ttl: P30D, scope: shared}                # DEFAULT
+
+# Phase 6-7 tools get entries when their contracts are written. Operations with
+# side effects (notifier sends, report-renderer uploads) are listed with
+# `cacheable: false` and always called.
+
+external:
+  # Services owned outside this repo whose contracts REx defines
+  # (openapi/services/<service>.yaml), cached exactly like tool operations. Only the
+  # listed callers may call them (checked).
+  # The other external services have no entry yet: seo-auditor gets one when its
+  # contract is known; data-aggregator stores archives and is never cached.
+  content-extractor:
+    # ADR 0021. Called only by workers (content-extraction and page-audit
+    # flows). The canonical input is the ExtractionRequest; the freshness of every
+    # page in REx is this TTL. archiveTo (ADR 0022): the worker sends every fresh
+    # result (miss, refresh, bypass) to the data-aggregator before storing it; if
+    # the archive does not accept it, the result is still used but not stored
+    # (outcome `uncacheable`), so nothing leaves the cache unarchived.
+    callers: [workers]
+    keyVersion: 1     # bump when the extractor changes its output for the same input
+    operations:
+      extractContent:
+        ttl: PT1H                                                # DEFAULT
+        scope: shared
+        archiveTo: data-aggregator
+  sitemap-extractor:
+    # ADR 0023. Called only by workers (sitemap-discovery flow). The canonical input
+    # is the SitemapExtractionRequest; how stale a site's URL list may be is this TTL.
+    callers: [workers]
+    keyVersion: 1     # bump when the service changes its output for the same input
+    operations:
+      extractSitemapUrls:
+        ttl: PT24H                                               # DEFAULT
+        scope: shared

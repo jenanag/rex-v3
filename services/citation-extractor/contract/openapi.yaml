@@ -1,0 +1,337 @@
+# GENERATED - DO NOT EDIT. Vendored by scripts/vendor-contracts (ADR 0018) from
+# packages/contracts/openapi/services/citation-extractor.yaml. Change the source and re-run the script; CI fails on drift.
+openapi: 3.1.0
+info:
+  title: REx citation-extractor tool
+  version: 1.0.0
+  description: |
+    Stateless tool: extracts cited URLs from one answer (engine-reported sources and
+    inline links), normalizes them, and classifies each as own, competitor or
+    third-party using the brand domains passed in the request. Deterministic, no
+    LLM, no network. Domain aggregates are computed by the orchestrator.
+    No database, no queues, no bus, no calls to other tools.
+    Service doc: docs/services/citation-extractor.md
+    No authentication in the tool: only workers and the gateway can reach it (network
+    policy), and the gateway exposes only `x-rex-public` operations (ADR 0014).
+security: []
+tags:
+  - name: Citations
+  - name: Health
+paths:
+  /healthz:
+    get:
+      operationId: getLiveness
+      summary: Liveness probe
+      description: Returns 200 while the process is running. Never checks dependencies.
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Readiness probe
+      description: 'Returns 200 when the service can serve traffic: required config loaded and its own dependencies reachable (orchestrator: Postgres and RabbitMQ; workers: RabbitMQ; gateway: Redis; tools: signing keys loaded).'
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/citation-extractions:
+    post:
+      operationId: extractCitations
+      x-rex-limits:
+        llm: none
+        outboundFetch: none
+      summary: Extract and classify the citations of one answer
+      tags:
+        - Citations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CitationExtractionRequest'
+      responses:
+        '200':
+          description: Citations in order (engine sources first, then inline links), deduplicated by URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CitationExtraction'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/InternalError'
+components:
+  schemas:
+    CitationExtractionRequest:
+      type: object
+      unevaluatedProperties: false
+      required:
+        - markdown
+        - sources
+        - brands
+      properties:
+        markdown:
+          type: string
+          maxLength: 200000
+          description: |
+            The answer as Markdown, exactly as engine-query returned it (its normalized
+            answer text); inline links are read from it. The tool fetches nothing: it
+            never opens cited pages (page content, when needed, comes from the
+            platform's content extraction, ADR 0021).
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnswerSource'
+        brands:
+          type: array
+          maxItems: 50
+          items:
+            $ref: '#/components/schemas/TrackedBrand'
+    Ownership:
+      type: string
+      description: own = a domain of the primary brand; competitor = a competitor's domain; third_party = anything else.
+      enum:
+        - own
+        - competitor
+        - third_party
+    CitationSourceType:
+      type: string
+      description: engine_source = listed by the engine as a source; inline_link = a link inside the answer text.
+      enum:
+        - engine_source
+        - inline_link
+    CitationDetail:
+      type: object
+      description: One cited URL. The orchestrator's Citation resource reuses it.
+      required:
+        - url
+        - domain
+        - title
+        - position
+        - sourceType
+        - ownership
+      properties:
+        url:
+          $ref: '#/components/schemas/Url'
+        domain:
+          $ref: '#/components/schemas/Domain'
+        title:
+          type:
+            - string
+            - 'null'
+        position:
+          type: integer
+          minimum: 1
+        sourceType:
+          $ref: '#/components/schemas/CitationSourceType'
+        ownership:
+          $ref: '#/components/schemas/Ownership'
+    CitationExtraction:
+      type: object
+      required:
+        - citations
+      properties:
+        citations:
+          type: array
+          items:
+            allOf:
+              - type: object
+                required:
+                  - brandKey
+                properties:
+                  brandKey:
+                    type:
+                      - string
+                      - 'null'
+                    description: '`key` of the owning TrackedBrand when `ownership` is own or competitor.'
+              - $ref: '#/components/schemas/CitationDetail'
+    Health:
+      type: object
+      required:
+        - status
+        - service
+        - version
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - degraded
+            - down
+        service:
+          type: string
+        version:
+          type: string
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+              - ok
+              - down
+    FieldError:
+      type: object
+      required:
+        - pointer
+        - detail
+      properties:
+        pointer:
+          type: string
+          description: JSON Pointer (RFC 6901) into the request body, or `#/query/<name>` / `#/header/<name>`.
+        detail:
+          type: string
+    Problem:
+      type: object
+      description: RFC 9457 problem details, with REx extension members.
+      required:
+        - type
+        - title
+        - status
+        - code
+      properties:
+        type:
+          type: string
+          format: uri
+          description: 'URI identifying the problem type: `{PROBLEM_BASE_URI}/{code}`. PROBLEM_BASE_URI is a deployment setting; the product domain is deferred, so it is a placeholder until then (docs/roadmap.md#deferred-decisions).'
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          description: Explanation specific to this occurrence.
+        instance:
+          type: string
+          format: uri-reference
+          description: Request path of this occurrence.
+        code:
+          type: string
+          pattern: ^[a-z][a-z0-9_]*$
+          description: Stable machine-readable error code (snake_case), e.g. `validation_failed`.
+        traceId:
+          type: string
+          description: W3C trace ID for support and log correlation.
+        errors:
+          type: array
+          description: Field-level errors; present for `validation_failed`.
+          items:
+            $ref: '#/components/schemas/FieldError'
+    Url:
+      type: string
+      format: uri
+      maxLength: 2048
+      pattern: ^https?://
+    AnswerSource:
+      type: object
+      description: A source URL an engine reported for its answer (citations, grounding or annotations).
+      required:
+        - url
+        - position
+      properties:
+        url:
+          $ref: '#/components/schemas/Url'
+        title:
+          type:
+            - string
+            - 'null'
+        position:
+          type: integer
+          minimum: 1
+          description: 1-based order in the engine's source list.
+    BrandKind:
+      type: string
+      description: Each project has exactly one `primary` brand; all others are `competitor`.
+      enum:
+        - primary
+        - competitor
+    Domain:
+      type: string
+      format: hostname
+      maxLength: 253
+      description: Lower-case host name without scheme or `www.`, e.g. `example.com`.
+    TrackedBrand:
+      type: object
+      description: |
+        A brand as passed to stateless tools (answer-analysis, citation-extractor).
+        `key` is opaque to tools and echoed back; the orchestrator uses brand IDs.
+      required:
+        - key
+        - kind
+        - name
+        - aliases
+        - domains
+      properties:
+        key:
+          type: string
+          minLength: 1
+          maxLength: 64
+        kind:
+          $ref: '#/components/schemas/BrandKind'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        aliases:
+          type: array
+          maxItems: 20
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+        domains:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/Domain'
+  responses:
+    Health:
+      description: Health status.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Health'
+    ServiceUnavailable:
+      description: A dependency is unavailable; retry later.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    BadRequest:
+      description: The request is malformed or fails schema validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  headers:
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+        minimum: 0
+x-rex-service:
+  name: citation-extractor
+  kind: tool

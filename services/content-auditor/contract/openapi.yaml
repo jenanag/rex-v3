@@ -1,0 +1,593 @@
+# GENERATED - DO NOT EDIT. Vendored by scripts/vendor-contracts (ADR 0018) from
+# packages/contracts/openapi/services/content-auditor.yaml. Change the source and re-run the script; CI fails on drift.
+openapi: 3.1.0
+info:
+  title: REx content-auditor tool
+  version: 1.0.0
+  description: |
+    Stateless tool: scores one page's AI readiness and checks which AI crawlers a
+    site's robots.txt allows. Deterministic, no LLM. No database, no queues, no bus,
+    no calls to other tools: the llms.txt check uses an `LlmsTxtValidation` the
+    caller passes in (a worker gets it from llms-txt-generator first). Fetches
+    nothing: the page's extracted content, raw HTML and robots.txt arrive in the
+    request. The content-extractor service produces them (ADR 0021).
+    The AI crawler list is data: packages/contracts/data/ai-crawlers.yaml.
+    Operations marked `x-rex-public` are exposed anonymously by the gateway under
+    `/v1/tools`. Service doc: docs/services/content-auditor.md
+    No authentication in the tool: only workers and the gateway can reach it (network
+    policy), and the gateway exposes only `x-rex-public` operations (ADR 0014).
+security: []
+tags:
+  - name: Audits
+  - name: Crawler checks
+  - name: Health
+paths:
+  /healthz:
+    get:
+      operationId: getLiveness
+      summary: Liveness probe
+      description: Returns 200 while the process is running. Never checks dependencies.
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Readiness probe
+      description: 'Returns 200 when the service can serve traffic: required config loaded and its own dependencies reachable (orchestrator: Postgres and RabbitMQ; workers: RabbitMQ; gateway: Redis; tools: signing keys loaded).'
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/audits:
+    post:
+      operationId: auditPage
+      x-rex-limits:
+        llm: none
+        outboundFetch: none
+        notes: audits the page data in the request; fetches nothing
+      summary: Audit one page for AI readiness
+      description: |
+        Synchronous and deterministic. Fetches nothing: the caller passes the page's
+        extracted content, its raw HTTP response and its robots.txt. The
+        content-extractor service produces all three (ADR 0021).
+      tags:
+        - Audits
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditRequest'
+      responses:
+        '200':
+          description: Score, category scores and checks.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/InternalError'
+  /v1/crawler-checks:
+    post:
+      operationId: checkCrawlerAccess
+      x-rex-limits:
+        p99: PT2S
+        llm: none
+        outboundFetch: none
+        notes: evaluates the robots.txt in the request; fetches nothing
+      summary: Check which AI crawlers a site's robots.txt allows
+      description: |
+        Evaluates the robots.txt content passed in. The tool fetches nothing; to check
+        a site by URL, use the orchestrator's async, anonymous `createAudit`
+        (category `crawler_access`); there the content-extractor service reads the
+        site (ADR 0021).
+      x-rex-public: true
+      tags:
+        - Crawler checks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrawlerCheckRequest'
+      responses:
+        '200':
+          description: Access per known AI crawler.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrawlerCheck'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        default:
+          $ref: '#/components/responses/InternalError'
+components:
+  schemas:
+    AuditCategory:
+      type: string
+      description: |
+        crawler_access: robots.txt and meta robots for AI crawlers.
+        structured_data: JSON-LD presence and validity.
+        llms_txt: /llms.txt presence and validity (from the `llmsTxt` input).
+        answer_readiness: question headings, direct answers, lists/tables, chunkable sections.
+        entity_signals: organization/author entities, sameAs links.
+        technical: server-rendered content, status, canonical, indexability.
+        freshness: visible and structured dates.
+      enum:
+        - crawler_access
+        - structured_data
+        - llms_txt
+        - answer_readiness
+        - entity_signals
+        - technical
+        - freshness
+    AuditOptions:
+      type: object
+      properties:
+        categories:
+          type: array
+          description: 'Categories to run. Default: all.'
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/AuditCategory'
+    AuditRequest:
+      type: object
+      description: |
+        Everything the audit reads, already fetched and extracted. `content` (text and
+        Markdown) feeds answer_readiness, entity_signals and freshness. `page` (raw
+        HTML and headers) is needed because main-content extraction drops what the
+        other categories check: JSON-LD (structured_data, entity_signals), meta robots
+        and X-Robots-Tag (crawler_access, technical), canonical, status and whether the
+        content is server-rendered (technical), and dated markup (freshness).
+      allOf:
+        - $ref: '#/components/schemas/AuditOptions'
+        - type: object
+          required:
+            - url
+            - page
+            - content
+          properties:
+            url:
+              description: The URL the audit was requested for.
+              $ref: '#/components/schemas/Url'
+            page:
+              $ref: '#/components/schemas/FetchedPage'
+            content:
+              $ref: '#/components/schemas/ExtractedContent'
+            robotsTxt:
+              description: The site's robots.txt. If absent, the robots.txt checks of crawler_access are not_applicable.
+              $ref: '#/components/schemas/FetchedFile'
+            llmsTxt:
+              description: Validation of the site's llms.txt. If absent, the llms_txt category is not_applicable.
+              $ref: '#/components/schemas/LlmsTxtValidation'
+      unevaluatedProperties: false
+    CheckResult:
+      type: string
+      enum:
+        - pass
+        - warn
+        - fail
+        - not_applicable
+    AuditCheck:
+      type: object
+      required:
+        - id
+        - category
+        - result
+        - message
+      properties:
+        id:
+          type: string
+          pattern: ^[a-z][a-z0-9_]*$
+          description: Stable check ID, e.g. `robots_allows_oai_searchbot`.
+        category:
+          $ref: '#/components/schemas/AuditCategory'
+        result:
+          $ref: '#/components/schemas/CheckResult'
+        message:
+          type: string
+        recommendation:
+          type:
+            - string
+            - 'null'
+    CategoryScore:
+      type: object
+      required:
+        - category
+        - score
+      properties:
+        category:
+          $ref: '#/components/schemas/AuditCategory'
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+    AuditResult:
+      type: object
+      description: The orchestrator's Audit resource embeds this as `result`.
+      required:
+        - url
+        - finalUrl
+        - score
+        - categoryScores
+        - checks
+      properties:
+        url:
+          $ref: '#/components/schemas/Url'
+        finalUrl:
+          $ref: '#/components/schemas/Url'
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        categoryScores:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryScore'
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditCheck'
+    CrawlerCheckRequest:
+      type: object
+      unevaluatedProperties: false
+      required:
+        - siteUrl
+        - robotsTxt
+      properties:
+        siteUrl:
+          $ref: '#/components/schemas/Url'
+        robotsTxt:
+          description: The site's robots.txt as fetched (verbatim; rules must be read exactly as served).
+          $ref: '#/components/schemas/FetchedFile'
+    CrawlerAccess:
+      type: string
+      description: |
+        allowed: no rule blocks `/`. disallowed: `/` is blocked.
+        partial: some paths are blocked. unknown: robots.txt could not be read (5xx status, or null status = network error or timeout).
+      enum:
+        - allowed
+        - disallowed
+        - partial
+        - unknown
+    CrawlerCheck:
+      type: object
+      required:
+        - siteUrl
+        - robotsTxtUrl
+        - robotsTxtStatus
+        - crawlers
+        - checkedAt
+      properties:
+        siteUrl:
+          $ref: '#/components/schemas/Url'
+        robotsTxtUrl:
+          $ref: '#/components/schemas/Url'
+        robotsTxtStatus:
+          type:
+            - integer
+            - 'null'
+          description: HTTP status of robots.txt as passed in; null on network error.
+        crawlers:
+          type: array
+          items:
+            allOf:
+              - $ref: '#/components/schemas/AiCrawler'
+              - type: object
+                required:
+                  - access
+                properties:
+                  access:
+                    $ref: '#/components/schemas/CrawlerAccess'
+                  matchedGroup:
+                    type:
+                      - string
+                      - 'null'
+                    description: The robots.txt user-agent group that applied (`*` if none named the token).
+        checkedAt:
+          $ref: '#/components/schemas/Timestamp'
+    Health:
+      type: object
+      required:
+        - status
+        - service
+        - version
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - degraded
+            - down
+        service:
+          type: string
+        version:
+          type: string
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+              - ok
+              - down
+    FieldError:
+      type: object
+      required:
+        - pointer
+        - detail
+      properties:
+        pointer:
+          type: string
+          description: JSON Pointer (RFC 6901) into the request body, or `#/query/<name>` / `#/header/<name>`.
+        detail:
+          type: string
+    Problem:
+      type: object
+      description: RFC 9457 problem details, with REx extension members.
+      required:
+        - type
+        - title
+        - status
+        - code
+      properties:
+        type:
+          type: string
+          format: uri
+          description: 'URI identifying the problem type: `{PROBLEM_BASE_URI}/{code}`. PROBLEM_BASE_URI is a deployment setting; the product domain is deferred, so it is a placeholder until then (docs/roadmap.md#deferred-decisions).'
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          description: Explanation specific to this occurrence.
+        instance:
+          type: string
+          format: uri-reference
+          description: Request path of this occurrence.
+        code:
+          type: string
+          pattern: ^[a-z][a-z0-9_]*$
+          description: Stable machine-readable error code (snake_case), e.g. `validation_failed`.
+        traceId:
+          type: string
+          description: W3C trace ID for support and log correlation.
+        errors:
+          type: array
+          description: Field-level errors; present for `validation_failed`.
+          items:
+            $ref: '#/components/schemas/FieldError'
+    Url:
+      type: string
+      format: uri
+      maxLength: 2048
+      pattern: ^https?://
+    FetchedPage:
+      type: object
+      description: |
+        Raw HTTP response of one page, for tools that must read what main-content
+        extraction removes (markup, meta tags, JSON-LD, headers). Fetched by the
+        platform before the call (ADR 0021); tools never fetch it.
+      required:
+        - finalUrl
+        - status
+        - headers
+        - html
+      properties:
+        finalUrl:
+          $ref: '#/components/schemas/Url'
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
+        headers:
+          type: object
+          description: Response headers, names lowercased; repeated headers joined with `, `.
+          maxProperties: 200
+          additionalProperties:
+            type: string
+            maxLength: 8192
+        html:
+          type: string
+          maxLength: 2000000
+          description: Response body as served (server-rendered HTML, no JavaScript executed); truncated at the cap.
+    ExtractedContent:
+      type: object
+      description: |
+        A page's main content as normalized plain text and Markdown, extracted by
+        the platform before the call (ADR 0021); tools receive it and never extract
+        it themselves.
+      required:
+        - text
+        - markdown
+      properties:
+        text:
+          type: string
+          maxLength: 1000000
+          description: Normalized plain text of the main content.
+        markdown:
+          type: string
+          maxLength: 1000000
+          description: Normalized Markdown of the main content.
+    FetchedFile:
+      type: object
+      description: One fetched text file, e.g. a site's robots.txt, passed to a tool verbatim.
+      required:
+        - url
+        - status
+        - content
+      properties:
+        url:
+          $ref: '#/components/schemas/Url'
+        status:
+          type:
+            - integer
+            - 'null'
+          description: HTTP status; null on network error or timeout.
+        content:
+          type:
+            - string
+            - 'null'
+          maxLength: 500000
+          description: Body when `status` is 2xx, else null.
+    ValidationIssue:
+      type: object
+      description: One finding from a validator (schema markup, llms.txt, ...).
+      required:
+        - severity
+        - message
+      properties:
+        severity:
+          type: string
+          enum:
+            - error
+            - warning
+            - info
+        code:
+          type: string
+          pattern: ^[a-z][a-z0-9_]*$
+        message:
+          type: string
+        pointer:
+          type: string
+          description: JSON Pointer or `line:<n>` locating the issue in the validated input.
+    ValidationResult:
+      type: object
+      required:
+        - valid
+        - issues
+      properties:
+        valid:
+          type: boolean
+          description: True when there are no `error` issues.
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssue'
+    LlmsTxtValidation:
+      description: |
+        Result of validating an llms.txt. Produced by llms-txt-generator and accepted
+        as input by content-auditor (a worker chains the two).
+      allOf:
+        - $ref: '#/components/schemas/ValidationResult'
+        - type: object
+          required:
+            - found
+            - url
+            - httpStatus
+          properties:
+            found:
+              type: boolean
+              description: False when there is no file (status not 2xx or no content); then `valid` is false.
+            url:
+              description: URL of the file; null when the content was given inline.
+              oneOf:
+                - $ref: '#/components/schemas/Url'
+                - type: 'null'
+            httpStatus:
+              type:
+                - integer
+                - 'null'
+    AiCrawler:
+      type: object
+      description: |
+        One known AI crawler. The list itself is data in
+        packages/contracts/data/ai-crawlers.yaml (validated against this schema),
+        used by content-auditor and ai-traffic-analyzer.
+      required:
+        - id
+        - robotsToken
+        - operator
+        - purpose
+      properties:
+        id:
+          type: string
+          pattern: ^[a-z][a-z0-9_]*$
+        robotsToken:
+          type: string
+          description: Token matched against robots.txt `User-agent` lines.
+        userAgentPattern:
+          type:
+            - string
+            - 'null'
+          description: Case-insensitive substring found in request User-Agent headers; null for robots-only tokens (e.g. Google-Extended).
+        operator:
+          type: string
+        purpose:
+          type: string
+          description: training = model training crawl; search = index for AI search answers; user_fetch = fetched live because a user asked.
+          enum:
+            - training
+            - search
+            - user_fetch
+    Timestamp:
+      type: string
+      format: date-time
+      description: RFC 3339 timestamp in UTC with millisecond precision, e.g. `2026-11-22T01:02:03.456Z`.
+  responses:
+    Health:
+      description: Health status.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Health'
+    ServiceUnavailable:
+      description: A dependency is unavailable; retry later.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    BadRequest:
+      description: The request is malformed or fails schema validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableContent:
+      description: Well-formed but violates a business rule, or an Idempotency-Key was reused with a different body.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  headers:
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+        minimum: 0
+x-rex-service:
+  name: content-auditor
+  kind: tool

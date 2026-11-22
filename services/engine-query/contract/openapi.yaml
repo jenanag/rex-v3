@@ -1,0 +1,380 @@
+# GENERATED - DO NOT EDIT. Vendored by scripts/vendor-contracts (ADR 0018) from
+# packages/contracts/openapi/services/engine-query.yaml. Change the source and re-run the script; CI fails on drift.
+openapi: 3.1.0
+info:
+  title: REx engine-query tool
+  version: 1.0.0
+  description: |
+    Stateless tool: asks one AI answer engine one prompt and returns the normalized
+    answer (Markdown text + engine-reported sources) and the LLM usage. No database,
+    no queues, no bus, no calls to other tools. Called by workers.
+    Service doc: docs/services/engine-query.md
+    No authentication in the tool: only workers and the gateway can reach it (network
+    policy), and the gateway exposes only `x-rex-public` operations (ADR 0014).
+security: []
+tags:
+  - name: Engines
+  - name: Health
+paths:
+  /healthz:
+    get:
+      operationId: getLiveness
+      summary: Liveness probe
+      description: Returns 200 while the process is running. Never checks dependencies.
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Readiness probe
+      description: 'Returns 200 when the service can serve traffic: required config loaded and its own dependencies reachable (orchestrator: Postgres and RabbitMQ; workers: RabbitMQ; gateway: Redis; tools: signing keys loaded).'
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/engines:
+    get:
+      operationId: listEngines
+      x-rex-limits:
+        llm: none
+        outboundFetch: none
+      summary: Engines this deployment can query and the model each one uses
+      tags:
+        - Engines
+      responses:
+        '200':
+          description: All engines (small, fixed list; not paginated).
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Engine'
+        default:
+          $ref: '#/components/responses/InternalError'
+  /v1/engine-answers:
+    post:
+      operationId: queryEngine
+      x-rex-limits:
+        maxDuration: PT120S
+        llm: required
+        outboundFetch: none
+      summary: Ask one engine one prompt (one sample) and return its answer
+      description: Synchronous; may take up to 120 s. A provider rate limit or outage returns 503 with Retry-After so the caller can retry.
+      tags:
+        - Engines
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EngineQuery'
+      responses:
+        '200':
+          description: The engine's answer and the LLM usage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EngineAnswerResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/InternalError'
+components:
+  schemas:
+    Engine:
+      type: object
+      required:
+        - id
+        - displayName
+        - provider
+        - model
+        - webSearch
+        - enabled
+      properties:
+        id:
+          $ref: '#/components/schemas/EngineId'
+        displayName:
+          type: string
+          examples:
+            - ChatGPT
+        provider:
+          type: string
+          description: API vendor, e.g. `openai`, `anthropic`, `google`, `perplexity`, `xai`.
+        model:
+          type: string
+          description: Model ID used for this engine (deployment config, not contract).
+        webSearch:
+          type: boolean
+          description: True when answers use the engine's web search or grounding.
+        enabled:
+          type: boolean
+    EngineQuery:
+      type: object
+      unevaluatedProperties: false
+      required:
+        - engine
+        - prompt
+      properties:
+        engine:
+          $ref: '#/components/schemas/EngineId'
+        prompt:
+          type: string
+          minLength: 3
+          maxLength: 2000
+        locale:
+          $ref: '#/components/schemas/Locale'
+        country:
+          $ref: '#/components/schemas/CountryCode'
+    EngineAnswer:
+      type: object
+      description: A normalized engine answer. The orchestrator stores it as part of its Answer resource.
+      required:
+        - engine
+        - model
+        - text
+        - sources
+        - latencyMs
+      properties:
+        engine:
+          $ref: '#/components/schemas/EngineId'
+        model:
+          type: string
+        text:
+          type: string
+          description: Answer text as Markdown, normalized across engines.
+        sources:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnswerSource'
+        latencyMs:
+          type: integer
+          minimum: 0
+    EngineAnswerResult:
+      type: object
+      required:
+        - answer
+        - usage
+      properties:
+        answer:
+          $ref: '#/components/schemas/EngineAnswer'
+        usage:
+          $ref: '#/components/schemas/LlmUsageList'
+    Health:
+      type: object
+      required:
+        - status
+        - service
+        - version
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - degraded
+            - down
+        service:
+          type: string
+        version:
+          type: string
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+              - ok
+              - down
+    FieldError:
+      type: object
+      required:
+        - pointer
+        - detail
+      properties:
+        pointer:
+          type: string
+          description: JSON Pointer (RFC 6901) into the request body, or `#/query/<name>` / `#/header/<name>`.
+        detail:
+          type: string
+    Problem:
+      type: object
+      description: RFC 9457 problem details, with REx extension members.
+      required:
+        - type
+        - title
+        - status
+        - code
+      properties:
+        type:
+          type: string
+          format: uri
+          description: 'URI identifying the problem type: `{PROBLEM_BASE_URI}/{code}`. PROBLEM_BASE_URI is a deployment setting; the product domain is deferred, so it is a placeholder until then (docs/roadmap.md#deferred-decisions).'
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          description: Explanation specific to this occurrence.
+        instance:
+          type: string
+          format: uri-reference
+          description: Request path of this occurrence.
+        code:
+          type: string
+          pattern: ^[a-z][a-z0-9_]*$
+          description: Stable machine-readable error code (snake_case), e.g. `validation_failed`.
+        traceId:
+          type: string
+          description: W3C trace ID for support and log correlation.
+        errors:
+          type: array
+          description: Field-level errors; present for `validation_failed`.
+          items:
+            $ref: '#/components/schemas/FieldError'
+    EngineId:
+      type: string
+      description: |
+        AI answer engine. Consumers must tolerate unknown values (tolerant reader),
+        so adding an engine is a non-breaking change; it also adds a per-engine
+        answer-capture queue (bus/topology.yaml expands `{engine}` from this enum).
+        The engine-to-model mapping is owned by engine-query (`GET /v1/engines`).
+      enum:
+        - chatgpt
+        - claude
+        - gemini
+        - perplexity
+        - grok
+    Locale:
+      type: string
+      pattern: ^[a-z]{2,3}(-[A-Z]{2})?$
+      description: BCP 47 language tag, e.g. `en-US`.
+      default: en-US
+    CountryCode:
+      type: string
+      pattern: ^[A-Z]{2}$
+      description: ISO 3166-1 alpha-2 country code, e.g. `US`.
+      default: US
+    Url:
+      type: string
+      format: uri
+      maxLength: 2048
+      pattern: ^https?://
+    AnswerSource:
+      type: object
+      description: A source URL an engine reported for its answer (citations, grounding or annotations).
+      required:
+        - url
+        - position
+      properties:
+        url:
+          $ref: '#/components/schemas/Url'
+        title:
+          type:
+            - string
+            - 'null'
+        position:
+          type: integer
+          minimum: 1
+          description: 1-based order in the engine's source list.
+    LlmUsage:
+      type: object
+      description: One LLM call made while serving a request. Tools report it; the orchestrator meters it.
+      required:
+        - provider
+        - model
+        - operation
+        - inputTokens
+        - outputTokens
+        - costMicrosUsd
+      properties:
+        provider:
+          type: string
+          examples:
+            - openai
+        model:
+          type: string
+        operation:
+          type: string
+          description: What the call was for, e.g. `answer_prompt`, `classify_sentiment`, `summarize_page`.
+        inputTokens:
+          type: integer
+          minimum: 0
+        outputTokens:
+          type: integer
+          minimum: 0
+        costMicrosUsd:
+          type: integer
+          minimum: 0
+          description: Cost in millionths of a US dollar from the provider price table at call time.
+    LlmUsageList:
+      type: array
+      description: Every LLM call made for this response; empty when none.
+      items:
+        $ref: '#/components/schemas/LlmUsage'
+  responses:
+    Health:
+      description: Health status.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Health'
+    ServiceUnavailable:
+      description: A dependency is unavailable; retry later.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    BadRequest:
+      description: The request is malformed or fails schema validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableContent:
+      description: Well-formed but violates a business rule, or an Idempotency-Key was reused with a different body.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  headers:
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+        minimum: 0
+x-rex-service:
+  name: engine-query
+  kind: tool

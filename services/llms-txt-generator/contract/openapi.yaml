@@ -1,0 +1,587 @@
+# GENERATED - DO NOT EDIT. Vendored by scripts/vendor-contracts (ADR 0018) from
+# packages/contracts/openapi/services/llms-txt-generator.yaml. Change the source and re-run the script; CI fails on drift.
+openapi: 3.1.0
+info:
+  title: REx llms-txt-generator tool
+  version: 1.0.0
+  description: |
+    Stateless tool: writes one page's llms.txt entry from its extracted content
+    (extractively or with an LLM), assembles a site's llms.txt (and optionally
+    llms-full.txt) from those entries without any LLM call, and validates an existing
+    llms.txt against the llmstxt.org format. No network besides the LLM API: pages,
+    entries and files are passed in (ADR 0021, ADR 0023).
+    No database, no queues, no bus, no calls to other tools. `validateLlmsTxt` is `x-rex-public`: the gateway exposes
+    it anonymously under `/v1/tools`. Service doc: docs/services/llms-txt-generator.md
+    No authentication in the tool: only workers and the gateway can reach it (network
+    policy), and the gateway exposes only `x-rex-public` operations (ADR 0014).
+security: []
+tags:
+  - name: llms.txt
+  - name: Health
+paths:
+  /healthz:
+    get:
+      operationId: getLiveness
+      summary: Liveness probe
+      description: Returns 200 while the process is running. Never checks dependencies.
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Readiness probe
+      description: 'Returns 200 when the service can serve traffic: required config loaded and its own dependencies reachable (orchestrator: Postgres and RabbitMQ; workers: RabbitMQ; gateway: Redis; tools: signing keys loaded).'
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/llms-txt/page-entries:
+    post:
+      operationId: describePage
+      x-rex-limits:
+        maxDuration: PT2M
+        llm: optional
+        llmCallTimeout: PT60S
+        outboundFetch: none
+        notes: 'LLM only with summarizer: llm (one call)'
+      summary: Write one page's llms.txt entry
+      description: 'Synchronous; turns one extracted page into its llms.txt entry (title and description; with `summarizer: llm` the description is written by an LLM); may take up to 2 minutes.'
+      tags:
+        - llms.txt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageEntryRequest'
+      responses:
+        '200':
+          description: The entry and the LLM usage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageEntryResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/InternalError'
+  /v1/llms-txt:
+    post:
+      operationId: generateLlmsTxt
+      x-rex-limits:
+        maxDuration: PT30S
+        llm: none
+        outboundFetch: none
+        notes: assembles the entries given; no LLM call
+      summary: Assemble a site's llms.txt from its page entries
+      description: Synchronous and deterministic; formats the entries given (and the pages' Markdown for llms-full.txt) without any LLM call; may take up to 30 s.
+      tags:
+        - llms.txt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LlmsTxtRequest'
+      responses:
+        '200':
+          description: The generated files.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmsTxtGeneration'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        default:
+          $ref: '#/components/responses/InternalError'
+  /v1/llms-txt/validate:
+    post:
+      operationId: validateLlmsTxt
+      x-rex-limits:
+        p99: PT2S
+        llm: none
+        outboundFetch: none
+        notes: validates the file in the request; fetches nothing
+      summary: Validate an llms.txt given inline or as a fetched file
+      x-rex-public: true
+      tags:
+        - llms.txt
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LlmsTxtValidateRequest'
+      responses:
+        '200':
+          description: Validation result (a missing or invalid file is still a 200).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmsTxtValidation'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/InternalError'
+components:
+  schemas:
+    PageEntryOptions:
+      type: object
+      description: How page entries are written (the llms.txt pipeline's per-page step).
+      properties:
+        summarizer:
+          type: string
+          enum:
+            - extractive
+            - llm
+          default: llm
+          description: |
+            How the description is written. `extractive` is deterministic (meta
+            description, else the first paragraph, trimmed) and makes no LLM call;
+            `llm` summarizes the page with an LLM (ADR 0017).
+        model:
+          type: string
+          description: 'LLM to use when `summarizer` is `llm`, as `<provider>/<model>`. Default: the deployment default.'
+          pattern: ^[a-z][a-z0-9_-]*/[A-Za-z0-9._:-]+$
+    LlmsTxtAssemblyOptions:
+      type: object
+      properties:
+        includeFull:
+          type: boolean
+          default: false
+          description: Also build llms-full.txt (page contents inlined as Markdown).
+    LlmsTxtPage:
+      type: object
+      description: One page of the site, as extracted by the content-extractor service.
+      required:
+        - url
+        - metadata
+        - content
+      properties:
+        url:
+          $ref: '#/components/schemas/Url'
+        metadata:
+          $ref: '#/components/schemas/PageMetadata'
+        content:
+          $ref: '#/components/schemas/ExtractedContent'
+    PageEntryRequest:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/PageEntryOptions'
+        - $ref: '#/components/schemas/LlmsTxtPage'
+      unevaluatedProperties: false
+    LlmsTxtEntry:
+      type: object
+      description: 'One page''s line in llms.txt: `- [title](url): description`.'
+      required:
+        - url
+        - title
+        - description
+      properties:
+        url:
+          $ref: '#/components/schemas/Url'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 300
+          description: The page title (metadata title, else the first heading, else the URL path).
+        description:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+          description: One or two sentences; null when the page has no usable text.
+    PageEntryResult:
+      type: object
+      required:
+        - entry
+        - usage
+      properties:
+        entry:
+          $ref: '#/components/schemas/LlmsTxtEntry'
+        usage:
+          $ref: '#/components/schemas/LlmUsageList'
+    LlmsTxtRequest:
+      type: object
+      description: |
+        The site's entries in the order they should be listed. The entry whose `url`
+        equals `siteUrl` (if any) gives the site's name and summary.
+      allOf:
+        - $ref: '#/components/schemas/LlmsTxtAssemblyOptions'
+        - type: object
+          required:
+            - siteUrl
+            - pages
+          properties:
+            siteUrl:
+              $ref: '#/components/schemas/Url'
+            pages:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required:
+                  - entry
+                properties:
+                  entry:
+                    $ref: '#/components/schemas/LlmsTxtEntry'
+                  markdown:
+                    type: string
+                    description: The page's Markdown for llms-full.txt; only with `includeFull` (pages without it are listed by entry only).
+      unevaluatedProperties: false
+    LlmsTxtResult:
+      type: object
+      description: The orchestrator's LlmsTxt resource embeds this as `result`.
+      required:
+        - content
+        - fullContent
+        - pageCount
+      properties:
+        content:
+          type: string
+          description: llms.txt Markdown.
+        fullContent:
+          type:
+            - string
+            - 'null'
+          maxLength: 2000000
+          description: llms-full.txt Markdown when `includeFull` was set; truncated at 2 MB with a closing notice.
+        pageCount:
+          type: integer
+          minimum: 0
+    LlmsTxtGeneration:
+      type: object
+      required:
+        - result
+      properties:
+        result:
+          $ref: '#/components/schemas/LlmsTxtResult'
+    LlmsTxtValidateRequest:
+      type: object
+      description: Exactly one of `file` (a fetched /llms.txt, including a missing one) or `content` (inline).
+      unevaluatedProperties: false
+      oneOf:
+        - type: object
+          required:
+            - file
+          properties:
+            file:
+              $ref: '#/components/schemas/FetchedFile'
+        - type: object
+          required:
+            - content
+          properties:
+            content:
+              type: string
+              maxLength: 1000000
+    Health:
+      type: object
+      required:
+        - status
+        - service
+        - version
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - degraded
+            - down
+        service:
+          type: string
+        version:
+          type: string
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+              - ok
+              - down
+    FieldError:
+      type: object
+      required:
+        - pointer
+        - detail
+      properties:
+        pointer:
+          type: string
+          description: JSON Pointer (RFC 6901) into the request body, or `#/query/<name>` / `#/header/<name>`.
+        detail:
+          type: string
+    Problem:
+      type: object
+      description: RFC 9457 problem details, with REx extension members.
+      required:
+        - type
+        - title
+        - status
+        - code
+      properties:
+        type:
+          type: string
+          format: uri
+          description: 'URI identifying the problem type: `{PROBLEM_BASE_URI}/{code}`. PROBLEM_BASE_URI is a deployment setting; the product domain is deferred, so it is a placeholder until then (docs/roadmap.md#deferred-decisions).'
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          description: Explanation specific to this occurrence.
+        instance:
+          type: string
+          format: uri-reference
+          description: Request path of this occurrence.
+        code:
+          type: string
+          pattern: ^[a-z][a-z0-9_]*$
+          description: Stable machine-readable error code (snake_case), e.g. `validation_failed`.
+        traceId:
+          type: string
+          description: W3C trace ID for support and log correlation.
+        errors:
+          type: array
+          description: Field-level errors; present for `validation_failed`.
+          items:
+            $ref: '#/components/schemas/FieldError'
+    Url:
+      type: string
+      format: uri
+      maxLength: 2048
+      pattern: ^https?://
+    LanguageTag:
+      type: string
+      description: |
+        BCP 47 language tag, lowercase language subtag first, e.g. `en`, `en-US`,
+        `pt-BR`. Matching against a supported list uses the primary language subtag
+        (`en-US` matches `en`).
+      pattern: ^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$
+      maxLength: 35
+    PageMetadata:
+      type: object
+      description: Page-level metadata read from the HTML head by the content-extractor service (ADR 0021); tools never extract it themselves.
+      required:
+        - title
+        - description
+        - language
+        - canonicalUrl
+      properties:
+        title:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+          description: '`<title>`, else `og:title`; null when neither is present.'
+        description:
+          type:
+            - string
+            - 'null'
+          maxLength: 5000
+          description: Meta description, else `og:description`; null when neither is present.
+        language:
+          description: '`<html lang>` normalized to a language tag; null when absent or invalid.'
+          oneOf:
+            - $ref: '#/components/schemas/LanguageTag'
+            - type: 'null'
+        canonicalUrl:
+          description: '`<link rel="canonical">` resolved against the page URL; null when absent.'
+          oneOf:
+            - $ref: '#/components/schemas/Url'
+            - type: 'null'
+    ExtractedContent:
+      type: object
+      description: |
+        A page's main content as normalized plain text and Markdown, extracted by
+        the platform before the call (ADR 0021); tools receive it and never extract
+        it themselves.
+      required:
+        - text
+        - markdown
+      properties:
+        text:
+          type: string
+          maxLength: 1000000
+          description: Normalized plain text of the main content.
+        markdown:
+          type: string
+          maxLength: 1000000
+          description: Normalized Markdown of the main content.
+    LlmUsage:
+      type: object
+      description: One LLM call made while serving a request. Tools report it; the orchestrator meters it.
+      required:
+        - provider
+        - model
+        - operation
+        - inputTokens
+        - outputTokens
+        - costMicrosUsd
+      properties:
+        provider:
+          type: string
+          examples:
+            - openai
+        model:
+          type: string
+        operation:
+          type: string
+          description: What the call was for, e.g. `answer_prompt`, `classify_sentiment`, `summarize_page`.
+        inputTokens:
+          type: integer
+          minimum: 0
+        outputTokens:
+          type: integer
+          minimum: 0
+        costMicrosUsd:
+          type: integer
+          minimum: 0
+          description: Cost in millionths of a US dollar from the provider price table at call time.
+    LlmUsageList:
+      type: array
+      description: Every LLM call made for this response; empty when none.
+      items:
+        $ref: '#/components/schemas/LlmUsage'
+    FetchedFile:
+      type: object
+      description: One fetched text file, e.g. a site's robots.txt, passed to a tool verbatim.
+      required:
+        - url
+        - status
+        - content
+      properties:
+        url:
+          $ref: '#/components/schemas/Url'
+        status:
+          type:
+            - integer
+            - 'null'
+          description: HTTP status; null on network error or timeout.
+        content:
+          type:
+            - string
+            - 'null'
+          maxLength: 500000
+          description: Body when `status` is 2xx, else null.
+    ValidationIssue:
+      type: object
+      description: One finding from a validator (schema markup, llms.txt, ...).
+      required:
+        - severity
+        - message
+      properties:
+        severity:
+          type: string
+          enum:
+            - error
+            - warning
+            - info
+        code:
+          type: string
+          pattern: ^[a-z][a-z0-9_]*$
+        message:
+          type: string
+        pointer:
+          type: string
+          description: JSON Pointer or `line:<n>` locating the issue in the validated input.
+    ValidationResult:
+      type: object
+      required:
+        - valid
+        - issues
+      properties:
+        valid:
+          type: boolean
+          description: True when there are no `error` issues.
+        issues:
+          type: array
+          items:
+            $ref: '#/components/schemas/ValidationIssue'
+    LlmsTxtValidation:
+      description: |
+        Result of validating an llms.txt. Produced by llms-txt-generator and accepted
+        as input by content-auditor (a worker chains the two).
+      allOf:
+        - $ref: '#/components/schemas/ValidationResult'
+        - type: object
+          required:
+            - found
+            - url
+            - httpStatus
+          properties:
+            found:
+              type: boolean
+              description: False when there is no file (status not 2xx or no content); then `valid` is false.
+            url:
+              description: URL of the file; null when the content was given inline.
+              oneOf:
+                - $ref: '#/components/schemas/Url'
+                - type: 'null'
+            httpStatus:
+              type:
+                - integer
+                - 'null'
+  responses:
+    Health:
+      description: Health status.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Health'
+    ServiceUnavailable:
+      description: A dependency is unavailable; retry later.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    BadRequest:
+      description: The request is malformed or fails schema validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableContent:
+      description: Well-formed but violates a business rule, or an Idempotency-Key was reused with a different body.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  headers:
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+        minimum: 0
+x-rex-service:
+  name: llms-txt-generator
+  kind: tool

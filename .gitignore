@@ -1,0 +1,63 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+.npm/
+
+# Build and test output
+dist/
+build/
+out/
+coverage/
+.nyc_output/
+.turbo/
+*.tsbuildinfo
+.eslintcache
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Go
+/bin/
+*.test
+*.out
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Editors and IDEs
+.idea/
+*.iml
+.vscode/*
+!.vscode/extensions.json
+.history/
+*.swp
+*.swo
+*~
+.claude/settings.local.json
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Local scratch
+.cache/
+tmp/

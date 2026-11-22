@@ -1,0 +1,53 @@
+# Redocly CLI config: the one OpenAPI linter/bundler for REx (ADR 0006, docs/dry-rule.md).
+# Run: npm run lint:openapi
+extends:
+  - recommended
+apis:
+  common:
+    root: packages/contracts/openapi/common.yaml
+  gateway:
+    root: packages/contracts/openapi/services/gateway.yaml
+  orchestrator:
+    root: packages/contracts/openapi/services/orchestrator.yaml
+  engine-query:
+    root: packages/contracts/openapi/services/engine-query.yaml
+  answer-analysis:
+    root: packages/contracts/openapi/services/answer-analysis.yaml
+  citation-extractor:
+    root: packages/contracts/openapi/services/citation-extractor.yaml
+  content-auditor:
+    root: packages/contracts/openapi/services/content-auditor.yaml
+  schema-generator:
+    root: packages/contracts/openapi/services/schema-generator.yaml
+  llms-txt-generator:
+    root: packages/contracts/openapi/services/llms-txt-generator.yaml
+  content-extractor:
+    root: packages/contracts/openapi/services/content-extractor.yaml
+  sitemap-extractor:
+    root: packages/contracts/openapi/services/sitemap-extractor.yaml
+rules:
+  # Portable contracts omit deployment-specific server addresses.
+  no-empty-servers: off
+  operation-operationId: error
+  operation-operationId-unique: error
+  operation-summary: error
+  operation-4xx-response: warn  # health probes, JWKS and parameterless tool lists legitimately have no 4xx
+  operation-4xx-problem-details-rfc7807: error
+  no-unused-components: off   # common.yaml is a library of components by design
+  security-defined: error
+  tag-description: off
+  info-license: off          # proprietary, no license block
+  info-license-strict: off
+  # REx rules (see docs/conventions.md)
+  rule/path-kebab-case:
+    subject:
+      type: Paths
+    assertions:
+      pattern: '^(/(\.well-known|[a-z0-9]+(-[a-z0-9]+)*(\.json)?|\{[a-zA-Z]+\}))+$'
+    message: Path segments must be kebab-case (or {camelCaseParam}).
+  rule/operationid-camel-case:
+    subject:
+      type: Operation
+      property: operationId
+    assertions:
+      casing: camelCase

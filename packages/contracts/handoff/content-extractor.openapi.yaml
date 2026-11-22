@@ -1,0 +1,417 @@
+# GENERATED - DO NOT EDIT. Vendored by scripts/vendor-contracts (ADR 0018) from
+# packages/contracts/openapi/services/content-extractor.yaml. Change the source and re-run the script; CI fails on drift.
+openapi: 3.1.0
+info:
+  title: REx content-extractor service
+  version: 2.0.0
+  description: |
+    External service (ADR 0021): implemented in Go outside this repo; its owner builds
+    to this contract, which REx defines. It turns a URL or inline HTML into the page's
+    main content as normalized text and Markdown, plus everything REx workers need
+    from the page: the raw response (final URL, status, relevant headers, HTML), page
+    metadata, and on request the site's robots.txt and llms.txt. Finding a site's page
+    URLs (sitemaps, links) is the sitemap-extractor's job (2.0.0, ADR 0023). REx
+    services never fetch anything; external services such as this one read websites
+    for them.
+
+    Called only by REx workers, cache first (cache/policy.yaml `external`). Stateless:
+    no database, no queues, no bus, no calls to REx services. No authentication in the
+    service: it runs on the private network inside the cluster and only workers can
+    reach it (network policy, ADR 0014).
+    Every number marked DEFAULT is a placeholder its owner may tune; changing one is
+    not a contract change.
+    Service doc: docs/services/content-extractor.md
+security: []
+tags:
+  - name: Extraction
+  - name: Health
+paths:
+  /healthz:
+    get:
+      operationId: getLiveness
+      summary: Liveness probe
+      description: Returns 200 while the process is running. Never checks dependencies.
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Readiness probe
+      description: 'Returns 200 when the service can serve traffic: required config loaded and its own dependencies reachable (orchestrator: Postgres and RabbitMQ; workers: RabbitMQ; gateway: Redis; tools: signing keys loaded).'
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/content-extractions:
+    post:
+      operationId: extractContent
+      x-rex-limits:
+        maxDuration: PT30S
+        llm: none
+        outboundFetch: several
+        fetchTimeout: PT10S
+        fetchMaxBytes: 2000000
+        notes: 'DEFAULT values; per fetch: the page, plus robots.txt and llms.txt when `include` asks or robots.txt is needed for `respectRobotsTxt`'
+      summary: Extract one page's main content and page data
+      description: |
+        Synchronous; may take up to 30 s (all fetches included). With `url`, fetches
+        the page (following up to 5 redirects, DEFAULT) and returns `page`; with inline
+        `html`, fetches nothing for the page itself and `page` is null. A target that
+        answers with a non-2xx status is still a 200 here: `page.status` carries it and
+        `content` holds whatever main content the body had (possibly empty).
+
+        Fetching rules: `http` and `https` only; requests to private, loopback,
+        link-local and metadata addresses are refused (`target_blocked`), also after
+        redirects; a fixed User-Agent that identifies REx; no JavaScript executed;
+        bodies truncated at `fetchMaxBytes`. Site files (`robotsTxt`, `llmsTxt`) are
+        read from the origin of `url` (or `baseUrl` with `html`). These rules apply
+        to every external service of REx that reads websites (sitemap-extractor too).
+
+        With `respectRobotsTxt: true`, the origin's robots.txt rules for the service's
+        User-Agent apply and a disallowed `url` is not fetched (`robots_disallowed`).
+        Rules are read per RFC 9309: a 4xx robots.txt allows everything; an
+        unreachable robots.txt or a 5xx disallows everything.
+
+        422 codes: `target_unreachable` (DNS, connection, TLS or timeout on the page
+        fetch), `target_blocked` (scheme or address refused), `unsupported_content_type`
+        (the page is not HTML or XHTML), `origin_required` (inline `html` without
+        `baseUrl` while `include` asks for site files),
+        `robots_disallowed` (`respectRobotsTxt` is true and robots.txt disallows `url`).
+        A failed site-file fetch
+        is not an error: that file comes back with `status: null`.
+      tags:
+        - Extraction
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtractionRequest'
+      responses:
+        '200':
+          description: The extraction (also when the target page answered with an error status).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Extraction'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/UnprocessableContent'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '#/components/responses/InternalError'
+components:
+  schemas:
+    ExtractionInclude:
+      type: string
+      description: |
+        Optional parts of the result: the site's /robots.txt and /llms.txt. (Links and
+        sitemap URLs moved to the sitemap-extractor in 2.0.0.)
+      enum:
+        - robotsTxt
+        - llmsTxt
+    ExtractionRequest:
+      type: object
+      description: Exactly one of `url` or `html` (`baseUrl` only with `html`).
+      unevaluatedProperties: false
+      oneOf:
+        - required:
+            - url
+          properties:
+            url:
+              $ref: '#/components/schemas/Url'
+        - required:
+            - html
+          properties:
+            html:
+              type: string
+              maxLength: 2000000
+              description: Inline HTML to extract instead of fetching a page.
+            baseUrl:
+              description: The URL the HTML came from (resolves relative links; origin for site files).
+              $ref: '#/components/schemas/Url'
+      properties:
+        include:
+          type: array
+          uniqueItems: true
+          default: []
+          items:
+            $ref: '#/components/schemas/ExtractionInclude'
+        respectRobotsTxt:
+          type: boolean
+          default: false
+          description: Refuse a `url` the origin's robots.txt disallows (see the operation). REx sets it for llms.txt page jobs.
+    Extraction:
+      type: object
+      required:
+        - url
+        - page
+        - content
+        - metadata
+      properties:
+        url:
+          description: '`url` of the request, else `baseUrl`, else null.'
+          oneOf:
+            - $ref: '#/components/schemas/Url'
+            - type: 'null'
+        page:
+          description: |
+            The raw page response; null with inline `html`. `headers` holds only the
+            relevant ones: content-type, content-language, last-modified, etag,
+            x-robots-tag, link, cache-control.
+          oneOf:
+            - $ref: '#/components/schemas/FetchedPage'
+            - type: 'null'
+        content:
+          $ref: '#/components/schemas/ExtractedContent'
+        metadata:
+          $ref: '#/components/schemas/PageMetadata'
+        robotsTxt:
+          description: Present when `include` has `robotsTxt`.
+          $ref: '#/components/schemas/FetchedFile'
+        llmsTxt:
+          description: Present when `include` has `llmsTxt`.
+          $ref: '#/components/schemas/FetchedFile'
+    Health:
+      type: object
+      required:
+        - status
+        - service
+        - version
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - degraded
+            - down
+        service:
+          type: string
+        version:
+          type: string
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+              - ok
+              - down
+    FieldError:
+      type: object
+      required:
+        - pointer
+        - detail
+      properties:
+        pointer:
+          type: string
+          description: JSON Pointer (RFC 6901) into the request body, or `#/query/<name>` / `#/header/<name>`.
+        detail:
+          type: string
+    Problem:
+      type: object
+      description: RFC 9457 problem details, with REx extension members.
+      required:
+        - type
+        - title
+        - status
+        - code
+      properties:
+        type:
+          type: string
+          format: uri
+          description: 'URI identifying the problem type: `{PROBLEM_BASE_URI}/{code}`. PROBLEM_BASE_URI is a deployment setting; the product domain is deferred, so it is a placeholder until then (docs/roadmap.md#deferred-decisions).'
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          description: Explanation specific to this occurrence.
+        instance:
+          type: string
+          format: uri-reference
+          description: Request path of this occurrence.
+        code:
+          type: string
+          pattern: ^[a-z][a-z0-9_]*$
+          description: Stable machine-readable error code (snake_case), e.g. `validation_failed`.
+        traceId:
+          type: string
+          description: W3C trace ID for support and log correlation.
+        errors:
+          type: array
+          description: Field-level errors; present for `validation_failed`.
+          items:
+            $ref: '#/components/schemas/FieldError'
+    Url:
+      type: string
+      format: uri
+      maxLength: 2048
+      pattern: ^https?://
+    FetchedPage:
+      type: object
+      description: |
+        Raw HTTP response of one page, for tools that must read what main-content
+        extraction removes (markup, meta tags, JSON-LD, headers). Fetched by the
+        platform before the call (ADR 0021); tools never fetch it.
+      required:
+        - finalUrl
+        - status
+        - headers
+        - html
+      properties:
+        finalUrl:
+          $ref: '#/components/schemas/Url'
+        status:
+          type: integer
+          minimum: 100
+          maximum: 599
+        headers:
+          type: object
+          description: Response headers, names lowercased; repeated headers joined with `, `.
+          maxProperties: 200
+          additionalProperties:
+            type: string
+            maxLength: 8192
+        html:
+          type: string
+          maxLength: 2000000
+          description: Response body as served (server-rendered HTML, no JavaScript executed); truncated at the cap.
+    ExtractedContent:
+      type: object
+      description: |
+        A page's main content as normalized plain text and Markdown, extracted by
+        the platform before the call (ADR 0021); tools receive it and never extract
+        it themselves.
+      required:
+        - text
+        - markdown
+      properties:
+        text:
+          type: string
+          maxLength: 1000000
+          description: Normalized plain text of the main content.
+        markdown:
+          type: string
+          maxLength: 1000000
+          description: Normalized Markdown of the main content.
+    LanguageTag:
+      type: string
+      description: |
+        BCP 47 language tag, lowercase language subtag first, e.g. `en`, `en-US`,
+        `pt-BR`. Matching against a supported list uses the primary language subtag
+        (`en-US` matches `en`).
+      pattern: ^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$
+      maxLength: 35
+    PageMetadata:
+      type: object
+      description: Page-level metadata read from the HTML head by the content-extractor service (ADR 0021); tools never extract it themselves.
+      required:
+        - title
+        - description
+        - language
+        - canonicalUrl
+      properties:
+        title:
+          type:
+            - string
+            - 'null'
+          maxLength: 1000
+          description: '`<title>`, else `og:title`; null when neither is present.'
+        description:
+          type:
+            - string
+            - 'null'
+          maxLength: 5000
+          description: Meta description, else `og:description`; null when neither is present.
+        language:
+          description: '`<html lang>` normalized to a language tag; null when absent or invalid.'
+          oneOf:
+            - $ref: '#/components/schemas/LanguageTag'
+            - type: 'null'
+        canonicalUrl:
+          description: '`<link rel="canonical">` resolved against the page URL; null when absent.'
+          oneOf:
+            - $ref: '#/components/schemas/Url'
+            - type: 'null'
+    FetchedFile:
+      type: object
+      description: One fetched text file, e.g. a site's robots.txt, passed to a tool verbatim.
+      required:
+        - url
+        - status
+        - content
+      properties:
+        url:
+          $ref: '#/components/schemas/Url'
+        status:
+          type:
+            - integer
+            - 'null'
+          description: HTTP status; null on network error or timeout.
+        content:
+          type:
+            - string
+            - 'null'
+          maxLength: 500000
+          description: Body when `status` is 2xx, else null.
+  responses:
+    Health:
+      description: Health status.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Health'
+    ServiceUnavailable:
+      description: A dependency is unavailable; retry later.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    BadRequest:
+      description: The request is malformed or fails schema validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableContent:
+      description: Well-formed but violates a business rule, or an Idempotency-Key was reused with a different body.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  headers:
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+        minimum: 0
+x-rex-service:
+  name: content-extractor
+  kind: external

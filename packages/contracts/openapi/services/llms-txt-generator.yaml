@@ -1,0 +1,232 @@
+openapi: 3.1.0
+info:
+  title: REx llms-txt-generator tool
+  version: 1.0.0
+  description: |
+    Stateless tool: writes one page's llms.txt entry from its extracted content
+    (extractively or with an LLM), assembles a site's llms.txt (and optionally
+    llms-full.txt) from those entries without any LLM call, and validates an existing
+    llms.txt against the llmstxt.org format. No network besides the LLM API: pages,
+    entries and files are passed in (ADR 0021, ADR 0023).
+    No database, no queues, no bus, no calls to other tools. `validateLlmsTxt` is `x-rex-public`: the gateway exposes
+    it anonymously under `/v1/tools`. Service doc: docs/services/llms-txt-generator.md
+    No authentication in the tool: only workers and the gateway can reach it (network
+    policy), and the gateway exposes only `x-rex-public` operations (ADR 0014).
+x-rex-service:
+  name: llms-txt-generator
+  kind: tool
+security: []   # no auth inside tools: enforced in front of them (ADR 0014, ADR 0018)
+tags:
+  - name: llms.txt
+  - name: Health
+paths:
+  /healthz:
+    $ref: '../common.yaml#/components/pathItems/Healthz'
+  /readyz:
+    $ref: '../common.yaml#/components/pathItems/Readyz'
+  /v1/llms-txt/page-entries:
+    post:
+      operationId: describePage
+      x-rex-limits: {maxDuration: PT2M, llm: optional, llmCallTimeout: PT60S, outboundFetch: none, notes: 'LLM only with summarizer: llm (one call)'}
+      summary: Write one page's llms.txt entry
+      description: 'Synchronous; turns one extracted page into its llms.txt entry (title and description; with `summarizer: llm` the description is written by an LLM); may take up to 2 minutes.'
+      tags: [llms.txt]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageEntryRequest'
+      responses:
+        '200':
+          description: The entry and the LLM usage.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PageEntryResult'
+        '400':
+          $ref: '../common.yaml#/components/responses/BadRequest'
+        '422':
+          $ref: '../common.yaml#/components/responses/UnprocessableContent'
+        '503':
+          $ref: '../common.yaml#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '../common.yaml#/components/responses/InternalError'
+  /v1/llms-txt:
+    post:
+      operationId: generateLlmsTxt
+      x-rex-limits: {maxDuration: PT30S, llm: none, outboundFetch: none, notes: 'assembles the entries given; no LLM call'}
+      summary: Assemble a site's llms.txt from its page entries
+      description: 'Synchronous and deterministic; formats the entries given (and the pages'' Markdown for llms-full.txt) without any LLM call; may take up to 30 s.'
+      tags: [llms.txt]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LlmsTxtRequest'
+      responses:
+        '200':
+          description: The generated files.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmsTxtGeneration'
+        '400':
+          $ref: '../common.yaml#/components/responses/BadRequest'
+        '422':
+          $ref: '../common.yaml#/components/responses/UnprocessableContent'
+        default:
+          $ref: '../common.yaml#/components/responses/InternalError'
+  /v1/llms-txt/validate:
+    post:
+      operationId: validateLlmsTxt
+      x-rex-limits: {p99: PT2S, llm: none, outboundFetch: none, notes: 'validates the file in the request; fetches nothing'}
+      summary: Validate an llms.txt given inline or as a fetched file
+      x-rex-public: true
+      tags: [llms.txt]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LlmsTxtValidateRequest'
+      responses:
+        '200':
+          description: Validation result (a missing or invalid file is still a 200).
+          content:
+            application/json:
+              schema:
+                $ref: '../common.yaml#/components/schemas/LlmsTxtValidation'
+        '400':
+          $ref: '../common.yaml#/components/responses/BadRequest'
+        default:
+          $ref: '../common.yaml#/components/responses/InternalError'
+components:
+  schemas:
+    PageEntryOptions:
+      type: object
+      description: How page entries are written (the llms.txt pipeline's per-page step).
+      properties:
+        summarizer:
+          type: string
+          enum: [extractive, llm]
+          default: llm
+          description: |
+            How the description is written. `extractive` is deterministic (meta
+            description, else the first paragraph, trimmed) and makes no LLM call;
+            `llm` summarizes the page with an LLM (ADR 0017).
+        model:
+          type: string
+          description: 'LLM to use when `summarizer` is `llm`, as `<provider>/<model>`. Default: the deployment default.'
+          pattern: '^[a-z][a-z0-9_-]*/[A-Za-z0-9._:-]+$'
+    LlmsTxtAssemblyOptions:
+      type: object
+      properties:
+        includeFull:
+          type: boolean
+          default: false
+          description: Also build llms-full.txt (page contents inlined as Markdown).
+    LlmsTxtPage:
+      type: object
+      description: One page of the site, as extracted by the content-extractor service.
+      required: [url, metadata, content]
+      properties:
+        url:
+          $ref: '../common.yaml#/components/schemas/Url'
+        metadata:
+          $ref: '../common.yaml#/components/schemas/PageMetadata'
+        content:
+          $ref: '../common.yaml#/components/schemas/ExtractedContent'
+    PageEntryRequest:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/PageEntryOptions'
+        - $ref: '#/components/schemas/LlmsTxtPage'
+      unevaluatedProperties: false
+    LlmsTxtEntry:
+      type: object
+      description: 'One page''s line in llms.txt: `- [title](url): description`.'
+      required: [url, title, description]
+      properties:
+        url:
+          $ref: '../common.yaml#/components/schemas/Url'
+        title:
+          type: string
+          minLength: 1
+          maxLength: 300
+          description: The page title (metadata title, else the first heading, else the URL path).
+        description:
+          type: [string, 'null']
+          maxLength: 1000
+          description: One or two sentences; null when the page has no usable text.
+    PageEntryResult:
+      type: object
+      required: [entry, usage]
+      properties:
+        entry:
+          $ref: '#/components/schemas/LlmsTxtEntry'
+        usage:
+          $ref: '../common.yaml#/components/schemas/LlmUsageList'
+    LlmsTxtRequest:
+      type: object
+      description: |
+        The site's entries in the order they should be listed. The entry whose `url`
+        equals `siteUrl` (if any) gives the site's name and summary.
+      allOf:
+        - $ref: '#/components/schemas/LlmsTxtAssemblyOptions'
+        - type: object
+          required: [siteUrl, pages]
+          properties:
+            siteUrl:
+              $ref: '../common.yaml#/components/schemas/Url'
+            pages:
+              type: array
+              minItems: 1
+              items:
+                type: object
+                required: [entry]
+                properties:
+                  entry:
+                    $ref: '#/components/schemas/LlmsTxtEntry'
+                  markdown:
+                    type: string
+                    description: The page's Markdown for llms-full.txt; only with `includeFull` (pages without it are listed by entry only).
+      unevaluatedProperties: false
+    LlmsTxtResult:
+      type: object
+      description: The orchestrator's LlmsTxt resource embeds this as `result`.
+      required: [content, fullContent, pageCount]
+      properties:
+        content:
+          type: string
+          description: llms.txt Markdown.
+        fullContent:
+          type: [string, 'null']
+          maxLength: 2000000
+          description: llms-full.txt Markdown when `includeFull` was set; truncated at 2 MB with a closing notice.
+        pageCount:
+          type: integer
+          minimum: 0
+    LlmsTxtGeneration:
+      type: object
+      required: [result]
+      properties:
+        result:
+          $ref: '#/components/schemas/LlmsTxtResult'
+    LlmsTxtValidateRequest:
+      type: object
+      description: 'Exactly one of `file` (a fetched /llms.txt, including a missing one) or `content` (inline).'
+      unevaluatedProperties: false
+      oneOf:
+        - type: object
+          required: [file]
+          properties:
+            file:
+              $ref: '../common.yaml#/components/schemas/FetchedFile'
+        - type: object
+          required: [content]
+          properties:
+            content:
+              type: string
+              maxLength: 1000000

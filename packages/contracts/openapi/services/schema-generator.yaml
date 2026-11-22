@@ -1,0 +1,143 @@
+openapi: 3.1.0
+info:
+  title: REx schema-generator service
+  version: 1.0.0
+  description: |
+    Stateless tool: generates and validates schema.org JSON-LD. Deterministic, no
+    LLM, no network: a page is passed in as its HTML (ADR 0021).
+    No database, no queues, no bus, no calls to other tools. Both operations are
+    `x-rex-public`: the gateway exposes them anonymously under `/v1/tools`.
+    Service doc: docs/services/schema-generator.md
+    No authentication in the tool: only workers and the gateway can reach it (network
+    policy), and the gateway exposes only `x-rex-public` operations (ADR 0014).
+x-rex-service:
+  name: schema-generator
+  kind: tool
+security: []   # no auth inside tools: enforced in front of them (ADR 0014, ADR 0018)
+tags:
+  - name: Schema markup
+  - name: Health
+paths:
+  /healthz:
+    $ref: '../common.yaml#/components/pathItems/Healthz'
+  /readyz:
+    $ref: '../common.yaml#/components/pathItems/Readyz'
+
+  /v1/schema-markup:
+    post:
+      operationId: generateSchemaMarkup
+      x-rex-limits: {p99: PT2S, llm: none, outboundFetch: none, notes: 'parses the data or HTML in the request; fetches nothing'}
+      x-rex-public: true
+      summary: Generate JSON-LD from structured input or from a page's existing metadata
+      tags: [Schema markup]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchemaMarkupRequest'
+      responses:
+        '200':
+          description: Generated markup plus any validation issues.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SchemaMarkup'
+        '400':
+          $ref: '../common.yaml#/components/responses/BadRequest'
+        '422':
+          $ref: '../common.yaml#/components/responses/UnprocessableContent'
+        default:
+          $ref: '../common.yaml#/components/responses/InternalError'
+  /v1/schema-markup/validate:
+    post:
+      operationId: validateSchemaMarkup
+      x-rex-limits: {p99: PT2S, llm: none, outboundFetch: none, notes: 'parses the JSON-LD or HTML in the request; fetches nothing'}
+      x-rex-public: true
+      summary: Validate JSON-LD given inline or found in a page's HTML
+      tags: [Schema markup]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SchemaMarkupValidateRequest'
+      responses:
+        '200':
+          description: Validation result (an invalid document is still a 200).
+          content:
+            application/json:
+              schema:
+                $ref: '../common.yaml#/components/schemas/ValidationResult'
+        '400':
+          $ref: '../common.yaml#/components/responses/BadRequest'
+        '422':
+          $ref: '../common.yaml#/components/responses/UnprocessableContent'
+        default:
+          $ref: '../common.yaml#/components/responses/InternalError'
+
+components:
+  schemas:
+    SchemaType:
+      type: string
+      description: 'Supported schema.org types (tolerant reader: more may be added).'
+      enum: [Organization, LocalBusiness, Product, SoftwareApplication, Article, FAQPage, HowTo, BreadcrumbList, Person, WebSite]
+    FromHtml:
+      type: object
+      description: A page as HTML; its meta tags, Open Graph tags and existing JSON-LD are read.
+      required: [html]
+      properties:
+        html:
+          type: string
+          maxLength: 2000000
+        pageUrl:
+          description: URL the HTML came from; resolves relative URLs and sets the markup's `url`.
+          $ref: '../common.yaml#/components/schemas/Url'
+    FromData:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          description: 'schema.org properties for the chosen type, e.g. `{ "name": "...", "url": "..." }`.'
+          additionalProperties: true
+    SchemaMarkupRequest:
+      type: object
+      unevaluatedProperties: false
+      required: [schemaType, source]
+      properties:
+        schemaType:
+          $ref: '#/components/schemas/SchemaType'
+        source:
+          oneOf:
+            - $ref: '#/components/schemas/FromHtml'
+            - $ref: '#/components/schemas/FromData'
+    SchemaMarkup:
+      type: object
+      required: [schemaType, jsonLd, scriptTag, validation]
+      properties:
+        schemaType:
+          $ref: '#/components/schemas/SchemaType'
+        jsonLd:
+          type: object
+          additionalProperties: true
+          description: The JSON-LD object (with `@context` and `@type`).
+        scriptTag:
+          type: string
+          description: Ready-to-paste HTML script element of type application/ld+json.
+        validation:
+          $ref: '../common.yaml#/components/schemas/ValidationResult'
+    FromJsonLd:
+      type: object
+      required: [jsonLd]
+      properties:
+        jsonLd:
+          type: object
+          additionalProperties: true
+    SchemaMarkupValidateRequest:
+      type: object
+      description: Exactly one of `html` (validates every JSON-LD block in it) or `jsonLd`.
+      unevaluatedProperties: false
+      oneOf:
+        - $ref: '#/components/schemas/FromHtml'
+        - $ref: '#/components/schemas/FromJsonLd'

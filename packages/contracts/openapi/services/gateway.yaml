@@ -1,0 +1,25 @@
+openapi: 3.1.0
+info:
+  title: REx edge gateway
+  version: 1.0.0
+  description: |
+    Thin edge in front of the platform (ADR 0013). Owns no business endpoints; it
+    exposes health probes and proxies:
+    - `/v1/tools/...` to the tool operations marked `x-rex-public` (anonymous,
+      rate limited per IP), cache first: the shared cache (ADR 0016) is checked
+      before the tool is called; responses carry `X-Rex-Cache` and, on hits,
+      `X-Rex-Cached-At` (common.yaml headers), and `Cache-Control: no-cache` forces
+      a refresh; and
+    - every other `/v1/...` path to the orchestrator.
+    The route table is generated from the specs. Request flow:
+    docs/architecture.md#gateway-flow. Service doc: docs/services/gateway.md
+x-rex-service:
+  name: gateway
+  kind: gateway
+tags:
+  - name: Health
+paths:
+  /healthz:
+    $ref: '../common.yaml#/components/pathItems/Healthz'
+  /readyz:
+    $ref: '../common.yaml#/components/pathItems/Readyz'

@@ -1,0 +1,47 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "enabledManagers": ["npm", "pep621", "gomod", "nvm"],
+  "rangeStrategy": "pin",
+  "packageRules": [
+    {
+      "matchFileNames": [
+        "package.json",
+        ".nvmrc",
+        "apps/**",
+        "packages/**",
+        "services/{gateway,orchestrator,workers}/**"
+      ],
+      "groupName": "platform"
+    },
+    {
+      "matchFileNames": ["services/engine-query/**"],
+      "matchManagers": ["npm", "pep621", "gomod"],
+      "groupName": "engine-query"
+    },
+    {
+      "matchFileNames": ["services/answer-analysis/**"],
+      "matchManagers": ["npm", "pep621", "gomod"],
+      "groupName": "answer-analysis"
+    },
+    {
+      "matchFileNames": ["services/citation-extractor/**"],
+      "matchManagers": ["npm", "pep621", "gomod"],
+      "groupName": "citation-extractor"
+    },
+    {
+      "matchFileNames": ["services/content-auditor/**"],
+      "matchManagers": ["npm", "pep621", "gomod"],
+      "groupName": "content-auditor"
+    },
+    {
+      "matchFileNames": ["services/schema-generator/**"],
+      "matchManagers": ["npm", "pep621", "gomod"],
+      "groupName": "schema-generator"
+    },
+    {
+      "matchFileNames": ["services/llms-txt-generator/**"],
+      "matchManagers": ["npm", "pep621", "gomod"],
+      "groupName": "llms-txt-generator"
+    }
+  ]
+}

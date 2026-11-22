@@ -1,0 +1,23 @@
+# Known AI crawlers: the single list used by content-auditor (robots.txt checks)
+# and ai-traffic-analyzer (log classification). Each entry must validate against
+# packages/contracts/openapi/common.yaml#/components/schemas/AiCrawler.
+# Data, not contract: adding an entry is non-breaking. Re-verify against each
+# operator's docs before Phase 5 and whenever an operator announces a change.
+lastVerified: '2026-11-22'
+crawlers:
+  - {id: gptbot, robotsToken: GPTBot, userAgentPattern: GPTBot, operator: OpenAI, purpose: training}
+  - {id: oai_searchbot, robotsToken: OAI-SearchBot, userAgentPattern: OAI-SearchBot, operator: OpenAI, purpose: search}
+  - {id: chatgpt_user, robotsToken: ChatGPT-User, userAgentPattern: ChatGPT-User, operator: OpenAI, purpose: user_fetch}
+  - {id: claudebot, robotsToken: ClaudeBot, userAgentPattern: ClaudeBot, operator: Anthropic, purpose: training}
+  - {id: claude_searchbot, robotsToken: Claude-SearchBot, userAgentPattern: Claude-SearchBot, operator: Anthropic, purpose: search}
+  - {id: claude_user, robotsToken: Claude-User, userAgentPattern: Claude-User, operator: Anthropic, purpose: user_fetch}
+  - {id: perplexitybot, robotsToken: PerplexityBot, userAgentPattern: PerplexityBot, operator: Perplexity, purpose: search}
+  - {id: perplexity_user, robotsToken: Perplexity-User, userAgentPattern: Perplexity-User, operator: Perplexity, purpose: user_fetch}
+  - {id: google_extended, robotsToken: Google-Extended, userAgentPattern: null, operator: Google, purpose: training}
+  - {id: applebot_extended, robotsToken: Applebot-Extended, userAgentPattern: null, operator: Apple, purpose: training}
+  - {id: ccbot, robotsToken: CCBot, userAgentPattern: CCBot, operator: Common Crawl, purpose: training}
+  - {id: meta_externalagent, robotsToken: meta-externalagent, userAgentPattern: meta-externalagent, operator: Meta, purpose: training}
+  - {id: bytespider, robotsToken: Bytespider, userAgentPattern: Bytespider, operator: ByteDance, purpose: training}
+  - {id: amazonbot, robotsToken: Amazonbot, userAgentPattern: Amazonbot, operator: Amazon, purpose: search}
+  - {id: duckassistbot, robotsToken: DuckAssistBot, userAgentPattern: DuckAssistBot, operator: DuckDuckGo, purpose: user_fetch}
+  - {id: mistralai_user, robotsToken: MistralAI-User, userAgentPattern: MistralAI-User, operator: Mistral AI, purpose: user_fetch}

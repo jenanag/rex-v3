@@ -1,0 +1,17 @@
+{
+  "name": "rex-openapi-validation-spike",
+  "private": true,
+  "type": "module",
+  "engines": { "node": "26.13.1" },
+  "scripts": {
+    "test": "node --test validation.test.ts",
+    "bench": "node benchmark.ts"
+  },
+  "devDependencies": {
+    "ajv": "8.20.0",
+    "ajv-formats": "3.0.1",
+    "fastify": "5.12.8",
+    "fastify-openapi-glue": "4.12.0",
+    "yaml": "2.9.1"
+  }
+}

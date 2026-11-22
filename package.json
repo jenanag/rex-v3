@@ -1,0 +1,29 @@
+{
+  "name": "rex",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "26.13.1"
+  },
+  "scripts": {
+    "lint:openapi": "redocly lint",
+    "validate:asyncapi": "asyncapi validate packages/contracts/asyncapi/events.yaml",
+    "format:check": "prettier --check",
+    "lint:markdown": "markdownlint-cli2",
+    "check:contracts": "scripts/check-contracts",
+    "test:contracts": "tsx --test scripts/test/*.test.ts",
+    "vendor:contracts": "scripts/vendor-contracts",
+    "gen:docs": "scripts/gen-docs"
+  },
+  "devDependencies": {
+    "@asyncapi/cli": "6.3.1",
+    "@redocly/cli": "2.82.0",
+    "dependency-cruiser": "18.8.0",
+    "jscpd": "5.4.3",
+    "markdownlint-cli2": "0.24.2",
+    "openapi-typescript": "7.13.0",
+    "prettier": "3.10.1",
+    "tsx": "4.23.15",
+    "yaml": "2.9.1"
+  }
+}

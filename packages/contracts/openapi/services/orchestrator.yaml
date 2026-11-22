@@ -1,0 +1,2816 @@
+# REx orchestrator: the only stateful service and the only public business API.
+# Source of truth for its REST contract (packages/contracts, ADR 0006). Shared parts come from common.yaml via $ref.
+openapi: 3.1.0
+info:
+  title: REx orchestrator
+  version: 1.0.0
+  description: |
+    The only stateful REx service: sole owner and writer of the database, the only
+    public business API (behind the edge gateway), the scheduler, the job publisher
+    (transactional outbox to RabbitMQ) and the consumer of job results. Internally a
+    modular monolith: identity, catalog, tracking, optimization, scheduling, billing,
+    alerts and messaging modules (docs/services/orchestrator.md).
+
+    Resources that embed tool output `$ref` the tool's schema (EngineAnswer,
+    MentionDetail, CitationDetail, AuditResult, LlmsTxtResult) instead of copying it.
+    Paths under `/v1/tools` are reserved for the gateway's public tool routes.
+x-rex-service:
+  name: orchestrator
+  kind: orchestrator
+security:
+  - bearerToken: []
+  - apiKey: []
+tags:
+  - name: Auth
+  - name: Orgs
+  - name: API keys
+  - name: Projects
+  - name: Brands
+  - name: Prompts
+  - name: Prompt runs
+  - name: Answers
+  - name: Visibility
+  - name: Citations
+  - name: Schedules
+  - name: Audits
+  - name: llms.txt
+  - name: Internal
+  - name: Health
+paths:
+  /healthz:
+    $ref: ../common.yaml#/components/pathItems/Healthz
+  /readyz:
+    $ref: ../common.yaml#/components/pathItems/Readyz
+  /v1/auth/signup:
+    post:
+      operationId: signup
+      summary: Create a user and their first org
+      tags:
+        - Auth
+      security: []
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: Signed up; tokens are scoped to the new org.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tokens'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '409':
+          $ref: ../common.yaml#/components/responses/Conflict
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/auth/login:
+    post:
+      operationId: login
+      summary: Log in with email and password
+      tags:
+        - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Tokens scoped to the user's default org.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tokens'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/auth/refresh:
+    post:
+      operationId: refreshTokens
+      summary: Rotate the refresh token, optionally switching the active org
+      tags:
+        - Auth
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshRequest'
+      responses:
+        '200':
+          description: New token pair. The old refresh token is revoked.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Tokens'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/auth/logout:
+    post:
+      operationId: logout
+      summary: Revoke the given refresh token
+      tags:
+        - Auth
+      security:
+        - bearerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LogoutRequest'
+      responses:
+        '204':
+          $ref: ../common.yaml#/components/responses/NoContent
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/me:
+    get:
+      operationId: getMe
+      summary: Current user, active org and role
+      tags:
+        - Auth
+      security:
+        - bearerToken: []
+      responses:
+        '200':
+          description: The caller.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Me'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/orgs:
+    get:
+      operationId: listOrgs
+      summary: Orgs the user belongs to
+      tags:
+        - Orgs
+      security:
+        - bearerToken: []
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/Cursor
+        - $ref: ../common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: A page of orgs.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: ../common.yaml#/components/schemas/Page
+                  - type: object
+                    properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/Org'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/orgs/{orgId}:
+    parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          $ref: ../common.yaml#/components/schemas/OrgId
+    get:
+      operationId: getOrg
+      summary: Get an org
+      tags:
+        - Orgs
+      responses:
+        '200':
+          description: The org.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Org'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    patch:
+      operationId: updateOrg
+      summary: Update an org (owner or admin)
+      tags:
+        - Orgs
+      security:
+        - bearerToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrgUpdate'
+      responses:
+        '200':
+          description: The updated org.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Org'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    delete:
+      operationId: deleteOrg
+      summary: Delete an org and all its data (owner only)
+      tags:
+        - Orgs
+      security:
+        - bearerToken: []
+      responses:
+        '204':
+          $ref: ../common.yaml#/components/responses/NoContent
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/orgs/{orgId}/members:
+    parameters:
+      - name: orgId
+        in: path
+        required: true
+        schema:
+          $ref: ../common.yaml#/components/schemas/OrgId
+    get:
+      operationId: listOrgMembers
+      summary: Members of an org
+      tags:
+        - Orgs
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/Cursor
+        - $ref: ../common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: A page of members.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: ../common.yaml#/components/schemas/Page
+                  - type: object
+                    properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/Member'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/api-keys:
+    get:
+      operationId: listApiKeys
+      summary: API keys of the caller's org (secrets are never returned)
+      tags:
+        - API keys
+      security:
+        - bearerToken: []
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/Cursor
+        - $ref: ../common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: A page of API keys.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: ../common.yaml#/components/schemas/Page
+                  - type: object
+                    properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/ApiKey'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    post:
+      operationId: createApiKey
+      summary: Create an API key (the secret is returned once)
+      tags:
+        - API keys
+      security:
+        - bearerToken: []
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiKeyCreate'
+      responses:
+        '201':
+          description: Created. Store `secret` now; it cannot be retrieved again.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyWithSecret'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/api-keys/{apiKeyId}:
+    parameters:
+      - name: apiKeyId
+        in: path
+        required: true
+        schema:
+          $ref: ../common.yaml#/components/schemas/ApiKeyId
+    delete:
+      operationId: revokeApiKey
+      summary: Revoke an API key (effective immediately at the orchestrator)
+      tags:
+        - API keys
+      security:
+        - bearerToken: []
+      responses:
+        '204':
+          $ref: ../common.yaml#/components/responses/NoContent
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/projects:
+    get:
+      operationId: listProjects
+      summary: Projects in the caller's org
+      tags:
+        - Projects
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/Cursor
+        - $ref: ../common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: A page of projects.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: ../common.yaml#/components/schemas/Page
+                  - type: object
+                    properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/Project'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    post:
+      operationId: createProject
+      summary: Create a project
+      tags:
+        - Projects
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectCreate'
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ../common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '422':
+          $ref: ../common.yaml#/components/responses/UnprocessableContent
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/projects/{projectId}:
+    parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          $ref: ../common.yaml#/components/schemas/ProjectId
+    get:
+      operationId: getProject
+      summary: Get a project
+      tags:
+        - Projects
+      responses:
+        '200':
+          description: The project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    patch:
+      operationId: updateProject
+      summary: Update a project (merge-patch semantics)
+      tags:
+        - Projects
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectUpdate'
+      responses:
+        '200':
+          description: The updated project.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Project'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    delete:
+      operationId: deleteProject
+      summary: Delete a project and all its data
+      tags:
+        - Projects
+      responses:
+        '204':
+          $ref: ../common.yaml#/components/responses/NoContent
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/brands:
+    get:
+      operationId: listBrands
+      summary: Brands in a project (primary first, then competitors)
+      tags:
+        - Brands
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/ProjectIdQuery
+        - name: kind
+          in: query
+          required: false
+          schema:
+            $ref: ../common.yaml#/components/schemas/BrandKind
+        - $ref: ../common.yaml#/components/parameters/Cursor
+        - $ref: ../common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: A page of brands.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: ../common.yaml#/components/schemas/Page
+                  - type: object
+                    properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/Brand'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    post:
+      operationId: createBrand
+      summary: Add the primary brand or a competitor to a project
+      tags:
+        - Brands
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrandCreate'
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ../common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brand'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ../common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ../common.yaml#/components/responses/UnprocessableContent
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/brands/{brandId}:
+    parameters:
+      - name: brandId
+        in: path
+        required: true
+        schema:
+          $ref: ../common.yaml#/components/schemas/BrandId
+    get:
+      operationId: getBrand
+      summary: Get a brand
+      tags:
+        - Brands
+      responses:
+        '200':
+          description: The brand.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brand'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    patch:
+      operationId: updateBrand
+      summary: Update a brand (merge-patch semantics)
+      tags:
+        - Brands
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BrandUpdate'
+      responses:
+        '200':
+          description: The updated brand.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Brand'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '422':
+          $ref: ../common.yaml#/components/responses/UnprocessableContent
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    delete:
+      operationId: deleteBrand
+      summary: Delete a competitor brand (the primary brand cannot be deleted)
+      tags:
+        - Brands
+      responses:
+        '204':
+          $ref: ../common.yaml#/components/responses/NoContent
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '422':
+          $ref: ../common.yaml#/components/responses/UnprocessableContent
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/prompts:
+    get:
+      operationId: listPrompts
+      summary: Tracked prompts of a project
+      tags:
+        - Prompts
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/ProjectIdQuery
+        - name: active
+          in: query
+          required: false
+          schema:
+            type: boolean
+        - name: tag
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: ../common.yaml#/components/parameters/Cursor
+        - $ref: ../common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: A page of prompts.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: ../common.yaml#/components/schemas/Page
+                  - type: object
+                    properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/Prompt'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    post:
+      operationId: createPrompt
+      summary: Track a new prompt
+      tags:
+        - Prompts
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromptCreate'
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ../common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prompt'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ../common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ../common.yaml#/components/responses/UnprocessableContent
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/prompts/{promptId}:
+    parameters:
+      - name: promptId
+        in: path
+        required: true
+        schema:
+          $ref: ../common.yaml#/components/schemas/PromptId
+    get:
+      operationId: getPrompt
+      summary: Get a prompt
+      tags:
+        - Prompts
+      responses:
+        '200':
+          description: The prompt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prompt'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    patch:
+      operationId: updatePrompt
+      summary: Update a prompt (merge-patch semantics; past answers keep their text snapshot)
+      tags:
+        - Prompts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromptUpdate'
+      responses:
+        '200':
+          description: The updated prompt.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Prompt'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '422':
+          $ref: ../common.yaml#/components/responses/UnprocessableContent
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    delete:
+      operationId: deletePrompt
+      summary: Stop tracking a prompt (its past answers are kept)
+      tags:
+        - Prompts
+      responses:
+        '204':
+          $ref: ../common.yaml#/components/responses/NoContent
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/prompt-runs:
+    get:
+      operationId: listPromptRuns
+      summary: Prompt runs of a project, newest first
+      tags:
+        - Prompt runs
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/ProjectIdQuery
+        - name: status
+          in: query
+          required: false
+          schema:
+            $ref: ../common.yaml#/components/schemas/JobStatus
+        - $ref: ../common.yaml#/components/parameters/From
+        - $ref: ../common.yaml#/components/parameters/To
+        - $ref: ../common.yaml#/components/parameters/Cursor
+        - $ref: ../common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: A page of prompt runs.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: ../common.yaml#/components/schemas/Page
+                  - type: object
+                    properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/PromptRun'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    post:
+      operationId: createPromptRun
+      summary: 'Start a prompt run now (async: one answer-capture job per prompt x engine x sample)'
+      tags:
+        - Prompt runs
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PromptRunCreate'
+      responses:
+        '202':
+          description: Accepted; poll the run until its status is terminal.
+          headers:
+            Location:
+              $ref: ../common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromptRun'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '409':
+          $ref: ../common.yaml#/components/responses/Conflict
+        '422':
+          $ref: ../common.yaml#/components/responses/UnprocessableContent
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/prompt-runs/{promptRunId}:
+    parameters:
+      - name: promptRunId
+        in: path
+        required: true
+        schema:
+          $ref: ../common.yaml#/components/schemas/PromptRunId
+    get:
+      operationId: getPromptRun
+      summary: Get a prompt run and its progress
+      tags:
+        - Prompt runs
+      responses:
+        '200':
+          description: The prompt run.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromptRun'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/prompt-runs/{promptRunId}/cancel:
+    parameters:
+      - name: promptRunId
+        in: path
+        required: true
+        schema:
+          $ref: ../common.yaml#/components/schemas/PromptRunId
+    post:
+      operationId: cancelPromptRun
+      summary: Cancel a queued or running prompt run (captured answers are kept)
+      tags:
+        - Prompt runs
+      responses:
+        '200':
+          description: The run, now `canceled`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PromptRun'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '409':
+          $ref: ../common.yaml#/components/responses/Conflict
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/answers:
+    get:
+      operationId: listAnswers
+      summary: Captured answers of a project
+      tags:
+        - Answers
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/ProjectIdQuery
+        - name: promptRunId
+          in: query
+          required: false
+          schema:
+            $ref: ../common.yaml#/components/schemas/PromptRunId
+        - name: promptId
+          in: query
+          required: false
+          schema:
+            $ref: ../common.yaml#/components/schemas/PromptId
+        - $ref: ../common.yaml#/components/parameters/EngineQuery
+        - $ref: ../common.yaml#/components/parameters/From
+        - $ref: ../common.yaml#/components/parameters/To
+        - $ref: ../common.yaml#/components/parameters/Cursor
+        - $ref: ../common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: A page of answers.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: ../common.yaml#/components/schemas/Page
+                  - type: object
+                    properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/Answer'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/answers/{answerId}:
+    parameters:
+      - name: answerId
+        in: path
+        required: true
+        schema:
+          $ref: ../common.yaml#/components/schemas/AnswerId
+    get:
+      operationId: getAnswer
+      summary: Get one captured answer
+      tags:
+        - Answers
+      responses:
+        '200':
+          description: The answer.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Answer'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/mentions:
+    get:
+      operationId: listMentions
+      summary: Brand mentions found in answers
+      tags:
+        - Visibility
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/ProjectIdQuery
+        - name: brandId
+          in: query
+          required: false
+          schema:
+            $ref: ../common.yaml#/components/schemas/BrandId
+        - $ref: ../common.yaml#/components/parameters/EngineQuery
+        - name: promptRunId
+          in: query
+          required: false
+          schema:
+            $ref: ../common.yaml#/components/schemas/PromptRunId
+        - name: answerId
+          in: query
+          required: false
+          schema:
+            $ref: ../common.yaml#/components/schemas/AnswerId
+        - name: sentiment
+          in: query
+          required: false
+          schema:
+            $ref: ../common.yaml#/components/schemas/Sentiment
+        - $ref: ../common.yaml#/components/parameters/From
+        - $ref: ../common.yaml#/components/parameters/To
+        - $ref: ../common.yaml#/components/parameters/Cursor
+        - $ref: ../common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: A page of mentions.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: ../common.yaml#/components/schemas/Page
+                  - type: object
+                    properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/Mention'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/visibility/summary:
+    get:
+      operationId: getVisibilitySummary
+      summary: Visibility metrics per tracked brand over a time range
+      tags:
+        - Visibility
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/ProjectIdQuery
+        - $ref: ../common.yaml#/components/parameters/EngineQuery
+        - $ref: ../common.yaml#/components/parameters/From
+        - $ref: ../common.yaml#/components/parameters/To
+      responses:
+        '200':
+          description: One row per tracked brand (bounded list, not paginated).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisibilitySummary'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/visibility/timeseries:
+    get:
+      operationId: getVisibilityTimeseries
+      summary: Visibility metrics per brand per day or week
+      tags:
+        - Visibility
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/ProjectIdQuery
+        - name: brandId
+          in: query
+          required: false
+          schema:
+            $ref: ../common.yaml#/components/schemas/BrandId
+        - $ref: ../common.yaml#/components/parameters/EngineQuery
+        - name: interval
+          in: query
+          required: false
+          schema:
+            type: string
+            enum:
+              - day
+              - week
+            default: day
+        - $ref: ../common.yaml#/components/parameters/From
+        - $ref: ../common.yaml#/components/parameters/To
+      responses:
+        '200':
+          description: Buckets (bounded by the 366-day max range, not paginated).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VisibilityTimeseries'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/citations:
+    get:
+      operationId: listCitations
+      summary: Cited URLs found in answers
+      tags:
+        - Citations
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/ProjectIdQuery
+        - name: ownership
+          in: query
+          required: false
+          schema:
+            $ref: ./citation-extractor.yaml#/components/schemas/Ownership
+        - name: domain
+          in: query
+          required: false
+          schema:
+            $ref: ../common.yaml#/components/schemas/Domain
+        - name: promptRunId
+          in: query
+          required: false
+          schema:
+            $ref: ../common.yaml#/components/schemas/PromptRunId
+        - name: answerId
+          in: query
+          required: false
+          schema:
+            $ref: ../common.yaml#/components/schemas/AnswerId
+        - $ref: ../common.yaml#/components/parameters/EngineQuery
+        - $ref: ../common.yaml#/components/parameters/From
+        - $ref: ../common.yaml#/components/parameters/To
+        - $ref: ../common.yaml#/components/parameters/Cursor
+        - $ref: ../common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: A page of citations.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: ../common.yaml#/components/schemas/Page
+                  - type: object
+                    properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/Citation'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/citations/domains:
+    get:
+      operationId: listCitedDomains
+      summary: Cited domains ranked by citation count
+      tags:
+        - Citations
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/ProjectIdQuery
+        - name: ownership
+          in: query
+          required: false
+          schema:
+            $ref: ./citation-extractor.yaml#/components/schemas/Ownership
+        - $ref: ../common.yaml#/components/parameters/EngineQuery
+        - $ref: ../common.yaml#/components/parameters/From
+        - $ref: ../common.yaml#/components/parameters/To
+        - $ref: ../common.yaml#/components/parameters/Cursor
+        - $ref: ../common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: A page of domain aggregates, highest `citationCount` first.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: ../common.yaml#/components/schemas/Page
+                  - type: object
+                    properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/CitedDomain'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/schedules:
+    get:
+      operationId: listSchedules
+      summary: Schedules of a project
+      tags:
+        - Schedules
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/ProjectIdQuery
+        - name: target
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/ScheduleTarget'
+        - $ref: ../common.yaml#/components/parameters/Cursor
+        - $ref: ../common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: A page of schedules.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: ../common.yaml#/components/schemas/Page
+                  - type: object
+                    properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/Schedule'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    post:
+      operationId: createSchedule
+      summary: Create a schedule
+      tags:
+        - Schedules
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleCreate'
+      responses:
+        '201':
+          description: Created.
+          headers:
+            Location:
+              $ref: ../common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '422':
+          $ref: ../common.yaml#/components/responses/UnprocessableContent
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/schedules/{scheduleId}:
+    parameters:
+      - name: scheduleId
+        in: path
+        required: true
+        schema:
+          $ref: ../common.yaml#/components/schemas/ScheduleId
+    get:
+      operationId: getSchedule
+      summary: Get a schedule
+      tags:
+        - Schedules
+      responses:
+        '200':
+          description: The schedule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    patch:
+      operationId: updateSchedule
+      summary: Update a schedule (merge-patch semantics; `target` is immutable)
+      tags:
+        - Schedules
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScheduleUpdate'
+      responses:
+        '200':
+          description: The updated schedule.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '422':
+          $ref: ../common.yaml#/components/responses/UnprocessableContent
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    delete:
+      operationId: deleteSchedule
+      summary: Delete a schedule
+      tags:
+        - Schedules
+      responses:
+        '204':
+          $ref: ../common.yaml#/components/responses/NoContent
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/schedules/{scheduleId}/trigger:
+    parameters:
+      - name: scheduleId
+        in: path
+        required: true
+        schema:
+          $ref: ../common.yaml#/components/schemas/ScheduleId
+    post:
+      operationId: triggerSchedule
+      summary: Fire a schedule now, outside its cron
+      tags:
+        - Schedules
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/IdempotencyKey
+      responses:
+        '202':
+          description: Fired; the target work was started asynchronously.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Schedule'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/audits:
+    get:
+      operationId: listAudits
+      summary: Audits of a project, newest first
+      tags:
+        - Audits
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/ProjectIdQuery
+        - name: url
+          in: query
+          required: false
+          schema:
+            $ref: ../common.yaml#/components/schemas/Url
+        - $ref: ../common.yaml#/components/parameters/From
+        - $ref: ../common.yaml#/components/parameters/To
+        - $ref: ../common.yaml#/components/parameters/Cursor
+        - $ref: ../common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: A page of audits.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: ../common.yaml#/components/schemas/Page
+                  - type: object
+                    properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/Audit'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    post:
+      operationId: createAudit
+      summary: Audit one URL for AI readiness (async; anonymous allowed)
+      description: |
+        Runs as two jobs (ADR 0021, ADR 0023): a `content-extraction` job (a worker calls
+        the external content-extractor, which fetches and extracts the page with its
+        robots.txt and llms.txt; the result reports only a page reference), then a
+        `content-audit` job with that reference (the worker reads the extraction from
+        the cache first, then the data-aggregator, and passes it to llms-txt-generator
+        and content-auditor). No page body goes through the orchestrator or the bus. This is also the
+        URL-based public flow for crawler checks and for validating a site's llms.txt or
+        structured data: the public tool operations take content only.
+      tags:
+        - Audits
+      security:
+        - bearerToken: []
+        - apiKey: []
+        - {}
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditCreate'
+      responses:
+        '202':
+          description: Accepted; poll until `status` is terminal.
+          headers:
+            Location:
+              $ref: ../common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Audit'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '422':
+          $ref: ../common.yaml#/components/responses/UnprocessableContent
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/audits/{auditId}:
+    parameters:
+      - name: auditId
+        in: path
+        required: true
+        schema:
+          $ref: ../common.yaml#/components/schemas/AuditId
+    get:
+      operationId: getAudit
+      summary: Get an audit and, once succeeded, its result (anonymous audits are readable by ID)
+      tags:
+        - Audits
+      security:
+        - bearerToken: []
+        - apiKey: []
+        - {}
+      responses:
+        '200':
+          description: The audit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Audit'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/llms-txt:
+    get:
+      operationId: listLlmsTxt
+      summary: Generated llms.txt files of a project
+      tags:
+        - llms.txt
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/ProjectIdQuery
+        - $ref: ../common.yaml#/components/parameters/Cursor
+        - $ref: ../common.yaml#/components/parameters/Limit
+      responses:
+        '200':
+          description: A page of generations.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: ../common.yaml#/components/schemas/Page
+                  - type: object
+                    properties:
+                      data:
+                        items:
+                          $ref: '#/components/schemas/LlmsTxt'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+    post:
+      operationId: createLlmsTxt
+      summary: Generate llms.txt for a site (async; anonymous allowed)
+      description: |
+        Runs as an event-driven pipeline of jobs (ADR 0023): one `sitemap-discovery`
+        job for `siteUrl` (the sitemap-extractor lists the page URLs), one `page-audit`
+        job per selected page (the site root first; no page cap unless `maxPages` is
+        set; each extracts the page and writes its llms.txt entry), then one
+        `llms-txt-generation` job that assembles the file from the entries, with no LLM
+        call. By default the crawl obeys the site's robots.txt (`respectRobotsTxt`).
+        Pages that fail or that robots.txt disallows are left out and counted; the
+        resource fails only if discovery fails or no page succeeds. Poll the resource
+        for `stage`, `pages` and the result.
+      tags:
+        - llms.txt
+      security:
+        - bearerToken: []
+        - apiKey: []
+        - {}
+      parameters:
+        - $ref: ../common.yaml#/components/parameters/IdempotencyKey
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LlmsTxtCreate'
+      responses:
+        '202':
+          description: Accepted; poll until `status` is terminal.
+          headers:
+            Location:
+              $ref: ../common.yaml#/components/headers/Location
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmsTxt'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '403':
+          $ref: ../common.yaml#/components/responses/Forbidden
+        '422':
+          $ref: ../common.yaml#/components/responses/UnprocessableContent
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /v1/llms-txt/{llmsTxtId}:
+    parameters:
+      - name: llmsTxtId
+        in: path
+        required: true
+        schema:
+          $ref: ../common.yaml#/components/schemas/LlmsTxtId
+    get:
+      operationId: getLlmsTxt
+      summary: Get a generation and, once succeeded, its content
+      tags:
+        - llms.txt
+      security:
+        - bearerToken: []
+        - apiKey: []
+        - {}
+      responses:
+        '200':
+          description: The generation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LlmsTxt'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        '404':
+          $ref: ../common.yaml#/components/responses/NotFound
+        '429':
+          $ref: ../common.yaml#/components/responses/TooManyRequests
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+  /internal/v1/api-keys/exchange:
+    post:
+      operationId: exchangeApiKey
+      summary: Exchange a raw API key for a short-lived access token (gateway only)
+      tags:
+        - Internal
+      security:
+        - serviceToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApiKeyExchangeRequest'
+      responses:
+        '200':
+          description: Access token for the key's org (typ `api_key`, max 5 minutes).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessToken'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+      x-internal: true
+  /internal/v1/service-tokens:
+    post:
+      operationId: createServiceToken
+      summary: Issue a service token (client credentials) to the gateway
+      tags:
+        - Internal
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ServiceTokenRequest'
+      responses:
+        '200':
+          description: Access token with typ `service`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AccessToken'
+        '401':
+          $ref: ../common.yaml#/components/responses/Unauthorized
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+      x-internal: true
+  /.well-known/jwks.json:
+    get:
+      operationId: getJwks
+      summary: Public keys for verifying REx access and service tokens (gateway and orchestrator)
+      tags:
+        - Internal
+      security: []
+      responses:
+        '200':
+          description: JWK Set (RFC 7517).
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - keys
+                properties:
+                  keys:
+                    type: array
+                    items:
+                      type: object
+                      additionalProperties: true
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+      x-internal: true
+components:
+  securitySchemes:
+    bearerToken:
+      $ref: ../common.yaml#/components/securitySchemes/bearerToken
+    apiKey:
+      $ref: ../common.yaml#/components/securitySchemes/apiKey
+    serviceToken:
+      $ref: ../common.yaml#/components/securitySchemes/serviceToken
+  schemas:
+    Role:
+      type: string
+      description: Org-level role. owner > admin > member > viewer.
+      enum:
+        - owner
+        - admin
+        - member
+        - viewer
+    ApiKeyAccess:
+      type: string
+      enum:
+        - read
+        - read_write
+    SignupRequest:
+      type: object
+      unevaluatedProperties: false
+      required:
+        - email
+        - password
+        - name
+        - orgName
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 254
+        password:
+          type: string
+          minLength: 12
+          maxLength: 128
+          writeOnly: true
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        orgName:
+          type: string
+          minLength: 1
+          maxLength: 100
+    LoginRequest:
+      type: object
+      unevaluatedProperties: false
+      required:
+        - email
+        - password
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          writeOnly: true
+    RefreshRequest:
+      type: object
+      unevaluatedProperties: false
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          writeOnly: true
+        orgId:
+          $ref: ../common.yaml#/components/schemas/OrgId
+    LogoutRequest:
+      type: object
+      unevaluatedProperties: false
+      required:
+        - refreshToken
+      properties:
+        refreshToken:
+          type: string
+          writeOnly: true
+    AccessToken:
+      type: object
+      required:
+        - accessToken
+        - tokenType
+        - expiresIn
+      properties:
+        accessToken:
+          type: string
+        tokenType:
+          type: string
+          const: Bearer
+        expiresIn:
+          type: integer
+          description: Seconds until the access token expires.
+    Tokens:
+      allOf:
+        - $ref: '#/components/schemas/AccessToken'
+        - type: object
+          required:
+            - refreshToken
+          properties:
+            refreshToken:
+              type: string
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - name
+        - createdAt
+      properties:
+        id:
+          $ref: ../common.yaml#/components/schemas/UserId
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        createdAt:
+          $ref: ../common.yaml#/components/schemas/Timestamp
+    Me:
+      type: object
+      required:
+        - user
+        - org
+        - role
+      properties:
+        user:
+          $ref: '#/components/schemas/User'
+        org:
+          $ref: '#/components/schemas/Org'
+        role:
+          $ref: '#/components/schemas/Role'
+    OrgFields:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+    Org:
+      allOf:
+        - $ref: '#/components/schemas/OrgFields'
+        - $ref: ../common.yaml#/components/schemas/ResourceTimestamps
+        - type: object
+          required:
+            - id
+            - name
+            - slug
+          properties:
+            id:
+              $ref: ../common.yaml#/components/schemas/OrgId
+            slug:
+              type: string
+              pattern: ^[a-z0-9][a-z0-9-]{1,62}$
+    OrgUpdate:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/OrgFields'
+      unevaluatedProperties: false
+    Member:
+      type: object
+      required:
+        - userId
+        - orgId
+        - role
+        - email
+        - name
+        - joinedAt
+      properties:
+        userId:
+          $ref: ../common.yaml#/components/schemas/UserId
+        orgId:
+          $ref: ../common.yaml#/components/schemas/OrgId
+        role:
+          $ref: '#/components/schemas/Role'
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        joinedAt:
+          $ref: ../common.yaml#/components/schemas/Timestamp
+    ProjectFields:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        primaryDomain:
+          $ref: ../common.yaml#/components/schemas/Domain
+        locale:
+          $ref: ../common.yaml#/components/schemas/Locale
+        country:
+          $ref: ../common.yaml#/components/schemas/CountryCode
+    Project:
+      allOf:
+        - $ref: '#/components/schemas/ProjectFields'
+        - $ref: ../common.yaml#/components/schemas/ResourceTimestamps
+        - type: object
+          required:
+            - id
+            - orgId
+            - name
+            - primaryDomain
+            - locale
+            - country
+          properties:
+            id:
+              $ref: ../common.yaml#/components/schemas/ProjectId
+            orgId:
+              $ref: ../common.yaml#/components/schemas/OrgId
+    ProjectCreate:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/ProjectFields'
+        - type: object
+          required:
+            - name
+            - primaryDomain
+      unevaluatedProperties: false
+    ProjectUpdate:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/ProjectFields'
+      unevaluatedProperties: false
+    BrandFields:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        aliases:
+          type: array
+          description: Other names the brand appears as in answers (case-insensitive match).
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+            maxLength: 100
+        domains:
+          type: array
+          description: Domains owned by the brand; used to classify citations.
+          maxItems: 20
+          uniqueItems: true
+          items:
+            $ref: ../common.yaml#/components/schemas/Domain
+    Brand:
+      allOf:
+        - $ref: '#/components/schemas/BrandFields'
+        - $ref: ../common.yaml#/components/schemas/ResourceTimestamps
+        - type: object
+          required:
+            - id
+            - orgId
+            - projectId
+            - kind
+            - name
+            - aliases
+            - domains
+          properties:
+            id:
+              $ref: ../common.yaml#/components/schemas/BrandId
+            orgId:
+              $ref: ../common.yaml#/components/schemas/OrgId
+            projectId:
+              $ref: ../common.yaml#/components/schemas/ProjectId
+            kind:
+              $ref: ../common.yaml#/components/schemas/BrandKind
+    BrandCreate:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/BrandFields'
+        - type: object
+          required:
+            - projectId
+            - kind
+            - name
+          properties:
+            projectId:
+              $ref: ../common.yaml#/components/schemas/ProjectId
+            kind:
+              $ref: ../common.yaml#/components/schemas/BrandKind
+      unevaluatedProperties: false
+    BrandUpdate:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/BrandFields'
+      unevaluatedProperties: false
+    ApiKey:
+      type: object
+      required:
+        - id
+        - orgId
+        - name
+        - prefix
+        - access
+        - createdAt
+      properties:
+        id:
+          $ref: ../common.yaml#/components/schemas/ApiKeyId
+        orgId:
+          $ref: ../common.yaml#/components/schemas/OrgId
+        name:
+          type: string
+        prefix:
+          type: string
+          description: First 12 characters of the secret, for identification.
+        access:
+          $ref: '#/components/schemas/ApiKeyAccess'
+        lastUsedAt:
+          oneOf:
+            - $ref: ../common.yaml#/components/schemas/Timestamp
+            - type: 'null'
+        createdAt:
+          $ref: ../common.yaml#/components/schemas/Timestamp
+        revokedAt:
+          oneOf:
+            - $ref: ../common.yaml#/components/schemas/Timestamp
+            - type: 'null'
+    ApiKeyCreate:
+      type: object
+      unevaluatedProperties: false
+      required:
+        - name
+        - access
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        access:
+          $ref: '#/components/schemas/ApiKeyAccess'
+    ApiKeyWithSecret:
+      allOf:
+        - $ref: '#/components/schemas/ApiKey'
+        - type: object
+          required:
+            - secret
+          properties:
+            secret:
+              type: string
+              description: Full API key (`rex_live_` + 32 random base62 chars). Shown once.
+    ApiKeyExchangeRequest:
+      type: object
+      unevaluatedProperties: false
+      required:
+        - key
+      properties:
+        key:
+          type: string
+          writeOnly: true
+    ServiceTokenRequest:
+      type: object
+      unevaluatedProperties: false
+      required:
+        - clientId
+        - clientSecret
+      properties:
+        clientId:
+          type: string
+          description: Service name, e.g. `gateway` or `workers`.
+        clientSecret:
+          type: string
+          writeOnly: true
+    PromptRunOptions:
+      type: object
+      description: |
+        What to run. Used by `createPromptRun` and as the params of a `prompt_run` schedule.
+      properties:
+        promptIds:
+          type: array
+          description: 'Subset of prompts to run. Default: all active prompts of the project.'
+          minItems: 1
+          maxItems: 500
+          uniqueItems: true
+          items:
+            $ref: ../common.yaml#/components/schemas/PromptId
+        engines:
+          type: array
+          description: 'Engines to query. Default: each prompt''s own `engines`.'
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: ../common.yaml#/components/schemas/EngineId
+        samples:
+          type: integer
+          description: Overrides each prompt's `samples`.
+          minimum: 1
+          maximum: 5
+        sentiment:
+          description: 'Sentiment analyzers to run side by side (deterministic and/or LLM). Default: the project
+            default, else `[det:lexicon]`.'
+          $ref: ./answer-analysis.yaml#/components/schemas/SentimentOptions
+        cacheMode:
+          description: Cache mode for every tool call of the resulting jobs (ADR 0016). `refresh` and `bypass` need
+            a signed-in caller; anonymous requests always use `use`.
+          $ref: ../common.yaml#/components/schemas/CacheMode
+    PromptFields:
+      type: object
+      properties:
+        text:
+          type: string
+          minLength: 3
+          maxLength: 2000
+          description: The question exactly as a user would ask an AI assistant.
+        locale:
+          $ref: ../common.yaml#/components/schemas/Locale
+        country:
+          $ref: ../common.yaml#/components/schemas/CountryCode
+        tags:
+          type: array
+          maxItems: 20
+          uniqueItems: true
+          items:
+            type: string
+            pattern: ^[a-z0-9][a-z0-9-]{0,39}$
+        engines:
+          type: array
+          description: 'Engines this prompt runs on. Default: all engines enabled for the org.'
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: ../common.yaml#/components/schemas/EngineId
+        samples:
+          type: integer
+          description: Answers captured per engine per run (LLM output varies between calls).
+          minimum: 1
+          maximum: 5
+          default: 1
+        active:
+          type: boolean
+          default: true
+    Prompt:
+      allOf:
+        - $ref: '#/components/schemas/PromptFields'
+        - $ref: ../common.yaml#/components/schemas/ResourceTimestamps
+        - type: object
+          required:
+            - id
+            - orgId
+            - projectId
+            - text
+            - locale
+            - country
+            - tags
+            - engines
+            - samples
+            - active
+          properties:
+            id:
+              $ref: ../common.yaml#/components/schemas/PromptId
+            orgId:
+              $ref: ../common.yaml#/components/schemas/OrgId
+            projectId:
+              $ref: ../common.yaml#/components/schemas/ProjectId
+    PromptCreate:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/PromptFields'
+        - type: object
+          required:
+            - projectId
+            - text
+          properties:
+            projectId:
+              $ref: ../common.yaml#/components/schemas/ProjectId
+      unevaluatedProperties: false
+    PromptUpdate:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/PromptFields'
+      unevaluatedProperties: false
+    PromptRunTrigger:
+      type: string
+      enum:
+        - manual
+        - schedule
+    PromptRun:
+      allOf:
+        - $ref: ../common.yaml#/components/schemas/JobFields
+        - type: object
+          required:
+            - id
+            - orgId
+            - projectId
+            - trigger
+            - scheduleId
+            - options
+            - expectedAnswerCount
+            - capturedAnswerCount
+            - failedAnswerCount
+          properties:
+            id:
+              $ref: ../common.yaml#/components/schemas/PromptRunId
+            orgId:
+              $ref: ../common.yaml#/components/schemas/OrgId
+            projectId:
+              $ref: ../common.yaml#/components/schemas/ProjectId
+            trigger:
+              $ref: '#/components/schemas/PromptRunTrigger'
+            scheduleId:
+              oneOf:
+                - $ref: ../common.yaml#/components/schemas/ScheduleId
+                - type: 'null'
+            options:
+              $ref: '#/components/schemas/PromptRunOptions'
+            expectedAnswerCount:
+              type: integer
+              minimum: 0
+              description: prompts x engines x samples (one answer-capture job each).
+            capturedAnswerCount:
+              type: integer
+              minimum: 0
+            failedAnswerCount:
+              type: integer
+              minimum: 0
+    PromptRunCreate:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/PromptRunOptions'
+        - type: object
+          required:
+            - projectId
+          properties:
+            projectId:
+              $ref: ../common.yaml#/components/schemas/ProjectId
+      unevaluatedProperties: false
+    Answer:
+      description: One engine's answer to one prompt in one run (immutable). Embeds the engine-query tool's EngineAnswer.
+      allOf:
+        - $ref: ./engine-query.yaml#/components/schemas/EngineAnswer
+        - type: object
+          required:
+            - id
+            - orgId
+            - projectId
+            - promptRunId
+            - promptId
+            - sampleIndex
+            - promptText
+            - locale
+            - country
+            - capturedAt
+            - cache
+          properties:
+            id:
+              $ref: ../common.yaml#/components/schemas/AnswerId
+            orgId:
+              $ref: ../common.yaml#/components/schemas/OrgId
+            projectId:
+              $ref: ../common.yaml#/components/schemas/ProjectId
+            promptRunId:
+              $ref: ../common.yaml#/components/schemas/PromptRunId
+            promptId:
+              $ref: ../common.yaml#/components/schemas/PromptId
+            sampleIndex:
+              type: integer
+              minimum: 0
+              maximum: 4
+            promptText:
+              type: string
+              description: Snapshot of the prompt text at capture time.
+            locale:
+              $ref: ../common.yaml#/components/schemas/Locale
+            country:
+              $ref: ../common.yaml#/components/schemas/CountryCode
+            capturedAt:
+              $ref: ../common.yaml#/components/schemas/Timestamp
+            cache:
+              description: Cache outcome of each tool call that produced this resource (empty until it has a result).
+              readOnly: true
+              $ref: ../common.yaml#/components/schemas/ToolCallCacheList
+    Mention:
+      description: One tracked brand found in one answer. Embeds the answer-analysis tool's MentionDetail.
+      allOf:
+        - $ref: ./answer-analysis.yaml#/components/schemas/MentionDetail
+        - type: object
+          required:
+            - id
+            - orgId
+            - projectId
+            - answerId
+            - promptRunId
+            - promptId
+            - brandId
+            - engine
+            - capturedAt
+          properties:
+            id:
+              $ref: ../common.yaml#/components/schemas/MentionId
+            orgId:
+              $ref: ../common.yaml#/components/schemas/OrgId
+            projectId:
+              $ref: ../common.yaml#/components/schemas/ProjectId
+            answerId:
+              $ref: ../common.yaml#/components/schemas/AnswerId
+            promptRunId:
+              $ref: ../common.yaml#/components/schemas/PromptRunId
+            promptId:
+              $ref: ../common.yaml#/components/schemas/PromptId
+            brandId:
+              $ref: ../common.yaml#/components/schemas/BrandId
+            engine:
+              $ref: ../common.yaml#/components/schemas/EngineId
+            capturedAt:
+              $ref: ../common.yaml#/components/schemas/Timestamp
+    BrandVisibility:
+      type: object
+      description: Metrics for one brand over a set of answers. Definitions in docs/glossary.md.
+      required:
+        - brandId
+        - answerCount
+        - mentionedAnswerCount
+        - mentionRate
+        - shareOfVoice
+        - avgPosition
+        - avgSentimentScore
+      properties:
+        brandId:
+          $ref: ../common.yaml#/components/schemas/BrandId
+        answerCount:
+          type: integer
+          minimum: 0
+        mentionedAnswerCount:
+          type: integer
+          minimum: 0
+        mentionRate:
+          type: number
+          minimum: 0
+          maximum: 1
+        shareOfVoice:
+          type: number
+          minimum: 0
+          maximum: 1
+        avgPosition:
+          type:
+            - number
+            - 'null'
+          minimum: 1
+        avgSentimentScore:
+          type:
+            - number
+            - 'null'
+          minimum: -1
+          maximum: 1
+    VisibilitySummary:
+      type: object
+      required:
+        - projectId
+        - from
+        - to
+        - engine
+        - totalAnswers
+        - brands
+      properties:
+        projectId:
+          $ref: ../common.yaml#/components/schemas/ProjectId
+        from:
+          $ref: ../common.yaml#/components/schemas/Timestamp
+        to:
+          $ref: ../common.yaml#/components/schemas/Timestamp
+        engine:
+          description: Null means all engines.
+          oneOf:
+            - $ref: ../common.yaml#/components/schemas/EngineId
+            - type: 'null'
+        totalAnswers:
+          type: integer
+          minimum: 0
+        brands:
+          type: array
+          items:
+            $ref: '#/components/schemas/BrandVisibility'
+    VisibilityTimeseries:
+      type: object
+      required:
+        - projectId
+        - interval
+        - engine
+        - points
+      properties:
+        projectId:
+          $ref: ../common.yaml#/components/schemas/ProjectId
+        interval:
+          type: string
+          enum:
+            - day
+            - week
+        engine:
+          oneOf:
+            - $ref: ../common.yaml#/components/schemas/EngineId
+            - type: 'null'
+        points:
+          type: array
+          items:
+            allOf:
+              - type: object
+                required:
+                  - bucketStart
+                properties:
+                  bucketStart:
+                    $ref: ../common.yaml#/components/schemas/Timestamp
+              - $ref: '#/components/schemas/BrandVisibility'
+    Citation:
+      description: One cited URL in one answer. Embeds the citation-extractor tool's CitationDetail.
+      allOf:
+        - $ref: ./citation-extractor.yaml#/components/schemas/CitationDetail
+        - type: object
+          required:
+            - id
+            - orgId
+            - projectId
+            - answerId
+            - promptRunId
+            - engine
+            - brandId
+            - capturedAt
+          properties:
+            id:
+              $ref: ../common.yaml#/components/schemas/CitationId
+            orgId:
+              $ref: ../common.yaml#/components/schemas/OrgId
+            projectId:
+              $ref: ../common.yaml#/components/schemas/ProjectId
+            answerId:
+              $ref: ../common.yaml#/components/schemas/AnswerId
+            promptRunId:
+              $ref: ../common.yaml#/components/schemas/PromptRunId
+            engine:
+              $ref: ../common.yaml#/components/schemas/EngineId
+            brandId:
+              description: Set when `ownership` is own or competitor.
+              oneOf:
+                - $ref: ../common.yaml#/components/schemas/BrandId
+                - type: 'null'
+            capturedAt:
+              $ref: ../common.yaml#/components/schemas/Timestamp
+    CitedDomain:
+      type: object
+      required:
+        - domain
+        - ownership
+        - brandId
+        - citationCount
+        - citedAnswerCount
+        - citationShare
+        - firstSeenAt
+        - lastSeenAt
+      properties:
+        domain:
+          $ref: ../common.yaml#/components/schemas/Domain
+        ownership:
+          $ref: ./citation-extractor.yaml#/components/schemas/Ownership
+        brandId:
+          oneOf:
+            - $ref: ../common.yaml#/components/schemas/BrandId
+            - type: 'null'
+        citationCount:
+          type: integer
+          minimum: 0
+        citedAnswerCount:
+          type: integer
+          minimum: 0
+        citationShare:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: citedAnswerCount / answers in range (see docs/glossary.md).
+        firstSeenAt:
+          $ref: ../common.yaml#/components/schemas/Timestamp
+        lastSeenAt:
+          $ref: ../common.yaml#/components/schemas/Timestamp
+    ScheduleTarget:
+      type: string
+      description: |
+        What the schedule starts: `prompt_run` (tracking module) or `content_audit`
+        (optimization module). `report` arrives with reports in Phase 6. Clients must
+        tolerate unknown values.
+      enum:
+        - prompt_run
+        - content_audit
+    ScheduleTiming:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        cron:
+          type: string
+          description: 5-field cron expression. Minimum interval 1 hour; plans may set a longer minimum.
+          examples:
+            - 0 6 * * *
+          pattern: ^\S+( \S+){4}$
+        timezone:
+          type: string
+          description: IANA time zone the cron is evaluated in.
+          examples:
+            - Asia/Manila
+          default: UTC
+        enabled:
+          type: boolean
+          default: true
+    AuditScheduleParams:
+      description: Params for target `content_audit`. One audit per URL each time the schedule fires.
+      allOf:
+        - $ref: ./content-auditor.yaml#/components/schemas/AuditOptions
+        - type: object
+          required:
+            - urls
+          properties:
+            urls:
+              type: array
+              minItems: 1
+              maxItems: 50
+              uniqueItems: true
+              items:
+                $ref: ../common.yaml#/components/schemas/Url
+    PromptRunScheduleSpec:
+      type: object
+      required:
+        - target
+        - params
+      properties:
+        target:
+          const: prompt_run
+        params:
+          $ref: '#/components/schemas/PromptRunOptions'
+    ContentAuditScheduleSpec:
+      type: object
+      required:
+        - target
+        - params
+      properties:
+        target:
+          const: content_audit
+        params:
+          $ref: '#/components/schemas/AuditScheduleParams'
+    ScheduleSpec:
+      description: '`target` plus its params, selected by the `const` on `target`.'
+      oneOf:
+        - $ref: '#/components/schemas/PromptRunScheduleSpec'
+        - $ref: '#/components/schemas/ContentAuditScheduleSpec'
+    Schedule:
+      allOf:
+        - $ref: '#/components/schemas/ScheduleTiming'
+        - $ref: '#/components/schemas/ScheduleSpec'
+        - $ref: ../common.yaml#/components/schemas/ResourceTimestamps
+        - type: object
+          required:
+            - id
+            - orgId
+            - projectId
+            - name
+            - cron
+            - timezone
+            - enabled
+            - nextRunAt
+            - lastFiredAt
+          properties:
+            id:
+              $ref: ../common.yaml#/components/schemas/ScheduleId
+            orgId:
+              $ref: ../common.yaml#/components/schemas/OrgId
+            projectId:
+              $ref: ../common.yaml#/components/schemas/ProjectId
+            nextRunAt:
+              oneOf:
+                - $ref: ../common.yaml#/components/schemas/Timestamp
+                - type: 'null'
+            lastFiredAt:
+              oneOf:
+                - $ref: ../common.yaml#/components/schemas/Timestamp
+                - type: 'null'
+    ScheduleCreate:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/ScheduleTiming'
+        - $ref: '#/components/schemas/ScheduleSpec'
+        - type: object
+          required:
+            - projectId
+            - name
+            - cron
+          properties:
+            projectId:
+              $ref: ../common.yaml#/components/schemas/ProjectId
+      unevaluatedProperties: false
+    ScheduleUpdate:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/ScheduleTiming'
+        - type: object
+          properties:
+            params:
+              type: object
+              description: Replaces `params`; validated against the schedule's existing `target`.
+      unevaluatedProperties: false
+    AuditCreate:
+      type: object
+      allOf:
+        - $ref: ./content-auditor.yaml#/components/schemas/AuditOptions
+        - type: object
+          required:
+            - url
+          properties:
+            url:
+              $ref: ../common.yaml#/components/schemas/Url
+            projectId:
+              $ref: ../common.yaml#/components/schemas/ProjectId
+            cacheMode:
+              description: Cache mode for every tool call of the resulting jobs (ADR 0016). `refresh` and `bypass`
+                need a signed-in caller; anonymous requests always use `use`.
+              $ref: ../common.yaml#/components/schemas/CacheMode
+      unevaluatedProperties: false
+    Audit:
+      allOf:
+        - $ref: ../common.yaml#/components/schemas/JobFields
+        - type: object
+          required:
+            - id
+            - orgId
+            - projectId
+            - url
+            - result
+            - cache
+          properties:
+            id:
+              $ref: ../common.yaml#/components/schemas/AuditId
+            orgId:
+              description: Null for anonymous free-tool audits.
+              oneOf:
+                - $ref: ../common.yaml#/components/schemas/OrgId
+                - type: 'null'
+            projectId:
+              oneOf:
+                - $ref: ../common.yaml#/components/schemas/ProjectId
+                - type: 'null'
+            url:
+              $ref: ../common.yaml#/components/schemas/Url
+            options:
+              $ref: ./content-auditor.yaml#/components/schemas/AuditOptions
+            result:
+              description: The content-auditor result; null until `succeeded`.
+              oneOf:
+                - $ref: ./content-auditor.yaml#/components/schemas/AuditResult
+                - type: 'null'
+            cache:
+              description: Cache outcome of each cached call (content extraction and tool calls) that produced this resource (empty until it has a result).
+              readOnly: true
+              $ref: ../common.yaml#/components/schemas/ToolCallCacheList
+    LlmsTxtSettings:
+      type: object
+      description: |
+        llms-txt-generator options (page entries and assembly) plus the crawl settings. A crawl setting left out of
+        the request comes from the organization's settings, else the default
+        (resolution in docs/services/orchestrator.md); the resource shows the effective
+        values.
+      allOf:
+        - $ref: ./llms-txt-generator.yaml#/components/schemas/PageEntryOptions
+        - $ref: ./llms-txt-generator.yaml#/components/schemas/LlmsTxtAssemblyOptions
+        - type: object
+          properties:
+            maxPages:
+              type: integer
+              minimum: 1
+              description: |
+                Most pages to extract and list, the site root included. Default: no
+                limit (the plan's page limit applies once membership tiers exist; the
+                smaller value wins).
+            respectRobotsTxt:
+              type: boolean
+              description: |
+                Obey the site's robots.txt: disallowed pages are neither selected nor
+                fetched. Default: true. Anonymous requests always obey robots.txt.
+    LlmsTxtCreate:
+      type: object
+      allOf:
+        - $ref: '#/components/schemas/LlmsTxtSettings'
+        - type: object
+          required:
+            - siteUrl
+          properties:
+            siteUrl:
+              $ref: ../common.yaml#/components/schemas/Url
+            projectId:
+              $ref: ../common.yaml#/components/schemas/ProjectId
+            cacheMode:
+              description: Cache mode for every tool call of the resulting jobs (ADR 0016). `refresh` and `bypass`
+                need a signed-in caller; anonymous requests always use `use`.
+              $ref: ../common.yaml#/components/schemas/CacheMode
+      unevaluatedProperties: false
+    LlmsTxt:
+      allOf:
+        - $ref: ../common.yaml#/components/schemas/JobFields
+        - type: object
+          required:
+            - id
+            - orgId
+            - projectId
+            - siteUrl
+            - options
+            - stage
+            - pages
+            - result
+            - cache
+          properties:
+            id:
+              $ref: ../common.yaml#/components/schemas/LlmsTxtId
+            orgId:
+              oneOf:
+                - $ref: ../common.yaml#/components/schemas/OrgId
+                - type: 'null'
+            projectId:
+              oneOf:
+                - $ref: ../common.yaml#/components/schemas/ProjectId
+                - type: 'null'
+            siteUrl:
+              $ref: ../common.yaml#/components/schemas/Url
+            options:
+              $ref: '#/components/schemas/LlmsTxtSettings'
+            stage:
+              description: Pipeline step (ADR 0023); `done` once `status` is terminal.
+              readOnly: true
+              type: string
+              enum: [discovering, auditing, generating, done]
+            pages:
+              description: >-
+                Crawl progress; zeros until discovery succeeded. A page whose results could
+                be read neither from the cache nor from the data-aggregator at generation
+                moves from `audited` to `failed`, so `audited + failed` equals `selected`
+                once `stage` is `done` after generation ran.
+              readOnly: true
+              type: object
+              required: [selected, audited, failed]
+              properties:
+                selected:
+                  type: integer
+                  minimum: 0
+                audited:
+                  type: integer
+                  minimum: 0
+                failed:
+                  type: integer
+                  minimum: 0
+            result:
+              description: The llms-txt-generator result; null until `succeeded`.
+              oneOf:
+                - $ref: ./llms-txt-generator.yaml#/components/schemas/LlmsTxtResult
+                - type: 'null'
+            cache:
+              description: Cache outcomes of the discovery and generation calls (empty until it has a result); per-page calls are reflected in `pages`, not listed.
+              readOnly: true
+              $ref: ../common.yaml#/components/schemas/ToolCallCacheList

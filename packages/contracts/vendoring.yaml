@@ -1,0 +1,113 @@
+# Vendoring manifest (ADR 0018): which contract files each service gets copied into
+# its own folder, so it builds and tests without the rest of the repo. The single
+# source stays in packages/contracts; the copies are generated, committed, carry a
+# GENERATED header, and are never edited by hand.
+#
+# scripts/vendor-contracts writes the copies (Phase 1); scripts/check-contracts
+# regenerates them in a temp dir and fails on any drift. `from` is relative to
+# packages/contracts/ (or to the service folder for `from: ./...`), `target` to
+# services/<service>/. `how`: bundle = Redocly bundle into one self-contained file;
+# copy = byte copy plus header; types = the generated types of the tool's language
+# (ADR 0024): each tool has a `language`, and `languages` below names the generator,
+# the target file and the template for it, so a types entry has no target of its own.
+# Types are for code only; the vendored openapi.yaml stays the request validator.
+# Platform services (gateway, orchestrator, workers) are TypeScript (ADR 0002) and have
+# no `language` field. `handoff` entries (bottom) are written under packages/contracts/.
+# Entries with `fromPhase` greater than the current phase are not checked yet.
+version: 2
+generators:
+  bundle: '@redocly/cli bundle (exact version pinned in the root package.json)'
+  openapi-typescript: 'openapi-typescript (exact version pinned in the root package.json)'
+  datamodel-code-generator: 'datamodel-code-generator, pydantic v2 output (exact version pinned in scripts/tools/python/, added with the Python bring-up)'
+  oapi-codegen: 'oapi-codegen v2, types and embedded spec (exact version pinned as a tool in scripts/tools/go/go.mod, added with the Go bring-up)'
+# One entry per tool language. A tool's `language` must be one of these keys; its
+# template is created only when the first tool in that language is scheduled
+# (ADR 0024, roadmap 1.4).
+languages:
+  ts:
+    name: TypeScript
+    template: services/_template
+    types: {how: openapi-typescript, target: contract/types.ts}
+  python:
+    name: Python
+    template: services/_template-python
+    types: {how: datamodel-code-generator, target: contract/models.py}
+  go:
+    name: Go
+    template: services/_template-go
+    types: {how: oapi-codegen, target: contract/types.gen.go}
+header: |
+  GENERATED - DO NOT EDIT. Vendored by scripts/vendor-contracts (ADR 0018) from
+  packages/contracts/{from}. Change the source and re-run the script; CI fails on drift.
+services:
+  engine-query:
+    language: ts
+    files:
+      - {target: contract/openapi.yaml, from: openapi/services/engine-query.yaml, how: bundle}
+      - {how: types, from: ./contract/openapi.yaml, fromPhase: 1}
+  answer-analysis:
+    language: ts
+    files:
+      - {target: contract/openapi.yaml, from: openapi/services/answer-analysis.yaml, how: bundle}
+      - {how: types, from: ./contract/openapi.yaml, fromPhase: 1}
+  citation-extractor:
+    language: ts
+    files:
+      - {target: contract/openapi.yaml, from: openapi/services/citation-extractor.yaml, how: bundle}
+      - {how: types, from: ./contract/openapi.yaml, fromPhase: 1}
+  content-auditor:
+    language: ts
+    files:
+      - {target: contract/openapi.yaml, from: openapi/services/content-auditor.yaml, how: bundle}
+      - {how: types, from: ./contract/openapi.yaml, fromPhase: 1}
+      - {target: contract/ai-crawlers.yaml, from: data/ai-crawlers.yaml, how: copy}
+  schema-generator:
+    language: ts
+    files:
+      - {target: contract/openapi.yaml, from: openapi/services/schema-generator.yaml, how: bundle}
+      - {how: types, from: ./contract/openapi.yaml, fromPhase: 1}
+  llms-txt-generator:
+    language: ts
+    files:
+      - {target: contract/openapi.yaml, from: openapi/services/llms-txt-generator.yaml, how: bundle}
+      - {how: types, from: ./contract/openapi.yaml, fromPhase: 1}
+  # Platform services vendor the same way when their folders are created, so their
+  # builds do not reach into packages/contracts either. Tool clients they call are
+  # generated from the vendored copies (openapi-typescript + openapi-fetch), whatever
+  # the tool's language.
+  gateway:
+    files:
+      - {target: contract/openapi.yaml, from: openapi/services/gateway.yaml, how: bundle, fromPhase: 3}
+      - {target: contract/orchestrator.yaml, from: openapi/services/orchestrator.yaml, how: bundle, fromPhase: 3}
+      - {target: contract/tools/content-auditor.yaml, from: openapi/services/content-auditor.yaml, how: bundle, fromPhase: 3}
+      - {target: contract/tools/schema-generator.yaml, from: openapi/services/schema-generator.yaml, how: bundle, fromPhase: 3}
+      - {target: contract/tools/llms-txt-generator.yaml, from: openapi/services/llms-txt-generator.yaml, how: bundle, fromPhase: 3}
+      - {target: contract/cache-policy.yaml, from: cache/policy.yaml, how: copy, fromPhase: 3}
+  orchestrator:
+    files:
+      - {target: contract/openapi.yaml, from: openapi/services/orchestrator.yaml, how: bundle, fromPhase: 3}
+      - {target: contract/cache-policy.yaml, from: cache/policy.yaml, how: copy, fromPhase: 3}
+      - {target: contract/events.yaml, from: asyncapi/events.yaml, how: bundle, fromPhase: 4}
+      - {target: contract/topology.yaml, from: bus/topology.yaml, how: copy, fromPhase: 4}
+  workers:
+    files:
+      - {target: contract/events.yaml, from: asyncapi/events.yaml, how: bundle, fromPhase: 4}
+      - {target: contract/topology.yaml, from: bus/topology.yaml, how: copy, fromPhase: 4}
+      - {target: contract/cache-policy.yaml, from: cache/policy.yaml, how: copy, fromPhase: 4}
+      - {target: contract/tools/engine-query.yaml, from: openapi/services/engine-query.yaml, how: bundle, fromPhase: 4}
+      - {target: contract/tools/answer-analysis.yaml, from: openapi/services/answer-analysis.yaml, how: bundle, fromPhase: 4}
+      - {target: contract/tools/citation-extractor.yaml, from: openapi/services/citation-extractor.yaml, how: bundle, fromPhase: 4}
+      - {target: contract/tools/content-auditor.yaml, from: openapi/services/content-auditor.yaml, how: bundle, fromPhase: 4}
+      - {target: contract/tools/llms-txt-generator.yaml, from: openapi/services/llms-txt-generator.yaml, how: bundle, fromPhase: 4}
+      - {target: contract/external/content-extractor.yaml, from: openapi/services/content-extractor.yaml, how: bundle, fromPhase: 4}
+      - {target: contract/external/sitemap-extractor.yaml, from: openapi/services/sitemap-extractor.yaml, how: bundle, fromPhase: 4}
+# Hand-off copies of contracts REx defines for services built outside this repo
+# (ADR 0021). Same generation and drift check as above, but `target` is relative to
+# packages/contracts/; the owner copies the file into their own repo.
+handoff:
+  content-extractor:
+    files:
+      - {target: handoff/content-extractor.openapi.yaml, from: openapi/services/content-extractor.yaml, how: bundle}
+  sitemap-extractor:
+    files:
+      - {target: handoff/sitemap-extractor.openapi.yaml, from: openapi/services/sitemap-extractor.yaml, how: bundle}

@@ -1,0 +1,128 @@
+openapi: 3.1.0
+info:
+  title: REx sitemap-extractor service
+  version: 1.0.0
+  description: |
+    External service (ADR 0023): implemented in Go outside this repo; its owner builds
+    to this contract, which REx defines. Deployment is the implementer's choice: a
+    separate service or a second endpoint of the content-extractor both work, with
+    this same contract (ADR 0023 amendment).
+    It finds a site's page URLs for the llms.txt pipeline: every URL in the site's
+    sitemaps (robots.txt `Sitemap:` lines, else /sitemap.xml; sitemap indexes and
+    gzip followed), else the same-host links of the site root, filtered by robots.txt
+    on request. It is the only place that discovers URLs (the content-extractor
+    extracts single pages).
+
+    Called only by REx workers, cache first (cache/policy.yaml `external`). Stateless:
+    no database, no queues, no bus, no calls to REx services. No authentication in the
+    service: it runs on the private network inside the cluster and only workers can
+    reach it (network policy, ADR 0014).
+    Every number marked DEFAULT is a placeholder its owner may tune; changing one is
+    not a contract change.
+    Service doc: docs/services/sitemap-extractor.md
+x-rex-service:
+  name: sitemap-extractor
+  kind: external
+security: []   # reachable only from workers (network policy, ADR 0014)
+tags:
+  - name: Discovery
+  - name: Health
+paths:
+  /healthz:
+    $ref: '../common.yaml#/components/pathItems/Healthz'
+  /readyz:
+    $ref: '../common.yaml#/components/pathItems/Readyz'
+  /v1/sitemap-extractions:
+    post:
+      operationId: extractSitemapUrls
+      x-rex-limits: {maxDuration: PT2M, llm: none, outboundFetch: crawl, fetchTimeout: PT10S, fetchMaxBytes: 52428800, notes: 'DEFAULT values; robots.txt, then sitemap files (at most 1000 files, 52428800 bytes each, the sitemaps.org cap), else the site root'}
+      summary: List a site's page URLs from its sitemaps
+      description: |
+        Synchronous; may take up to 2 minutes (all fetches included). Reads
+        robots.txt (or uses the `robotsTxt` given), then the sitemaps it names, else
+        /sitemap.xml, following sitemap indexes. When no sitemap lists a URL, it reads
+        the site root and returns its same-host `<a href>` links instead (`via:
+        links`). URLs are kept only when they are `http(s)` and on the host of
+        `siteUrl`; they are deduplicated in sitemap order (fragments removed).
+
+        Fetching rules are the content-extractor's (SSRF guard, REx User-Agent, no
+        JavaScript, 5 redirects, DEFAULT). With `respectRobotsTxt: true`, URLs the
+        robots.txt disallows for the service's User-Agent are left out and counted in
+        `disallowed` (RFC 9309, as in the content-extractor).
+
+        422 codes: `target_blocked` (scheme or address of `siteUrl` refused),
+        `target_unreachable` (neither robots.txt, a sitemap nor the site root could be
+        reached). Finding no URL is not an error: `via: none`, empty `urls`.
+      tags: [Discovery]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SitemapExtractionRequest'
+      responses:
+        '200':
+          description: The site's page URLs.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SitemapExtraction'
+        '400':
+          $ref: '../common.yaml#/components/responses/BadRequest'
+        '422':
+          $ref: '../common.yaml#/components/responses/UnprocessableContent'
+        '503':
+          $ref: '../common.yaml#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '../common.yaml#/components/responses/InternalError'
+components:
+  schemas:
+    SitemapExtractionRequest:
+      type: object
+      unevaluatedProperties: false
+      required: [siteUrl]
+      properties:
+        siteUrl:
+          description: The site; its origin gives robots.txt and /sitemap.xml.
+          $ref: '../common.yaml#/components/schemas/Url'
+        respectRobotsTxt:
+          type: boolean
+          default: false
+          description: Leave out URLs robots.txt disallows. REx sets it from the llms.txt setting.
+        robotsTxt:
+          description: The site's robots.txt when the caller already has it; used instead of fetching it.
+          $ref: '../common.yaml#/components/schemas/FetchedFile'
+        maxUrls:
+          type: integer
+          minimum: 1
+          description: Most URLs to return. Default (absent) all of them, within the limits above.
+    SitemapExtraction:
+      type: object
+      required: [siteUrl, via, sources, urls, disallowed, truncated, robotsTxt]
+      properties:
+        siteUrl:
+          $ref: '../common.yaml#/components/schemas/Url'
+        via:
+          type: string
+          enum: [sitemap, links, none]
+          description: Where the URLs came from.
+        sources:
+          type: array
+          description: 'Sitemap files read in order, or the site root with `via: links`; empty with `via: none`.'
+          items:
+            $ref: '../common.yaml#/components/schemas/Url'
+        urls:
+          type: array
+          description: Same-host page URLs, deduplicated, in sitemap (or document) order.
+          items:
+            $ref: '../common.yaml#/components/schemas/Url'
+        disallowed:
+          type: integer
+          minimum: 0
+          description: URLs left out because robots.txt disallows them (0 unless `respectRobotsTxt`).
+        truncated:
+          type: boolean
+          description: True when `maxUrls` or a DEFAULT limit stopped the listing early.
+        robotsTxt:
+          description: The robots.txt used (fetched or given).
+          $ref: '../common.yaml#/components/schemas/FetchedFile'

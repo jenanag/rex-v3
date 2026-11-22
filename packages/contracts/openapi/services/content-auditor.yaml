@@ -1,0 +1,234 @@
+openapi: 3.1.0
+info:
+  title: REx content-auditor tool
+  version: 1.0.0
+  description: |
+    Stateless tool: scores one page's AI readiness and checks which AI crawlers a
+    site's robots.txt allows. Deterministic, no LLM. No database, no queues, no bus,
+    no calls to other tools: the llms.txt check uses an `LlmsTxtValidation` the
+    caller passes in (a worker gets it from llms-txt-generator first). Fetches
+    nothing: the page's extracted content, raw HTML and robots.txt arrive in the
+    request. The content-extractor service produces them (ADR 0021).
+    The AI crawler list is data: packages/contracts/data/ai-crawlers.yaml.
+    Operations marked `x-rex-public` are exposed anonymously by the gateway under
+    `/v1/tools`. Service doc: docs/services/content-auditor.md
+    No authentication in the tool: only workers and the gateway can reach it (network
+    policy), and the gateway exposes only `x-rex-public` operations (ADR 0014).
+x-rex-service:
+  name: content-auditor
+  kind: tool
+security: []   # no auth inside tools: enforced in front of them (ADR 0014, ADR 0018)
+tags:
+  - name: Audits
+  - name: Crawler checks
+  - name: Health
+paths:
+  /healthz:
+    $ref: '../common.yaml#/components/pathItems/Healthz'
+  /readyz:
+    $ref: '../common.yaml#/components/pathItems/Readyz'
+  /v1/audits:
+    post:
+      operationId: auditPage
+      x-rex-limits: {llm: none, outboundFetch: none, notes: 'audits the page data in the request; fetches nothing'}
+      summary: Audit one page for AI readiness
+      description: |
+        Synchronous and deterministic. Fetches nothing: the caller passes the page's
+        extracted content, its raw HTTP response and its robots.txt. The
+        content-extractor service produces all three (ADR 0021).
+      tags: [Audits]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuditRequest'
+      responses:
+        '200':
+          description: Score, category scores and checks.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuditResult'
+        '400':
+          $ref: '../common.yaml#/components/responses/BadRequest'
+        '422':
+          $ref: '../common.yaml#/components/responses/UnprocessableContent'
+        '503':
+          $ref: '../common.yaml#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '../common.yaml#/components/responses/InternalError'
+  /v1/crawler-checks:
+    post:
+      operationId: checkCrawlerAccess
+      x-rex-limits: {p99: PT2S, llm: none, outboundFetch: none, notes: 'evaluates the robots.txt in the request; fetches nothing'}
+      summary: Check which AI crawlers a site's robots.txt allows
+      description: |
+        Evaluates the robots.txt content passed in. The tool fetches nothing; to check
+        a site by URL, use the orchestrator's async, anonymous `createAudit`
+        (category `crawler_access`); there the content-extractor service reads the
+        site (ADR 0021).
+      x-rex-public: true
+      tags: [Crawler checks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CrawlerCheckRequest'
+      responses:
+        '200':
+          description: Access per known AI crawler.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrawlerCheck'
+        '400':
+          $ref: '../common.yaml#/components/responses/BadRequest'
+        '422':
+          $ref: '../common.yaml#/components/responses/UnprocessableContent'
+        default:
+          $ref: '../common.yaml#/components/responses/InternalError'
+components:
+  schemas:
+    AuditCategory:
+      type: string
+      description: |
+        crawler_access: robots.txt and meta robots for AI crawlers.
+        structured_data: JSON-LD presence and validity.
+        llms_txt: /llms.txt presence and validity (from the `llmsTxt` input).
+        answer_readiness: question headings, direct answers, lists/tables, chunkable sections.
+        entity_signals: organization/author entities, sameAs links.
+        technical: server-rendered content, status, canonical, indexability.
+        freshness: visible and structured dates.
+      enum: [crawler_access, structured_data, llms_txt, answer_readiness, entity_signals, technical, freshness]
+    AuditOptions:
+      type: object
+      properties:
+        categories:
+          type: array
+          description: 'Categories to run. Default: all.'
+          minItems: 1
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/AuditCategory'
+    AuditRequest:
+      type: object
+      description: |
+        Everything the audit reads, already fetched and extracted. `content` (text and
+        Markdown) feeds answer_readiness, entity_signals and freshness. `page` (raw
+        HTML and headers) is needed because main-content extraction drops what the
+        other categories check: JSON-LD (structured_data, entity_signals), meta robots
+        and X-Robots-Tag (crawler_access, technical), canonical, status and whether the
+        content is server-rendered (technical), and dated markup (freshness).
+      allOf:
+        - $ref: '#/components/schemas/AuditOptions'
+        - type: object
+          required: [url, page, content]
+          properties:
+            url:
+              description: The URL the audit was requested for.
+              $ref: '../common.yaml#/components/schemas/Url'
+            page:
+              $ref: '../common.yaml#/components/schemas/FetchedPage'
+            content:
+              $ref: '../common.yaml#/components/schemas/ExtractedContent'
+            robotsTxt:
+              description: The site's robots.txt. If absent, the robots.txt checks of crawler_access are not_applicable.
+              $ref: '../common.yaml#/components/schemas/FetchedFile'
+            llmsTxt:
+              description: Validation of the site's llms.txt. If absent, the llms_txt category is not_applicable.
+              $ref: '../common.yaml#/components/schemas/LlmsTxtValidation'
+      unevaluatedProperties: false
+    CheckResult:
+      type: string
+      enum: [pass, warn, fail, not_applicable]
+    AuditCheck:
+      type: object
+      required: [id, category, result, message]
+      properties:
+        id:
+          type: string
+          pattern: '^[a-z][a-z0-9_]*$'
+          description: 'Stable check ID, e.g. `robots_allows_oai_searchbot`.'
+        category:
+          $ref: '#/components/schemas/AuditCategory'
+        result:
+          $ref: '#/components/schemas/CheckResult'
+        message:
+          type: string
+        recommendation:
+          type: [string, 'null']
+    CategoryScore:
+      type: object
+      required: [category, score]
+      properties:
+        category:
+          $ref: '#/components/schemas/AuditCategory'
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+    AuditResult:
+      type: object
+      description: The orchestrator's Audit resource embeds this as `result`.
+      required: [url, finalUrl, score, categoryScores, checks]
+      properties:
+        url:
+          $ref: '../common.yaml#/components/schemas/Url'
+        finalUrl:
+          $ref: '../common.yaml#/components/schemas/Url'
+        score:
+          type: integer
+          minimum: 0
+          maximum: 100
+        categoryScores:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryScore'
+        checks:
+          type: array
+          items:
+            $ref: '#/components/schemas/AuditCheck'
+    CrawlerCheckRequest:
+      type: object
+      unevaluatedProperties: false
+      required: [siteUrl, robotsTxt]
+      properties:
+        siteUrl:
+          $ref: '../common.yaml#/components/schemas/Url'
+        robotsTxt:
+          description: The site's robots.txt as fetched (verbatim; rules must be read exactly as served).
+          $ref: '../common.yaml#/components/schemas/FetchedFile'
+    CrawlerAccess:
+      type: string
+      description: |
+        allowed: no rule blocks `/`. disallowed: `/` is blocked.
+        partial: some paths are blocked. unknown: robots.txt could not be read (5xx status, or null status = network error or timeout).
+      enum: [allowed, disallowed, partial, unknown]
+    CrawlerCheck:
+      type: object
+      required: [siteUrl, robotsTxtUrl, robotsTxtStatus, crawlers, checkedAt]
+      properties:
+        siteUrl:
+          $ref: '../common.yaml#/components/schemas/Url'
+        robotsTxtUrl:
+          $ref: '../common.yaml#/components/schemas/Url'
+        robotsTxtStatus:
+          type: [integer, 'null']
+          description: HTTP status of robots.txt as passed in; null on network error.
+        crawlers:
+          type: array
+          items:
+            allOf:
+              - $ref: '../common.yaml#/components/schemas/AiCrawler'
+              - type: object
+                required: [access]
+                properties:
+                  access:
+                    $ref: '#/components/schemas/CrawlerAccess'
+                  matchedGroup:
+                    type: [string, 'null']
+                    description: The robots.txt user-agent group that applied (`*` if none named the token).
+        checkedAt:
+          $ref: '../common.yaml#/components/schemas/Timestamp'

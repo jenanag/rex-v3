@@ -1,0 +1,645 @@
+asyncapi: 3.1.0
+info:
+  title: REx bus messages
+  version: 3.0.0
+  description: |
+    Single source of truth for every message on the RabbitMQ bus: routing key,
+    version, producer and payload. Jobs flow orchestrator -> workers
+    (`<job>.requested`), results flow workers -> orchestrator (`<job>.completed`,
+    `<job>.failed`). Nothing else uses the bus: tools, the gateway and the
+    dashboard never touch it.
+
+    - Exchanges, queues, bindings, retries and dead-lettering: ../bus/topology.yaml.
+      Channel bindings `$ref` its exchange objects; consumers are derived from its
+      queue bindings (never listed here).
+    - Payloads that carry tool input or output `$ref` the tool's OpenAPI schema, so a
+      job message is exactly what the worker sends to the tool and a result is
+      exactly what the tool returned. Exception: pages travel by reference, never
+      as bodies, in both page flows (audits: `content-extraction`, `content-audit`;
+      the llms.txt pipeline: `sitemap-discovery`, `page-audit`,
+      `llms-txt-generation`; ADR 0023). A result message carries a `PageRef` (URL
+      and cache keys) and the next job carries it on; the reading worker gets the
+      bodies from the cache first, then the data-aggregator
+      (docs/architecture.md#page-results-by-reference).
+    - `x-rex-producers` is the authoritative producer list.
+    - Workers make every tool call cache first (ADR 0016): `requested` messages may
+      carry a `cache` directive (CacheDirective), and `completed` messages report
+      each call's cache outcome (`cache`, ToolCallCacheList), so a redelivered job
+      reuses the calls that already succeeded.
+    - External services (content-extractor, sitemap-extractor, data-aggregator; ADR
+      0021, 0022, 0023) are called only by workers, cache first where cacheable. No
+      service, tool or external, ever publishes or consumes a message.
+    - docs/events.md is the generated, readable catalog.
+defaultContentType: application/json
+
+channels:
+  answerCaptureRequested:
+    address: answer-capture.requested.{engine}
+    title: answer-capture.requested
+    parameters:
+      engine:
+        description: An `EngineId` value from packages/contracts/openapi/common.yaml; selects the per-engine queue.
+    x-rex-producers: [orchestrator]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      answerCaptureRequested:
+        $ref: '#/components/messages/answerCaptureRequested'
+  answerCaptureCompleted:
+    address: answer-capture.completed
+    x-rex-producers: [workers]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      answerCaptureCompleted:
+        $ref: '#/components/messages/answerCaptureCompleted'
+  answerCaptureFailed:
+    address: answer-capture.failed
+    x-rex-producers: [workers]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      answerCaptureFailed:
+        $ref: '#/components/messages/answerCaptureFailed'
+  contentExtractionRequested:
+    address: content-extraction.requested
+    x-rex-producers: [orchestrator]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      contentExtractionRequested:
+        $ref: '#/components/messages/contentExtractionRequested'
+  contentExtractionCompleted:
+    address: content-extraction.completed
+    x-rex-producers: [workers]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      contentExtractionCompleted:
+        $ref: '#/components/messages/contentExtractionCompleted'
+  contentExtractionFailed:
+    address: content-extraction.failed
+    x-rex-producers: [workers]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      contentExtractionFailed:
+        $ref: '#/components/messages/contentExtractionFailed'
+  contentAuditRequested:
+    address: content-audit.requested
+    x-rex-producers: [orchestrator]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      contentAuditRequested:
+        $ref: '#/components/messages/contentAuditRequested'
+  contentAuditCompleted:
+    address: content-audit.completed
+    x-rex-producers: [workers]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      contentAuditCompleted:
+        $ref: '#/components/messages/contentAuditCompleted'
+  contentAuditFailed:
+    address: content-audit.failed
+    x-rex-producers: [workers]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      contentAuditFailed:
+        $ref: '#/components/messages/contentAuditFailed'
+  sitemapDiscoveryRequested:
+    address: sitemap-discovery.requested
+    x-rex-producers: [orchestrator]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      sitemapDiscoveryRequested:
+        $ref: '#/components/messages/sitemapDiscoveryRequested'
+  sitemapDiscoveryCompleted:
+    address: sitemap-discovery.completed
+    x-rex-producers: [workers]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      sitemapDiscoveryCompleted:
+        $ref: '#/components/messages/sitemapDiscoveryCompleted'
+  sitemapDiscoveryFailed:
+    address: sitemap-discovery.failed
+    x-rex-producers: [workers]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      sitemapDiscoveryFailed:
+        $ref: '#/components/messages/sitemapDiscoveryFailed'
+  pageAuditRequested:
+    address: page-audit.requested
+    x-rex-producers: [orchestrator]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      pageAuditRequested:
+        $ref: '#/components/messages/pageAuditRequested'
+  pageAuditCompleted:
+    address: page-audit.completed
+    x-rex-producers: [workers]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      pageAuditCompleted:
+        $ref: '#/components/messages/pageAuditCompleted'
+  pageAuditFailed:
+    address: page-audit.failed
+    x-rex-producers: [workers]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      pageAuditFailed:
+        $ref: '#/components/messages/pageAuditFailed'
+  llmsTxtGenerationRequested:
+    address: llms-txt-generation.requested
+    x-rex-producers: [orchestrator]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      llmsTxtGenerationRequested:
+        $ref: '#/components/messages/llmsTxtGenerationRequested'
+  llmsTxtGenerationCompleted:
+    address: llms-txt-generation.completed
+    x-rex-producers: [workers]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      llmsTxtGenerationCompleted:
+        $ref: '#/components/messages/llmsTxtGenerationCompleted'
+  llmsTxtGenerationFailed:
+    address: llms-txt-generation.failed
+    x-rex-producers: [workers]
+    bindings:
+      $ref: '#/components/channelBindings/eventsExchange'
+    messages:
+      llmsTxtGenerationFailed:
+        $ref: '#/components/messages/llmsTxtGenerationFailed'
+
+components:
+  channelBindings:
+    eventsExchange:
+      amqp:
+        is: routingKey
+        exchange:
+          $ref: '../bus/topology.yaml#/exchanges/events'
+        bindingVersion: 0.3.0
+
+  schemas:
+    Envelope:
+      type: object
+      description: Every message body is one JSON object with this envelope; `data` is message-specific.
+      required: [id, type, version, occurredAt, producer, orgId, projectId, idempotencyKey, causationId, traceparent, data]
+      properties:
+        id:
+          $ref: '../openapi/common.yaml#/components/schemas/EventId'
+        type:
+          type: string
+          pattern: '^[a-z][a-z-]*\.(requested|completed|failed)$'
+          description: '`<job>.<requested|completed|failed>`; the routing key without any shard suffix.'
+        version:
+          type: integer
+          minimum: 1
+        occurredAt:
+          $ref: '../openapi/common.yaml#/components/schemas/Timestamp'
+        producer:
+          type: string
+          enum: [orchestrator, workers]
+        orgId:
+          description: Tenant. Null for anonymous free-tool jobs.
+          oneOf:
+            - $ref: '../openapi/common.yaml#/components/schemas/OrgId'
+            - type: 'null'
+        projectId:
+          oneOf:
+            - $ref: '../openapi/common.yaml#/components/schemas/ProjectId'
+            - type: 'null'
+        idempotencyKey:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: |
+            Job key set by the orchestrator, e.g. `answer:<promptRunId>:<promptId>:<engine>:<sample>`.
+            Copied unchanged onto the job's result. The orchestrator applies at most one
+            result per key.
+        causationId:
+          description: On results, the `id` of the requested message; null on requests.
+          oneOf:
+            - $ref: '../openapi/common.yaml#/components/schemas/EventId'
+            - type: 'null'
+        traceparent:
+          type: string
+          description: W3C Trace Context of the operation that caused the message.
+        data:
+          type: object
+    JobFailure:
+      type: object
+      description: Data of every `<job>.failed` message.
+      required: [error, attempts, step]
+      properties:
+        error:
+          $ref: '../openapi/common.yaml#/components/schemas/Problem'
+        attempts:
+          type: integer
+          minimum: 1
+        step:
+          type: [string, 'null']
+          description: operationId of the call that failed, e.g. `queryEngine` (`extractContent`, `extractSitemapUrls` for external services); `readPageResult` when a referenced page result is in neither the cache nor the data-aggregator (final, code `page_result_missing`); null if it failed before any call.
+    SitemapDiscovery:
+      type: object
+      description: The sitemap-extractor response without the robots.txt body (ids and URLs only, ADR 0023).
+      required: [via, urls, disallowed, truncated]
+      properties:
+        via:
+          $ref: '../openapi/services/sitemap-extractor.yaml#/components/schemas/SitemapExtraction/properties/via'
+        urls:
+          $ref: '../openapi/services/sitemap-extractor.yaml#/components/schemas/SitemapExtraction/properties/urls'
+        disallowed:
+          $ref: '../openapi/services/sitemap-extractor.yaml#/components/schemas/SitemapExtraction/properties/disallowed'
+        truncated:
+          $ref: '../openapi/services/sitemap-extractor.yaml#/components/schemas/SitemapExtraction/properties/truncated'
+    PageExtractionRequest:
+      description: A content-extractor request for one page, always by `url` (no inline HTML on the bus).
+      allOf:
+        - $ref: '../openapi/services/content-extractor.yaml#/components/schemas/ExtractionRequest'
+        - required: [url]
+    PageRef:
+      type: object
+      description: |
+        Where one page's stored results live: cache keys, which are also the
+        data-aggregator keys (ADR 0023). The one page reference of both page flows;
+        bodies are read by key, cache first, then the data-aggregator.
+      unevaluatedProperties: false
+      required: [url, extractionKey]
+      properties:
+        url:
+          $ref: '../openapi/common.yaml#/components/schemas/Url'
+        extractionKey:
+          description: Cache key of the page's `extractContent` result.
+          $ref: '../openapi/common.yaml#/components/schemas/ToolCallCache/properties/key'
+        entryKey:
+          description: Cache key of the page's `describePage` result (llms.txt pipeline only).
+          $ref: '../openapi/common.yaml#/components/schemas/ToolCallCache/properties/key'
+    AuditJob:
+      type: object
+      description: One audit, by reference (ADR 0023); the worker reads the extraction by `page.extractionKey`.
+      unevaluatedProperties: false
+      required: [page]
+      properties:
+        page:
+          $ref: '#/components/schemas/PageRef'
+        options:
+          allOf:
+            - $ref: '../openapi/services/content-auditor.yaml#/components/schemas/AuditOptions'
+          unevaluatedProperties: false
+    PageAuditJob:
+      type: object
+      description: One page of the llms.txt pipeline (ADR 0023). Not a content-auditor audit.
+      unevaluatedProperties: false
+      required: [extraction, entry]
+      properties:
+        extraction:
+          $ref: '#/components/schemas/PageExtractionRequest'
+        entry:
+          allOf:
+            - $ref: '../openapi/services/llms-txt-generator.yaml#/components/schemas/PageEntryOptions'
+          unevaluatedProperties: false
+    PageResultRef:
+      description: A `PageRef` of the llms.txt pipeline, which also needs the entry key (the extraction is read only for llms-full.txt).
+      allOf:
+        - $ref: '#/components/schemas/PageRef'
+        - required: [entryKey]
+    LlmsTxtGenerationJob:
+      type: object
+      description: |
+        What an `llms-txt-generation` job assembles: the audited pages in listing order
+        (site root first), as references; the worker reads each entry (and, for
+        llms-full.txt, each extraction) from the cache, else the data-aggregator.
+      unevaluatedProperties: false
+      required: [siteUrl, pages]
+      properties:
+        siteUrl:
+          $ref: '../openapi/common.yaml#/components/schemas/Url'
+        pages:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/PageResultRef'
+        options:
+          allOf:
+            - $ref: '../openapi/services/llms-txt-generator.yaml#/components/schemas/LlmsTxtAssemblyOptions'
+          unevaluatedProperties: false   # assembly only: no LLM options
+    FailedPayload:
+      description: Payload of every `<job>.failed` message (its `type` is fixed by the channel).
+      allOf:
+        - $ref: '#/components/schemas/Envelope'
+        - type: object
+          properties:
+            type:
+              type: string
+              pattern: '\.failed$'
+            data:
+              $ref: '#/components/schemas/JobFailure'
+
+  messages:
+    answerCaptureRequested:
+      name: answer-capture.requested
+      summary: Capture one answer (prompt x engine x sample) and analyze it.
+      description: |
+        Worker flow: engine-query `queryEngine` -> answer-analysis `analyzeAnswer`
+        -> citation-extractor `extractCitations`, then publish the result.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              type: {const: answer-capture.requested}
+              version: {const: 1}
+              data:
+                type: object
+                required: [query, analysis]
+                properties:
+                  query:
+                    $ref: '../openapi/services/engine-query.yaml#/components/schemas/EngineQuery'
+                  analysis:
+                    description: answer-analysis input minus the text; its brands also feed citation-extractor.
+                    $ref: '../openapi/services/answer-analysis.yaml#/components/schemas/AnswerAnalysisOptions'
+                  cache:
+                    $ref: '../openapi/common.yaml#/components/schemas/CacheDirective'
+    answerCaptureCompleted:
+      name: answer-capture.completed
+      summary: The captured answer with its mentions, citations, LLM usage (tool responses verbatim) and cache outcomes.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              type: {const: answer-capture.completed}
+              version: {const: 1}
+              data:
+                type: object
+                required: [capture, analysis, citations, cache]
+                properties:
+                  cache:
+                    $ref: '../openapi/common.yaml#/components/schemas/ToolCallCacheList'
+                  capture:
+                    $ref: '../openapi/services/engine-query.yaml#/components/schemas/EngineAnswerResult'
+                  analysis:
+                    $ref: '../openapi/services/answer-analysis.yaml#/components/schemas/AnswerAnalysis'
+                  citations:
+                    $ref: '../openapi/services/citation-extractor.yaml#/components/schemas/CitationExtraction'
+    answerCaptureFailed:
+      name: answer-capture.failed
+      summary: The answer could not be captured or analyzed after all retries.
+      payload:
+        $ref: '#/components/schemas/FailedPayload'
+    contentExtractionRequested:
+      name: content-extraction.requested
+      summary: Have the content-extractor extract one page for an audit.
+      description: |
+        Worker flow: call content-extractor `extractContent` with `request`, cache
+        first (the service fetches and extracts; the worker only makes the call); a
+        fresh result is archived to the data-aggregator, then cached. Publishes a
+        `PageRef`, never the extraction. The orchestrator then starts `content-audit`
+        with that reference (audits only; the llms.txt pipeline uses `page-audit`).
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              type: {const: content-extraction.requested}
+              version: {const: 1}
+              data:
+                type: object
+                required: [request]
+                properties:
+                  request:
+                    $ref: '#/components/schemas/PageExtractionRequest'
+                  cache:
+                    $ref: '../openapi/common.yaml#/components/schemas/CacheDirective'
+    contentExtractionCompleted:
+      name: content-extraction.completed
+      summary: Where the extraction is stored (page reference) and the cache outcome; no page body.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              type: {const: content-extraction.completed}
+              version: {const: 1}
+              data:
+                type: object
+                required: [page, cache]
+                properties:
+                  page:
+                    $ref: '#/components/schemas/PageRef'
+                  cache:
+                    $ref: '../openapi/common.yaml#/components/schemas/ToolCallCacheList'
+    contentExtractionFailed:
+      name: content-extraction.failed
+      summary: The content could not be extracted after all retries.
+      payload:
+        $ref: '#/components/schemas/FailedPayload'
+    contentAuditRequested:
+      name: content-audit.requested
+      summary: Audit one page from its stored extraction, by reference.
+      description: |
+        Published after the page's `content-extraction` job succeeded, with the
+        `PageRef` it reported. Worker flow: read the extraction by
+        `page.extractionKey`, cache first, then the data-aggregator (in neither: final
+        failure `page_result_missing`) -> llms-txt-generator `validateLlmsTxt` with
+        the extraction's `llmsTxt` (skipped when absent) -> content-auditor
+        `auditPage` with the extraction's `page`, `content` and `robotsTxt`, that
+        validation as `llmsTxt`, and `options`.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              type: {const: content-audit.requested}
+              version: {const: 1}
+              data:
+                type: object
+                required: [request]
+                properties:
+                  request:
+                    $ref: '#/components/schemas/AuditJob'
+                  cache:
+                    $ref: '../openapi/common.yaml#/components/schemas/CacheDirective'
+    contentAuditCompleted:
+      name: content-audit.completed
+      summary: The audit result and cache outcomes.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              type: {const: content-audit.completed}
+              version: {const: 1}
+              data:
+                type: object
+                required: [result, cache]
+                properties:
+                  cache:
+                    $ref: '../openapi/common.yaml#/components/schemas/ToolCallCacheList'
+                  result:
+                    $ref: '../openapi/services/content-auditor.yaml#/components/schemas/AuditResult'
+    contentAuditFailed:
+      name: content-audit.failed
+      summary: The audit failed after all retries.
+      payload:
+        $ref: '#/components/schemas/FailedPayload'
+    sitemapDiscoveryRequested:
+      name: sitemap-discovery.requested
+      summary: List the page URLs of an llms.txt site.
+      description: |
+        Worker flow: sitemap-extractor `extractSitemapUrls` with `request`, cache
+        first; publish the URLs (not the robots.txt body). The orchestrator selects
+        the pages and publishes one `page-audit` per page; `.failed` fails the
+        resource.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              type: {const: sitemap-discovery.requested}
+              version: {const: 1}
+              data:
+                type: object
+                required: [request]
+                properties:
+                  request:
+                    $ref: '../openapi/services/sitemap-extractor.yaml#/components/schemas/SitemapExtractionRequest'
+                  cache:
+                    $ref: '../openapi/common.yaml#/components/schemas/CacheDirective'
+    sitemapDiscoveryCompleted:
+      name: sitemap-discovery.completed
+      summary: The discovered URLs and the cache outcome (with its key).
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              type: {const: sitemap-discovery.completed}
+              version: {const: 1}
+              data:
+                type: object
+                required: [discovery, cache]
+                properties:
+                  cache:
+                    $ref: '../openapi/common.yaml#/components/schemas/ToolCallCacheList'
+                  discovery:
+                    $ref: '#/components/schemas/SitemapDiscovery'
+    sitemapDiscoveryFailed:
+      name: sitemap-discovery.failed
+      summary: The job failed after all retries.
+      payload:
+        $ref: '#/components/schemas/FailedPayload'
+    pageAuditRequested:
+      name: page-audit.requested
+      summary: Have one page extracted and its llms.txt entry written.
+      description: |
+        Worker flow (ADR 0023): call content-extractor `extractContent` with
+        `request.extraction`, cache first (the service extracts; a fresh result is
+        archived to the data-aggregator before it is cached), then llms-txt-generator
+        `describePage` with the page's `url`, `metadata` and `content` and
+        `request.entry`, cache first (archived the same way). Publishes a
+        `PageResultRef` and LLM usage, never the page or the entry.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              type: {const: page-audit.requested}
+              version: {const: 1}
+              data:
+                type: object
+                required: [request]
+                properties:
+                  request:
+                    $ref: '#/components/schemas/PageAuditJob'
+                  cache:
+                    $ref: '../openapi/common.yaml#/components/schemas/CacheDirective'
+    pageAuditCompleted:
+      name: page-audit.completed
+      summary: Where the page's extraction and entry are stored (page reference), the cache outcomes, and LLM usage.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              type: {const: page-audit.completed}
+              version: {const: 1}
+              data:
+                type: object
+                required: [page, cache, usage]
+                properties:
+                  page:
+                    $ref: '#/components/schemas/PageResultRef'
+                  cache:
+                    $ref: '../openapi/common.yaml#/components/schemas/ToolCallCacheList'
+                  usage:
+                    $ref: '../openapi/common.yaml#/components/schemas/LlmUsageList'
+    pageAuditFailed:
+      name: page-audit.failed
+      summary: The job failed after all retries.
+      payload:
+        $ref: '#/components/schemas/FailedPayload'
+    llmsTxtGenerationRequested:
+      name: llms-txt-generation.requested
+      summary: Assemble llms.txt for a site from its audited pages.
+      description: |
+        Published when every `page-audit` job is terminal and at least one succeeded;
+        `pages` lists the audited ones. Worker flow: read each page's entry (and, with
+        `includeFull`, its Markdown) from the cache first, else from the
+        data-aggregator, by the keys given; then llms-txt-generator `generateLlmsTxt`
+        (no LLM call). A page found in neither is left out and counted in
+        `pagesMissing`.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              type: {const: llms-txt-generation.requested}
+              version: {const: 1}
+              data:
+                type: object
+                required: [request]
+                properties:
+                  request:
+                    $ref: '#/components/schemas/LlmsTxtGenerationJob'
+                  cache:
+                    $ref: '../openapi/common.yaml#/components/schemas/CacheDirective'
+    llmsTxtGenerationCompleted:
+      name: llms-txt-generation.completed
+      summary: The generated llms.txt, the pages that could not be read, and cache outcomes.
+      payload:
+        allOf:
+          - $ref: '#/components/schemas/Envelope'
+          - type: object
+            properties:
+              type: {const: llms-txt-generation.completed}
+              version: {const: 1}
+              data:
+                type: object
+                required: [generation, pagesMissing, cache]
+                properties:
+                  cache:
+                    $ref: '../openapi/common.yaml#/components/schemas/ToolCallCacheList'
+                  generation:
+                    $ref: '../openapi/services/llms-txt-generator.yaml#/components/schemas/LlmsTxtGeneration'
+                  pagesMissing:
+                    type: integer
+                    minimum: 0
+                    description: Pages whose entry was in neither the cache nor the data-aggregator.
+    llmsTxtGenerationFailed:
+      name: llms-txt-generation.failed
+      summary: The generation failed after all retries.
+      payload:
+        $ref: '#/components/schemas/FailedPayload'

@@ -1,0 +1,5 @@
+* text=auto eol=lf
+services/*/contract/** linguist-generated
+services/*/AGENTS.md linguist-generated
+packages/contracts/handoff/** linguist-generated
+**/generated/** linguist-generated

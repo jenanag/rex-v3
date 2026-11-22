@@ -1,0 +1,150 @@
+openapi: 3.1.0
+info:
+  title: REx content-extractor service
+  version: 2.0.0
+  description: |
+    External service (ADR 0021): implemented in Go outside this repo; its owner builds
+    to this contract, which REx defines. It turns a URL or inline HTML into the page's
+    main content as normalized text and Markdown, plus everything REx workers need
+    from the page: the raw response (final URL, status, relevant headers, HTML), page
+    metadata, and on request the site's robots.txt and llms.txt. Finding a site's page
+    URLs (sitemaps, links) is the sitemap-extractor's job (2.0.0, ADR 0023). REx
+    services never fetch anything; external services such as this one read websites
+    for them.
+
+    Called only by REx workers, cache first (cache/policy.yaml `external`). Stateless:
+    no database, no queues, no bus, no calls to REx services. No authentication in the
+    service: it runs on the private network inside the cluster and only workers can
+    reach it (network policy, ADR 0014).
+    Every number marked DEFAULT is a placeholder its owner may tune; changing one is
+    not a contract change.
+    Service doc: docs/services/content-extractor.md
+x-rex-service:
+  name: content-extractor
+  kind: external
+security: []   # reachable only from workers (network policy, ADR 0014)
+tags:
+  - name: Extraction
+  - name: Health
+paths:
+  /healthz:
+    $ref: '../common.yaml#/components/pathItems/Healthz'
+  /readyz:
+    $ref: '../common.yaml#/components/pathItems/Readyz'
+  /v1/content-extractions:
+    post:
+      operationId: extractContent
+      x-rex-limits: {maxDuration: PT30S, llm: none, outboundFetch: several, fetchTimeout: PT10S, fetchMaxBytes: 2000000, notes: 'DEFAULT values; per fetch: the page, plus robots.txt and llms.txt when `include` asks or robots.txt is needed for `respectRobotsTxt`'}
+      summary: Extract one page's main content and page data
+      description: |
+        Synchronous; may take up to 30 s (all fetches included). With `url`, fetches
+        the page (following up to 5 redirects, DEFAULT) and returns `page`; with inline
+        `html`, fetches nothing for the page itself and `page` is null. A target that
+        answers with a non-2xx status is still a 200 here: `page.status` carries it and
+        `content` holds whatever main content the body had (possibly empty).
+
+        Fetching rules: `http` and `https` only; requests to private, loopback,
+        link-local and metadata addresses are refused (`target_blocked`), also after
+        redirects; a fixed User-Agent that identifies REx; no JavaScript executed;
+        bodies truncated at `fetchMaxBytes`. Site files (`robotsTxt`, `llmsTxt`) are
+        read from the origin of `url` (or `baseUrl` with `html`). These rules apply
+        to every external service of REx that reads websites (sitemap-extractor too).
+
+        With `respectRobotsTxt: true`, the origin's robots.txt rules for the service's
+        User-Agent apply and a disallowed `url` is not fetched (`robots_disallowed`).
+        Rules are read per RFC 9309: a 4xx robots.txt allows everything; an
+        unreachable robots.txt or a 5xx disallows everything.
+
+        422 codes: `target_unreachable` (DNS, connection, TLS or timeout on the page
+        fetch), `target_blocked` (scheme or address refused), `unsupported_content_type`
+        (the page is not HTML or XHTML), `origin_required` (inline `html` without
+        `baseUrl` while `include` asks for site files),
+        `robots_disallowed` (`respectRobotsTxt` is true and robots.txt disallows `url`).
+        A failed site-file fetch
+        is not an error: that file comes back with `status: null`.
+      tags: [Extraction]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ExtractionRequest'
+      responses:
+        '200':
+          description: The extraction (also when the target page answered with an error status).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Extraction'
+        '400':
+          $ref: '../common.yaml#/components/responses/BadRequest'
+        '422':
+          $ref: '../common.yaml#/components/responses/UnprocessableContent'
+        '503':
+          $ref: '../common.yaml#/components/responses/ServiceUnavailable'
+        default:
+          $ref: '../common.yaml#/components/responses/InternalError'
+components:
+  schemas:
+    ExtractionInclude:
+      type: string
+      description: |
+        Optional parts of the result: the site's /robots.txt and /llms.txt. (Links and
+        sitemap URLs moved to the sitemap-extractor in 2.0.0.)
+      enum: [robotsTxt, llmsTxt]
+    ExtractionRequest:
+      type: object
+      description: Exactly one of `url` or `html` (`baseUrl` only with `html`).
+      unevaluatedProperties: false
+      oneOf:
+        - required: [url]
+          properties:
+            url:
+              $ref: '../common.yaml#/components/schemas/Url'
+        - required: [html]
+          properties:
+            html:
+              type: string
+              maxLength: 2000000
+              description: Inline HTML to extract instead of fetching a page.
+            baseUrl:
+              description: The URL the HTML came from (resolves relative links; origin for site files).
+              $ref: '../common.yaml#/components/schemas/Url'
+      properties:
+        include:
+          type: array
+          uniqueItems: true
+          default: []
+          items:
+            $ref: '#/components/schemas/ExtractionInclude'
+        respectRobotsTxt:
+          type: boolean
+          default: false
+          description: Refuse a `url` the origin's robots.txt disallows (see the operation). REx sets it for llms.txt page jobs.
+    Extraction:
+      type: object
+      required: [url, page, content, metadata]
+      properties:
+        url:
+          description: '`url` of the request, else `baseUrl`, else null.'
+          oneOf:
+            - $ref: '../common.yaml#/components/schemas/Url'
+            - type: 'null'
+        page:
+          description: |
+            The raw page response; null with inline `html`. `headers` holds only the
+            relevant ones: content-type, content-language, last-modified, etag,
+            x-robots-tag, link, cache-control.
+          oneOf:
+            - $ref: '../common.yaml#/components/schemas/FetchedPage'
+            - type: 'null'
+        content:
+          $ref: '../common.yaml#/components/schemas/ExtractedContent'
+        metadata:
+          $ref: '../common.yaml#/components/schemas/PageMetadata'
+        robotsTxt:
+          description: Present when `include` has `robotsTxt`.
+          $ref: '../common.yaml#/components/schemas/FetchedFile'
+        llmsTxt:
+          description: Present when `include` has `llmsTxt`.
+          $ref: '../common.yaml#/components/schemas/FetchedFile'
