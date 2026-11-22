@@ -66,5 +66,7 @@ spike is recorded in ADR 0020, accepted by Jay on 2026-11-22.
 | [0022](0022-page-archive.md) | Pages are archived to the external data-aggregator at capture time, before they are cached | Accepted |
 | [0023](0023-llms-txt-pipeline.md) | The llms.txt crawl is an event-driven pipeline: sitemap discovery, page audits, LLM-free assembly | Accepted |
 | [0024](0024-per-tool-language.md) | Per-tool implementation language: TypeScript, Python or Go behind the same contract | Accepted |
+| [0025](0025-schema-generator-language.md) | Use TypeScript for schema-generator | Proposed |
+| [0026](0026-typescript-validation-budget.md) | Keep one TypeScript request validation budget | Proposed |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.

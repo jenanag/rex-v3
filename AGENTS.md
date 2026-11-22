@@ -13,12 +13,13 @@ page); one stateful **orchestrator** owns all data; stateless **workers** chain 
 through a self-hosted RabbitMQ bus; a thin **gateway** sits at the edge. Details:
 [README](README.md), [architecture](docs/architecture.md).
 
-**Current phase:** 1
+**Current phase:** 2
 
 **Status:** Phase 0 (docs and contracts) was accepted by Jay on 2026-11-22. ADRs 0001
 to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the superseded
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
-Phase 1 was completed on 2026-11-22. Docs and contracts change at Jay’s request.
+Phase 1 was completed on 2026-11-22. Phase 2 has started with ADRs 0025 and
+0026 Proposed for Jay’s review. Docs and contracts change at Jay’s request.
 A new ADR amends or supersedes an Accepted decision.
 
 See the [roadmap](docs/roadmap.md) for the build order and review gates.
