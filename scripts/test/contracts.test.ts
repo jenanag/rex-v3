@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
-import { execFile } from "node:child_process";
+import { execFile, execFileSync } from "node:child_process";
 import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { test } from "node:test";
 import { promisify } from "node:util";
+import { parse, stringify } from "yaml";
 
 const exec = promisify(execFile);
 const root = resolve(".");
+const gitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], { encoding: "utf8" }).trim();
 const answer = "packages/contracts/openapi/services/answer-analysis.yaml";
 const answerDir = "services/answer-analysis";
 const manifest = "packages/contracts/vendoring.yaml";
@@ -16,7 +18,7 @@ const events = "packages/contracts/asyncapi/events.yaml";
 const topology = "packages/contracts/bus/topology.yaml";
 const policy = "packages/contracts/cache/policy.yaml";
 
-async function fixture(t: { after: (fn: () => Promise<void>) => void }) {
+async function fixture(t: { after: (fn: () => Promise<void>) => void }, ownBaseline = false) {
   const dir = await mkdtemp(join(tmpdir(), "rex-contract-test-"));
   t.after(() => rm(dir, { recursive: true, force: true }));
   const folders = ["docs", "packages", "services", "scripts", ".github", ".cursor"];
@@ -47,7 +49,7 @@ async function fixture(t: { after: (fn: () => Promise<void>) => void }) {
           join(dir, "scripts/lib", script + ".ts"),
           ...args,
         ],
-        { cwd: dir },
+        { cwd: dir, env: { ...process.env, GIT_DIR: ownBaseline ? join(dir, ".git") : gitDir } },
       ),
     async write(file: string, text: string) {
       await mkdir(dirname(join(dir, file)), { recursive: true });
@@ -375,6 +377,74 @@ test("cross-file rule fixtures", { concurrency: 4 }, async (t) => {
       }),
     ),
   );
+});
+
+test("breaking request changes require an info.version major bump", async (t) => {
+  const repo = await fixture(t, true);
+  const file = "packages/contracts/openapi/services/schema-generator.yaml";
+  const spec = parse(await readFile(join(repo.dir, file), "utf8"));
+  const schemas = spec.components.schemas;
+  const data = schemas.FromData.properties.data;
+  data.properties = {
+    items: { type: "array", maxItems: 4, items: { type: "string", enum: ["a", "b"] } },
+    title: { type: "string", minLength: 1 },
+    score: { type: "number", minimum: 0, maximum: 10 },
+    label: { type: ["string", "null"] },
+    optional: { type: "boolean" },
+  };
+  const save = () => repo.write(file, stringify(spec));
+  const check = () => repo.run("check-contracts", "--source-only");
+  const git = (...args: string[]) => exec("git", args, { cwd: repo.dir });
+  await save();
+  await git("init", "-b", "main");
+  await git("add", "packages/contracts/openapi");
+  await git(
+    "-c", "user.name=REx tests",
+    "-c", "user.email=tests@rex.invalid",
+    "-c", "commit.gpgSign=false",
+    "commit", "-qm", "Request contract baseline",
+  );
+  await git("update-ref", "refs/remotes/origin/main", "HEAD");
+
+  data.properties.items.items.enum.push("c");
+  data.properties.additive = { type: "boolean" };
+  schemas.SchemaMarkup.properties.scriptTag.maxLength = 128;
+  await save();
+  await check();
+
+  schemas.FromHtml.properties.html.maxLength -= 1;
+  data.properties.items.maxItems = 3;
+  data.properties.items.items.enum = ["a"];
+  data.properties.title.minLength = 2;
+  data.properties.score.minimum = 1;
+  data.properties.score.maximum = 9;
+  data.properties.label.type = "string";
+  delete data.properties.optional;
+  data.required = ["title"];
+  await save();
+  await assert.rejects(check(), (error: unknown) => {
+    assert.ok(error instanceof Error && "stderr" in error);
+    const message = String(error.stderr);
+    assert.match(message, /\[request-version\].*schema-generator\.yaml/);
+    for (const reason of [
+      "maxLength lowered",
+      "maxItems lowered",
+      "maximum lowered",
+      "minLength raised",
+      "minimum raised",
+      "now requires property title",
+      "optional: property removed",
+      "enum value removed",
+      "label: type narrowed",
+    ]) {
+      assert.ok(message.includes(reason), "Missing diagnostic for " + reason);
+    }
+    return true;
+  });
+
+  spec.info.version = String(Number(spec.info.version.split(".")[0]) + 1) + ".0.0";
+  await save();
+  await check();
 });
 
 test("vendoring detects source, shared schema and generated drift", async (t) => {

@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { parseArgs } from "node:util";
 import { bus, matchesTopic } from "./bus.js";
 import { checkRepo } from "./check-repo.js";
+import { checkRequestVersions } from "./check-request-versions.js";
 import { checkSpecs, duration, type Report } from "./check-specs.js";
 import {
   commonFile,
@@ -121,6 +122,7 @@ main(() => {
   checkSpecs(all, yaml(commonFile), policy, yaml(eventsFile), report);
   checkBus(report);
   checkRepo(all, manifest, policy, report);
+  checkRequestVersions(all, report);
 
   if (!values["source-only"]) {
     for (const [script, args] of [

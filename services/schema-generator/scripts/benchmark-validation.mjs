@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { arch, cpus, platform } from "node:os";
 import { performance } from "node:perf_hooks";
 import { createApp } from "../dist/src/app.js";
 import { loadConfig } from "../dist/src/config.js";
@@ -101,6 +102,7 @@ try {
     assert.equal(rejected.statusCode, 400, `${path} must reject HTML over ${htmlLimit} characters`);
   }
 
+  console.log(`${process.version}, ${platform()}/${arch()}, ${cpus()[0].model}`);
   console.log(`Request validation p99 (milliseconds, ${samples} samples per workload)`);
   for (const [path, input, workloads] of [
     [generatePath, "HTML", htmlWorkloads(generateHtml)],

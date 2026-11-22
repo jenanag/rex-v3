@@ -56,12 +56,12 @@ export function pointer(value: any, fragment: string) {
 }
 
 export type Located = { value: Document; file: string; document: Document };
-export function resolver() {
+export function resolver(load = yaml) {
   const documents = new Map<string, Document>();
   return function lookup(file: string, ref = ""): Located {
     const [source, anchor = ""] = ref.split("#");
     const target = source ? join(dirname(file), source) : file;
-    if (!documents.has(target)) documents.set(target, yaml(target));
+    if (!documents.has(target)) documents.set(target, load(target));
     const document = documents.get(target)!;
     return { file: target, document, value: pointer(document, anchor ? "#" + anchor : "") };
   };

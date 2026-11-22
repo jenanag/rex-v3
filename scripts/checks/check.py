@@ -661,7 +661,8 @@ if os.path.exists('scripts/vendor-contracts-phase0.sh') and os.environ.get('REX_
 for f in md+([AG] if ag else [])+contract_yaml:
     if f in SUPERSEDED or not os.path.exists(f): continue
     for sc in set(x.rstrip('.') for x in re.findall(r'scripts/[a-z0-9.-]+[a-z0-9]',open(f).read())):
-        if not os.path.exists(sc) and sc not in rm: errs.append(f'{f}: {sc} neither exists nor is planned in the roadmap')
+        if not os.path.exists(sc) and sc not in rm and not glob.glob('services/*/' + sc):
+            errs.append(f'{f}: {sc} neither exists nor is planned in the roadmap')
 if 'aeo-platform' in arch: errs.append('architecture.md uses the undefined name aeo-platform')
 if '~/projects/REx/v3' not in arch.split('```')[1]: errs.append('architecture.md layout does not name the repo root ~/projects/REx/v3')
 # x-rex-limits on every tool operation

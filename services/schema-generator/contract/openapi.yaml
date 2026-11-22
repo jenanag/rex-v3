@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: REx schema-generator service
-  version: 1.0.0
+  version: 2.0.0
   description: |
     Stateless tool: generates and validates schema.org JSON-LD. Deterministic, no
     LLM, no network: a page is passed in as its HTML (ADR 0021).

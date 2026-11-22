@@ -48,7 +48,7 @@ jobs:
           cd "services/$TOOL"
           ../../scripts/offline-tool npm run test:coverage
       - name: Request validation budget
-        if: inputs.tool == 'schema-generator'
+        if: hashFiles(format('services/{0}/scripts/benchmark-validation.mjs', inputs.tool)) != ''
         working-directory: services/${{ inputs.tool }}
         run: |
           ../../scripts/offline-tool npm run build
