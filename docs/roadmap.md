@@ -173,9 +173,8 @@ Deliverables:
 Done when (per spike): the same table of 25 request cases (valid and invalid, one per
 feature above, shared as a JSON file by all three spikes) gives the expected 200 or 400
 with correct pointers on the chosen option; a valid response fails contract validation
-when a required field is removed, and its ADR is accepted. TypeScript validation
-budget tuning is deferred until tools can be measured ([ADR 0020](adr/0020-fastify-openapi-validation.md)).
-[Proposed ADR 0026](adr/0026-typescript-validation-budget.md) records the follow-up budget decision.
+when a required field is removed, and its ADR is accepted. The TypeScript validation
+budget is set by [ADR 0026](adr/0026-typescript-validation-budget.md) once accepted.
 The Python and Go bring-up spikes use the budgets in [ADR 0024](adr/0024-per-tool-language.md). Each spike is a gate: the first tool in its
 language starts only after it passes. A Python or Go spike that fails, with its fallback
 too, leaves that tool in TypeScript (its tool ADR says so); ADR 0020 is required for

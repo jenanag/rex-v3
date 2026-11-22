@@ -38,7 +38,12 @@ dated "Amended by" lines. Jay accepted 0024 on 2026-11-22; his decisions at that
 openapi-core with FastAPI, kin-openapi and the validation budgets approved; spikes right
 before each tool's step; one language ADR per tool) were written into 0024 directly
 before it was marked Accepted, as its header records. The Phase 1 TypeScript route-loader
-spike is recorded in ADR 0020, accepted by Jay on 2026-11-22.
+spike is recorded in ADR 0020, accepted by Jay on 2026-11-22. Phase 2 opened with
+[ADR 0025](0025-schema-generator-language.md), which proposes TypeScript for the
+first tool, `schema-generator`. [ADR 0026](0026-typescript-validation-budget.md)
+records the CI measurements and proposes a single TypeScript validation budget
+for all valid body sizes up to each tool's configured limit. Both are Proposed
+for Jay's review.
 
 | ADR | Title | Status |
 |---|---|---|

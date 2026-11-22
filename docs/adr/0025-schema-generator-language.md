@@ -13,18 +13,20 @@ schema.org JSON-LD from the structured input, HTML, or JSON-LD supplied in a
 request. Its work is deterministic and stays offline. [Phase 2 order](../roadmap.md#phase-2-tool-services-one-at-a-time-each-built-and-tested-in-isolation),
 [service contract](../../packages/contracts/openapi/services/schema-generator.yaml).
 
-[ADR 0024](0024-per-tool-language.md) proposes TypeScript because the approved
-npm stack covers both parsing supplied HTML and expanding JSON-LD. The TypeScript
-template and its contract validation have already passed the Phase 1 CI checks.
+[ADR 0024](0024-per-tool-language.md) proposes TypeScript for JSON-LD processing,
+where jsonld.js is the reference implementation, and HTML parsing; the TypeScript
+template is hardened here first.
 [Approved dependencies](../conventions.md#approved-tool-dependencies).
 
 ## Decision
 
 Implement `schema-generator` in TypeScript using `services/_template` without
-the LLM adapter. Use Cheerio to parse supplied HTML and jsonld.js for JSON-LD
-expansion and validation. Keep processing within the supplied or bundled data,
-including context resolution. The vendored OpenAPI contract remains the request
-validator through the Fastify loader and Ajv2020. [ADR 0020](0020-fastify-openapi-validation.md).
+the LLM adapter. Use `cheerio` to parse supplied HTML and `jsonld` (jsonld.js) to
+expand JSON-LD; validation rules run on the expanded form.
+Resolve `@context` only from a schema.org context file vendored in the tool, through
+a custom jsonld `documentLoader`; any other remote context is rejected, never fetched.
+The vendored OpenAPI contract remains the request validator through the Fastify
+loader and Ajv2020. [ADR 0020](0020-fastify-openapi-validation.md).
 
 ## Consequences
 

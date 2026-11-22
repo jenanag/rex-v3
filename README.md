@@ -34,8 +34,9 @@ It is a monorepo with contract-first OpenAPI 3.1 and AsyncAPI specs:
 **Status: Phase 0 accepted by Jay on 2026-11-22.** The [ADR index](docs/adr/README.md)
 records the decisions, including ADR 0024 for TypeScript, Python and Go tools. Phase 1
 was completed on 2026-11-22. The [roadmap](docs/roadmap.md) tracks the tool factory, including
-contract vendoring, the tool template and portability CI. Phase 2 builds the tools
-one at a time, before the platform. Open choices are tracked as
+contract vendoring, the tool template and portability CI. Phase 2 has started;
+ADRs 0025 and 0026 are Proposed for Jay's review. Phase 2 builds the tools one at
+a time, before the platform. Open choices are tracked as
 [deferred decisions](docs/roadmap.md#deferred-decisions).
 
 **Coding agents** (Cursor, Claude Code, Codex, Copilot): start at [AGENTS.md](AGENTS.md).
@@ -72,7 +73,7 @@ Other pages link to it rather than repeat it.
   [tenancy](docs/architecture.md#tenancy-model-org--project--brand) ·
   [LLM concurrency and cost](docs/architecture.md#llm-concurrency-and-cost)
 - **Rules:** [conventions](docs/conventions.md) · [DRY rule](docs/dry-rule.md) · [bus messages and delivery](docs/events.md) · [glossary](docs/glossary.md)
-- **Decisions:** [ADR index](docs/adr/README.md): 0001 monorepo · 0002 TypeScript + Fastify · 0006 contract-first OpenAPI · 0007 DRY policy · 0009 stateless tools · 0010 orchestrator · 0011 RabbitMQ bus · 0012 bus contracts · 0013 edge gateway · 0014 auth · 0015 stateless workers · 0016 cache first · 0017 deterministic first · 0018 tool portability · 0019 internal packages · 0020 Fastify validation · 0021 content extraction · 0022 page archive · 0023 llms.txt pipeline · 0024 per-tool language (0003, 0004, 0005 and 0008 are superseded; 0020 is Accepted; statuses in the index)
+- **Decisions:** [ADR index](docs/adr/README.md): 0001 monorepo · 0002 TypeScript + Fastify · 0006 contract-first OpenAPI · 0007 DRY policy · 0009 stateless tools · 0010 orchestrator · 0011 RabbitMQ bus · 0012 bus contracts · 0013 edge gateway · 0014 auth · 0015 stateless workers · 0016 cache first · 0017 deterministic first · 0018 tool portability · 0019 internal packages · 0020 Fastify validation · 0021 content extraction · 0022 page archive · 0023 llms.txt pipeline · 0024 per-tool language · 0025 schema-generator language · 0026 TypeScript validation budget (0003, 0004, 0005 and 0008 are superseded; 0020 is Accepted; statuses in the index)
 - **Contracts:** [common.yaml](packages/contracts/openapi/common.yaml) · [events.yaml](packages/contracts/asyncapi/events.yaml) · [topology.yaml](packages/contracts/bus/topology.yaml) · [policy.yaml](packages/contracts/cache/policy.yaml) · [ai-crawlers.yaml](packages/contracts/data/ai-crawlers.yaml) · [vendoring.yaml](packages/contracts/vendoring.yaml) · [contracts README](packages/contracts/README.md)
 - **Services** (doc · spec):
   - Platform: [gateway](docs/services/gateway.md) · [spec](packages/contracts/openapi/services/gateway.yaml) | [orchestrator](docs/services/orchestrator.md) · [spec](packages/contracts/openapi/services/orchestrator.yaml) | [workers](docs/services/workers.md)
