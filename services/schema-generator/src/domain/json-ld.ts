@@ -140,6 +140,7 @@ function expandedTerm(term: string, ctx: ActiveContext) {
   if (ctx.mappings.has(term)) return ctx.mappings.get(term)?.["@id"];
   const separator = term.indexOf(":");
   if (separator > 0) {
+    if (term.startsWith("_:") || term.startsWith("//", separator + 1)) return term;
     const prefix = ctx.mappings.get(term.slice(0, separator));
     return prefix?._prefix ? String(prefix["@id"]) + term.slice(separator + 1) : term;
   }
@@ -157,16 +158,40 @@ async function originalLocations(document: unknown, root: string, terms: Map<str
     matches.push(path);
     locations.set(key, matches);
   }
-  async function visit(value: unknown, path: string, active: ActiveContext) {
+  async function visit(
+    value: unknown,
+    path: string,
+    active: ActiveContext,
+    propertyScope?: unknown,
+  ) {
     if (Array.isArray(value)) {
       for (const [index, child] of value.entries())
-        await visit(child, pointer(path, index), active);
+        await visit(child, pointer(path, index), active, propertyScope);
       return;
     }
-    if (!isObject(value)) return;
-    const ctx = Object.hasOwn(value, "@context")
-      ? await jsonld.processContext(active, value["@context"], options())
-      : active;
+    if (!isObject(value) || active.previousContext) return;
+    let ctx = active;
+    try {
+      if (propertyScope !== undefined)
+        ctx = await jsonld.processContext(ctx, propertyScope, options());
+      if (Object.hasOwn(value, "@context"))
+        ctx = await jsonld.processContext(ctx, value["@context"], options());
+    } catch {
+      // Leave this branch unlocated if its active context cannot be reconstructed.
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) {
+      const iri = expandedTerm(key, ctx);
+      if (iri === "@value") return;
+      // Type-scoped context reversion depends on the expansion position.
+      if (
+        iri === "@type" &&
+        (Array.isArray(child) ? child : [child]).some(
+          (name) => typeof name === "string" && ctx.mappings.get(name)?.["@context"] !== undefined,
+        )
+      )
+        return;
+    }
     for (const [key, child] of Object.entries(value)) {
       if (key === "@context") continue;
       const here = pointer(path, key);
@@ -180,9 +205,19 @@ async function originalLocations(document: unknown, root: string, terms: Map<str
               Array.isArray(child) ? pointer(here, index) : here,
             );
         }
-      } else if (iri !== "@value") {
+      } else if (iri && iri !== "@nest") {
         record("property", iri, here);
-        await visit(child, here, ctx);
+        const mapping = ctx.mappings.get(key);
+        const container = mapping?.["@container"];
+        const mapContainer =
+          Array.isArray(container) &&
+          container.some(
+            (item) =>
+              item === "@language" || item === "@index" || item === "@id" || item === "@type",
+          );
+        // Container keys and JSON literals are data, with different expansion rules.
+        if (mapping?.["@type"] !== "@json" && !(isObject(child) && mapContainer))
+          await visit(child, here, ctx, mapping?.["@context"]);
       }
     }
   }

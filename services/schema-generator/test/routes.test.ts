@@ -37,6 +37,34 @@ test("validates an inline document with the bundled context", async () => {
   expect(result).toEqual({ valid: true, issues: [] });
 });
 
+test("locates a typo only where the effective context keeps it unknown", async () => {
+  const result = await post(
+    validate,
+    {
+      jsonLd: {
+        "@context": [
+          schemaContext,
+          { author: { "@id": "schema:author", "@context": { headlne: "schema:headline" } } },
+        ],
+        "@type": "Article",
+        headlne: "Root typo",
+        author: { "@type": "Person", headlne: "Known under the author context" },
+      },
+    },
+    200,
+  );
+  expect(result).toEqual({
+    valid: true,
+    issues: [
+      expect.objectContaining({
+        severity: "warning",
+        code: "unknown_schema_property",
+        pointer: "/jsonLd/headlne",
+      }),
+    ],
+  });
+});
+
 test("validates mixed HTML blocks independently in source order", async () => {
   const html = [
     "<head>",
@@ -175,6 +203,21 @@ test("falls back to ordinary metadata and omits a relative URL when no pageUrl i
     valid: true,
     issues: [
       expect.objectContaining({ severity: "warning", code: "unresolved_url", pointer: "line:4" }),
+    ],
+  });
+});
+
+test("uses the next usable Open Graph image when the first is relative without pageUrl", async () => {
+  const html = [
+    '<meta property="og:image" content="/relative.png">',
+    '<meta property="og:image" content="https://example.com/absolute.png">',
+  ].join("\n");
+  const result = await post(generate, { schemaType: "Article", source: { html } }, 200);
+  expect(result.jsonLd.image).toBe("https://example.com/absolute.png");
+  expect(result.validation).toEqual({
+    valid: true,
+    issues: [
+      expect.objectContaining({ severity: "warning", code: "unresolved_url", pointer: "line:1" }),
     ],
   });
 });

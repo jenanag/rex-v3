@@ -2,6 +2,7 @@ declare module "jsonld" {
   export type Document = Record<string, unknown>;
   export type ActiveContext = {
     mappings: Map<string, Document | null>;
+    previousContext?: ActiveContext | null;
     "@vocab"?: string;
   };
 

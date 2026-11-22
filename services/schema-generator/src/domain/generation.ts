@@ -122,12 +122,14 @@ async function htmlFields(
   function fillMissing(fields: JsonObject) {
     const tags = metadata($, schemaType);
     for (const values of [tags.og, tags.html]) {
-      for (const [key, located] of Object.entries(values)) {
-        if (located && !Object.hasOwn(fields, key)) {
-          Object.assign(
-            fields,
-            fieldsFrom({ [key]: located.value }, located.pointer, issues, pageUrl),
-          );
+      for (const [key, candidates] of Object.entries(values)) {
+        if (Object.hasOwn(fields, key)) continue;
+        for (const { value, pointer } of candidates) {
+          const usable = fieldsFrom({ [key]: value }, pointer, issues, pageUrl)[key];
+          if (usable !== undefined) {
+            fields[key] = usable;
+            break;
+          }
         }
       }
     }

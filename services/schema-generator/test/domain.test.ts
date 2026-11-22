@@ -44,6 +44,45 @@ describe("expanded vocabulary findings", () => {
       issues: [],
     });
   });
+
+  test("locates an unknown term introduced by a property-scoped context", async () => {
+    const result = await validateMarkup({
+      jsonLd: {
+        "@context": [
+          schemaContext,
+          { author: { "@id": "schema:author", "@context": { localTitle: "schema:headlne" } } },
+        ],
+        "@type": "Article",
+        author: [{ "@type": "Person", localTitle: "Scoped typo" }],
+      },
+    });
+    expect(result).toEqual({
+      valid: true,
+      issues: [
+        expect.objectContaining({
+          code: "unknown_schema_property",
+          pointer: "/jsonLd/author/0/localTitle",
+        }),
+      ],
+    });
+  });
+
+  test("uses the document pointer when a type-scoped location is uncertain", async () => {
+    const result = await validateMarkup({
+      jsonLd: {
+        "@context": [
+          schemaContext,
+          { Article: { "@id": "schema:Article", "@context": { headline: "schema:headlne" } } },
+        ],
+        "@type": "Article",
+        headline: "Scoped typo",
+      },
+    });
+    expect(result).toEqual({
+      valid: true,
+      issues: [expect.objectContaining({ code: "unknown_schema_property", pointer: "/jsonLd" })],
+    });
+  });
 });
 
 const schemaTypes: SchemaType[] = [

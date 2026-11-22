@@ -2,7 +2,7 @@ import { load, type CheerioAPI } from "cheerio";
 import type { SchemaType } from "./schema.js";
 
 type LocatedText = { value: string; pointer: string };
-type Metadata = Record<string, LocatedText | undefined>;
+type Metadata = Record<string, Iterable<LocatedText>>;
 
 export const parseHtml = (html: string) => load(html, { sourceCodeLocationInfo: true });
 
@@ -32,42 +32,43 @@ export function readMarkupBlock(text: string): { value: unknown } | undefined {
 
 export function metadata($: CheerioAPI, type: SchemaType): { og: Metadata; html: Metadata } {
   const titleField = type === "Article" ? "headline" : "name";
-  function firstMeta(attribute: "name" | "property", key: string) {
+  function* meta(attribute: "name" | "property", key: string) {
     for (const el of $("meta[" + attribute + "]").toArray()) {
       const tag = $(el);
       if (tag.attr(attribute)?.trim().toLowerCase() === key) {
         const value = tag.attr("content")?.trim();
-        if (value) return { value, pointer: "line:" + (el.sourceCodeLocation?.startLine ?? 1) };
+        if (value) yield { value, pointer: "line:" + (el.sourceCodeLocation?.startLine ?? 1) };
       }
     }
   }
-  function firstLink(relation: string) {
+  function* link(relation: string) {
     for (const el of $("link[rel][href]").toArray()) {
       const tag = $(el);
       if (tag.attr("rel")?.toLowerCase().split(/\s+/).includes(relation)) {
         const href = tag.attr("href")?.trim();
-        if (href)
-          return { value: href, pointer: "line:" + (el.sourceCodeLocation?.startLine ?? 1) };
+        if (href) yield { value: href, pointer: "line:" + (el.sourceCodeLocation?.startLine ?? 1) };
       }
     }
   }
-  const title = $("title").first();
-  const titleText = title.text().trim();
-  const documentTitle = titleText
-    ? { value: titleText, pointer: "line:" + (title[0]?.sourceCodeLocation?.startLine ?? 1) }
-    : undefined;
+  function* title() {
+    yield* meta("name", "title");
+    for (const el of $("title").toArray()) {
+      const value = $(el).text().trim();
+      if (value) yield { value, pointer: "line:" + (el.sourceCodeLocation?.startLine ?? 1) };
+    }
+  }
   return {
     og: {
-      [titleField]: firstMeta("property", "og:title"),
-      description: firstMeta("property", "og:description"),
-      image: firstMeta("property", "og:image") ?? firstMeta("property", "og:image:url"),
-      url: firstMeta("property", "og:url"),
+      [titleField]: meta("property", "og:title"),
+      description: meta("property", "og:description"),
+      image: [...meta("property", "og:image"), ...meta("property", "og:image:url")],
+      url: meta("property", "og:url"),
     },
     html: {
-      [titleField]: firstMeta("name", "title") ?? documentTitle,
-      description: firstMeta("name", "description"),
-      image: firstMeta("name", "image") ?? firstLink("image_src"),
-      url: firstLink("canonical"),
+      [titleField]: title(),
+      description: meta("name", "description"),
+      image: [...meta("name", "image"), ...link("image_src")],
+      url: link("canonical"),
     },
   };
 }
