@@ -1,0 +1,106 @@
+name: CI
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Tool matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+      has_tools: ${{ steps.matrix.outputs.has_tools }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Select changed tools
+        id: matrix
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          matrix=$(scripts/tool-ci matrix --base "$BASE_SHA")
+          printf 'matrix=%s\n' "$matrix" >> "$GITHUB_OUTPUT"
+          MATRIX="$matrix" node --input-type=module -e '
+            import { appendFileSync } from "node:fs";
+            const enabled = JSON.parse(process.env.MATRIX).include.length > 0;
+            appendFileSync(process.env.GITHUB_OUTPUT, "has_tools=" + enabled + "\n");
+          '
+
+  contracts:
+    uses: ./.github/workflows/contracts.yml
+
+  tool:
+    needs: plan
+    if: needs.plan.outputs.has_tools == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    uses: ./.github/workflows/tool.yml
+    with:
+      tool: ${{ matrix.name }}
+      language: ${{ matrix.language }}
+
+  portability:
+    needs: plan
+    if: needs.plan.outputs.has_tools == 'true'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    uses: ./.github/workflows/portability.yml
+    with:
+      tool: ${{ matrix.name }}
+      language: ${{ matrix.language }}
+
+  duplication:
+    name: jscpd
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: scripts/tool-ci duplicates --base "$BASE_SHA"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+
+  required:
+    name: Required
+    if: always()
+    needs: [plan, contracts, tool, portability, duplication]
+    runs-on: ubuntu-latest
+    timeout-minutes: 1
+    steps:
+      - name: Require CI gates
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+          HAS_TOOLS: ${{ needs.plan.outputs.has_tools }}
+        run: |
+          node --input-type=module -e '
+            const results = JSON.parse(process.env.RESULTS);
+            for (const [job, {result}] of Object.entries(results)) {
+              const emptyMatrix = ["tool", "portability"].includes(job) && process.env.HAS_TOOLS === "false";
+              if (result !== "success" && !(result === "skipped" && emptyMatrix)) {
+                console.error(job + ": " + result);
+                process.exitCode = 1;
+              }
+            }
+          '

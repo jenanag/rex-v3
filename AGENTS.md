@@ -122,7 +122,12 @@ The TypeScript tool factory lives in `services/_template`. Its commands are:
 scripts/new-tool <name> [--lang ts|python|go] [--llm]  # Python and Go arrive at their bring-ups
 scripts/new-tool --check [<tool>]                     # template drift
 scripts/new-tool --upgrade <tool>                     # re-render template-owned files
+scripts/tool-ci matrix                                # list the runnable tools and their languages
+scripts/tool-ci duplicates                           # jscpd across tool source folders
 ```
+
+The [Phase 1 CI jobs](docs/roadmap.md#15-ci-with-the-portability-check) run portability
+checks on Linux with Docker.
 
 ### Inside a tool folder (from Phase 2, once the tool is scaffolded)
 

@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+tool=${1:?tool name required}
+language=${2:?tool language required}
+if [[ "$tool" != _template && ! "$tool" =~ ^[a-z][a-z0-9]*(-[a-z0-9]+)*$ ]]; then
+  printf 'Invalid tool name: %s\n' "$tool" >&2
+  exit 1
+fi
+if [[ "$language" != ts ]]; then
+  printf 'Run the %s bring-up first\n' "$language" >&2
+  exit 1
+fi
+
+scratch=$(mktemp -d "${RUNNER_TEMP:-${TMPDIR:-/tmp}}/rex-portable.XXXXXX")
+image="rex-portability-${tool//_/-}"
+container=""
+cleanup() {
+  if [[ -n "$container" ]]; then docker rm -f "$container" >/dev/null 2>&1 || true; fi
+  rm -rf "$scratch"
+}
+trap cleanup EXIT
+mkdir -p "$scratch/$tool"
+git -C "$root" archive HEAD "services/$tool" |
+  tar -x -C "$scratch/$tool" --strip-components=2
+cd "$scratch/$tool"
+export REX_TOOL_NPM_CACHE="$scratch/npm-cache"
+NPM_CONFIG_CACHE="$REX_TOOL_NPM_CACHE" NPM_CONFIG_USERCONFIG=/dev/null \
+  NPM_CONFIG_GLOBALCONFIG=/dev/null npm ci --no-audit --no-fund
+"$root/scripts/offline-tool" npm run build
+"$root/scripts/offline-tool" npm test
+
+docker build -t "$image" .
+container=$(docker run --rm -d --network none -e PORT=8080 -e LLM_MODE=mock "$image")
+if ! timeout 10 bash -c '
+  until docker exec "$1" node -e '\''fetch("http://127.0.0.1:8080/healthz").then(r=>{if(!r.ok)process.exitCode=1}).catch(()=>{process.exitCode=1})'\''; do
+    sleep 0.2
+  done
+' _ "$container"; then
+  docker logs "$container" >&2 || true
+  exit 1
+fi
+if [[ "$tool" == _template ]] || node -e 'process.exit(require("./.template.json").options.example ? 0 : 1)'; then
+  docker exec "$container" node -e '
+    fetch("http://127.0.0.1:8080/v1/echoes", {
+      method: "POST", headers: {"content-type":"application/json"}, body: JSON.stringify({text:"portable"})
+    }).then(async r => {if(!r.ok || (await r.json()).text !== "portable")process.exitCode=1})
+      .catch(()=>{process.exitCode=1})'
+fi
+printf '%s passed standalone install, offline build and tests, and Docker smoke checks.\n' "$tool"

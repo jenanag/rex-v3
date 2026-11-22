@@ -82,13 +82,11 @@ Other pages link to it rather than repeat it.
 
 ## Validate the contracts
 
-The exact commands (pinned tool versions; Node.js, bash and network needed) are listed
-once, in [AGENTS.md](AGENTS.md#works-today-phase-1): Redocly lint, AsyncAPI validate and
-the vendored-copy check.
+Run the pinned validators and cross-file checks from the repo root. The
+[commands in AGENTS.md](AGENTS.md#works-today-phase-1) also cover vendoring, generated
+docs, and template drift.
 
-Expected: 0 errors. The only warnings (19) are `operation-4xx-response` on health
-probes, the JWKS endpoint and the two parameterless tool lists (`listEngines`,
-`listAnalyzers`), which have no 4xx responses by design. Cross-file checks (stateless
-tools, no auth in tools, vendored copies in sync, cache policy coverage, routing keys vs
-queue bindings, links) arrive as `scripts/check-contracts` in Phase 1
-([dry-rule.md §4](docs/dry-rule.md#4-enforcement)).
+Expect zero OpenAPI errors. The linter can warn about missing 4xx responses on
+health probes, the JWKS endpoint, and parameterless tool lists. The
+[Phase 1 CI jobs](docs/roadmap.md#15-ci-with-the-portability-check) run the same
+contract checks and verify that each changed tool works in isolation.
