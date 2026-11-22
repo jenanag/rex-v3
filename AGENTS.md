@@ -18,8 +18,8 @@ through a self-hosted RabbitMQ bus; a thin **gateway** sits at the edge. Details
 to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the superseded
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
 Phase 1 was completed on 2026-11-22. Phase 2 has started. Jay accepted ADRs 0025
-and 0026 on 2026-11-22. ADR 0027 is Proposed. Docs and contracts change at Jay’s request.
-A new ADR amends or supersedes an Accepted decision.
+and 0026 on 2026-11-22. Jay accepted ADR 0027 on 2026-11-23.
+Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
 
 See the [roadmap](docs/roadmap.md) for the build order and review gates.
 
@@ -76,7 +76,7 @@ Breaking one of these fails review even if CI is green.
 | Use or add a package in a tool (any language) | [approved tool dependencies](docs/conventions.md#approved-tool-dependencies) |
 | A tool's language; Python and Go tools and templates | [ADR 0024](docs/adr/0024-per-tool-language.md), `language` in [vendoring.yaml](packages/contracts/vendoring.yaml), [roadmap Phase 1](docs/roadmap.md#phase-1-tool-factory-contracts-vendoring-tool-template-portability-ci) |
 | Timeouts, LLM and fetch limits of a tool operation | `x-rex-limits` in its spec ([conventions §2](docs/conventions.md#sync-vs-async)) |
-| TypeScript request validation budget | [ADR 0027](docs/adr/0027-scale-typescript-validation-budget.md), pending acceptance of 0027 |
+| TypeScript request validation budget | 5 ms p99 per MiB of the effective request body limit. [ADR 0027](docs/adr/0027-scale-typescript-validation-budget.md) |
 | Change a request or response | [packages/contracts/openapi/services/](packages/contracts/openapi/services/), [common.yaml](packages/contracts/openapi/common.yaml), [contracts README](packages/contracts/README.md) |
 | Add or change a bus message or queue | [events.md](docs/events.md), [events.yaml](packages/contracts/asyncapi/events.yaml), [topology.yaml](packages/contracts/bus/topology.yaml) |
 | Page content for a tool, the content-extractor and its contract | [content-extractor](docs/services/content-extractor.md), [ADR 0021](docs/adr/0021-content-extraction.md), [content-extractor.yaml](packages/contracts/openapi/services/content-extractor.yaml) |

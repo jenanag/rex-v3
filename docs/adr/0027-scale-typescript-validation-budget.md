@@ -1,13 +1,13 @@
 # 0027: Scale the TypeScript validation budget with the body limit
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-23, accepted by Jay)
 - **Date:** 2026-11-23
 - **Deciders:** Jay Pascual
-- **Proposed amendment to:** [ADR 0026](0026-typescript-validation-budget.md), TypeScript validation budget
+- **Amends:** [ADR 0026](0026-typescript-validation-budget.md), TypeScript validation budget
 
 ## Context
 
-ADR 0026 sets one 1 ms p99 request-validation budget for each TypeScript tool.
+ADR 0026 originally set a 1 ms p99 request-validation budget for every TypeScript tool.
 Two PR #3 runs exercised the same 1 MiB HTML request on
 `POST /v1/schema-markup`:
 
@@ -40,8 +40,8 @@ benchmark logs the effective limit and calculated budget, and CI still measures
 a valid request at that limit for each input shape.
 
 `schema-generator` keeps the 1 MiB default and the 250,000-character HTML cap
-for both operations. Its CI gate exercises this proposal pending acceptance of
-0027. [Schema-generator limits](../services/schema-generator.md#limits).
+for both operations. Its CI gate uses a 5 ms p99 budget at that limit.
+[Schema-generator limits](../services/schema-generator.md#limits).
 
 ## Alternatives considered
 

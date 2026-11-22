@@ -44,9 +44,9 @@ first tool, `schema-generator`. [ADR 0026](0026-typescript-validation-budget.md)
 records the CI measurements and sets a single TypeScript validation budget
 for all valid body sizes up to each tool's configured limit. Jay accepted both
 on 2026-11-22. ADR 0026 amends the TypeScript validation budget in ADRs 0020 and 0024.
-On 2026-11-23, [ADR 0027](0027-scale-typescript-validation-budget.md) proposed
-scaling the TypeScript validation budget with each tool's body limit. The change
-to ADR 0026 is pending acceptance of 0027.
+Jay accepted [ADR 0027](0027-scale-typescript-validation-budget.md) on 2026-11-23.
+It amends ADR 0026 to scale the TypeScript validation budget with each tool's
+effective request body limit.
 
 | ADR | Title | Status |
 |---|---|---|
@@ -75,7 +75,7 @@ to ADR 0026 is pending acceptance of 0027.
 | [0023](0023-llms-txt-pipeline.md) | The llms.txt crawl is an event-driven pipeline: sitemap discovery, page audits, LLM-free assembly | Accepted |
 | [0024](0024-per-tool-language.md) | Per-tool implementation language: TypeScript, Python or Go behind the same contract | Accepted (amended) |
 | [0025](0025-schema-generator-language.md) | Use TypeScript for schema-generator | Accepted |
-| [0026](0026-typescript-validation-budget.md) | Keep one TypeScript request validation budget | Accepted |
-| [0027](0027-scale-typescript-validation-budget.md) | Scale the TypeScript validation budget with the body limit | Proposed |
+| [0026](0026-typescript-validation-budget.md) | Keep one TypeScript request validation budget | Accepted (amended) |
+| [0027](0027-scale-typescript-validation-budget.md) | Scale the TypeScript validation budget with the body limit | Accepted |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.

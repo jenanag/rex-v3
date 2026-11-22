@@ -42,11 +42,11 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 the template's default 1 MiB request body limit. The shared `html` input schema
 allows up to 250,000 characters on both operations.
 [ADR 0020](../adr/0020-fastify-openapi-validation.md#validation-budget),
-[ADR 0026](../adr/0026-typescript-validation-budget.md).
-
-The CI benchmark checks both routes at exactly 1,048,576 request bytes. It tests
-a 5 ms p99 validation budget per workload at this limit, pending acceptance of 0027.
 [ADR 0027](../adr/0027-scale-typescript-validation-budget.md).
+
+The CI benchmark checks both routes at exactly 1,048,576 request bytes. ADR 0027
+sets a budget of 5 ms p99 per MiB of the effective request body limit, so the
+default limit gives each workload a 5 ms p99 budget.
 From the tool folder, run `npm run build && node scripts/benchmark-validation.mjs`.
 
 <!-- GENERATED:limits START (source: x-rex-limits in packages/contracts/openapi/services/schema-generator.yaml) -->
