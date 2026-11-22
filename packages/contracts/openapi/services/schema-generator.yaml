@@ -89,7 +89,7 @@ components:
       properties:
         html:
           type: string
-          maxLength: 2000000
+          maxLength: 250000
         pageUrl:
           description: URL the HTML came from; resolves relative URLs and sets the markup's `url`.
           $ref: '../common.yaml#/components/schemas/Url'

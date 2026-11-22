@@ -284,7 +284,8 @@ template, 1.5 lane) with their done criteria above.
 **Current phase:** 2
 
 [ADR 0025](adr/0025-schema-generator-language.md) selects TypeScript for
-`schema-generator`. Scaffolding awaits Jay's decision on the request body limit.
+`schema-generator`. The scaffold and validation benchmark are in place. JSON-LD
+generation and validation are next. [Request body decision](services/schema-generator.md#limits).
 
 Built in this order, each started with its language ADR and `scripts/new-tool --lang
 <language>` and finished (definition of done below) before the next one starts. The order goes from no LLM to

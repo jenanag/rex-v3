@@ -129,10 +129,7 @@ from data, HTML or JSON-LD (no LLM, no network).
 
 ## Build and test standalone
 
-Not scaffolded yet: today this folder holds only this file and `contract/`.
-`scripts/new-tool` (built in Phase 1) scaffolds the rest at the start of this tool's
-Phase 2 step, with `--lang` as its language ADR decides. Then these commands work (for
-the language above):
+Scaffolded: these commands work in this folder.
 
 ```bash
 cp -r services/schema-generator /tmp/schema-generator && cd /tmp/schema-generator   # any folder outside the repo

@@ -47,6 +47,12 @@ jobs:
         run: |
           cd "services/$TOOL"
           ../../scripts/offline-tool npm run test:coverage
+      - name: Request validation budget
+        if: inputs.tool == 'schema-generator'
+        working-directory: services/${{ inputs.tool }}
+        run: |
+          ../../scripts/offline-tool npm run build
+          ../../scripts/offline-tool node scripts/benchmark-validation.mjs
 
   python:
     name: Python tool checks (${{ inputs.tool }})

@@ -142,7 +142,7 @@ docker build -t <tool> . && docker run -p 8080:8080 <tool>
 
 The tool's own `AGENTS.md` lists the exact commands for its language.
 
-Today a tool folder contains only `AGENTS.md` and its vendored `contract/`.
+An unscaffolded tool folder contains only `AGENTS.md` and its vendored `contract/`.
 
 ## Definition of done for any change
 
