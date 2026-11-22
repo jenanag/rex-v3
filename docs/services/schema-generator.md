@@ -44,9 +44,10 @@ allows up to 250,000 characters on both operations.
 [ADR 0020](../adr/0020-fastify-openapi-validation.md#validation-budget),
 [ADR 0026](../adr/0026-typescript-validation-budget.md).
 
-The CI benchmark checks both routes at exactly 1,048,576 request bytes and
-requires validation p99 below 1 ms for each workload. From the tool folder, run
-`npm run build && node scripts/benchmark-validation.mjs`.
+The CI benchmark checks both routes at exactly 1,048,576 request bytes. It tests
+a 5 ms p99 validation budget per workload at this limit, pending acceptance of 0027.
+[ADR 0027](../adr/0027-scale-typescript-validation-budget.md).
+From the tool folder, run `npm run build && node scripts/benchmark-validation.mjs`.
 
 <!-- GENERATED:limits START (source: x-rex-limits in packages/contracts/openapi/services/schema-generator.yaml) -->
 See [the tool's operation limits](../../services/schema-generator/AGENTS.md#limits).

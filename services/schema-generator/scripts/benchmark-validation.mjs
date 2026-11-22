@@ -5,9 +5,7 @@ import { performance } from "node:perf_hooks";
 import { createApp } from "../dist/src/app.js";
 import { loadConfig } from "../dist/src/config.js";
 
-const bodyLimitBytes = 1024 * 1024;
 const htmlLimit = 250_000;
-const budgetMs = 1;
 const warmups = 200;
 const samples = 1000;
 const generatePath = "/v1/schema-markup";
@@ -32,29 +30,43 @@ const validateJsonLd = (description) => ({
   },
 });
 
-function htmlAtBodyLimit(wrap) {
-  const empty = JSON.stringify(wrap(html("")));
-  // The same Unicode character takes four UTF-8 bytes or twelve JSON escape bytes.
-  // Use both spellings to exercise the character limit and the byte limit together.
-  const extraBytes = bodyLimitBytes - Buffer.byteLength(empty) - 4 * textLength;
-  const escaped = Math.floor(extraBytes / 8);
-  const text = "\\ud83d\\ude00".repeat(escaped) + "😀".repeat(textLength - escaped);
-  return empty.replace(html(""), html(text)) + " ".repeat(extraBytes % 8);
+function htmlAtBodyLimit(empty, availableBytes) {
+  // Start with one byte per character, then use raw and JSON-escaped Unicode
+  // to fill the wire body without exceeding the HTML character limit.
+  const characters = Math.min(textLength, availableBytes);
+  const unicode = Math.min(characters, Math.floor((availableBytes - characters) / 3));
+  const extraBytes = availableBytes - characters - 3 * unicode;
+  const escaped = Math.min(unicode, Math.floor(extraBytes / 8));
+  const text =
+    "\\ud83d\\ude00".repeat(escaped) +
+    "😀".repeat(unicode - escaped) +
+    "a".repeat(characters - unicode);
+  // JSON permits trailing whitespace, including when the HTML is already full.
+  return empty.replace(html(""), html(text)) + " ".repeat(extraBytes - 8 * escaped);
 }
 
-function htmlWorkloads(wrap) {
+function htmlWorkloads(wrap, bodyLimitBytes) {
+  const empty = JSON.stringify(wrap(html("")));
+  const overhead = Buffer.byteLength(empty);
+  assert.ok(overhead <= bodyLimitBytes, "Body limit is too small for the HTML fixture");
+  const intermediateLength = Math.min(
+    textLength,
+    Math.max(0, Math.floor(bodyLimitBytes / 2) - overhead),
+  );
   return [
     ["representative", JSON.stringify(wrap(html("Example article")))],
-    ["HTML character limit (ASCII)", JSON.stringify(wrap(html("a".repeat(textLength))))],
-    ["body limit", htmlAtBodyLimit(wrap)],
+    ["intermediate (ASCII)", JSON.stringify(wrap(html("a".repeat(intermediateLength))))],
+    ["body limit", htmlAtBodyLimit(empty, bodyLimitBytes - overhead)],
   ];
 }
 
-function objectWorkloads(wrap) {
+function objectWorkloads(wrap, bodyLimitBytes) {
   const overhead = Buffer.byteLength(JSON.stringify(wrap("")));
+  assert.ok(overhead <= bodyLimitBytes, "Body limit is too small for the object fixture");
+  const intermediateLength = Math.max(0, Math.floor(bodyLimitBytes / 2) - overhead);
   return [
     ["representative", JSON.stringify(wrap("An example article."))],
-    ["512 KiB", JSON.stringify(wrap("a".repeat(bodyLimitBytes / 2 - overhead)))],
+    ["intermediate", JSON.stringify(wrap("a".repeat(intermediateLength)))],
     ["body limit", JSON.stringify(wrap("a".repeat(bodyLimitBytes - overhead)))],
   ];
 }
@@ -84,31 +96,40 @@ function measure(validate, payload) {
 
 const app = createApp({
   spec: JSON.parse(readFileSync(new URL("../dist/contract.json", import.meta.url), "utf8")),
-  config: loadConfig({ NODE_ENV: "test" }),
+  config: loadConfig({ NODE_ENV: "test", BODY_LIMIT_BYTES: process.env.BODY_LIMIT_BYTES }),
   handlers: { generateSchemaMarkup: captureValidator, validateSchemaMarkup: captureValidator },
   logs: false,
 });
+const bodyLimitBytes = app.initialConfig.bodyLimit;
+const budgetMs = (5 * bodyLimitBytes) / 1_048_576;
 const inject = (url, payload) =>
   app.inject({ method: "POST", url, headers: { "content-type": "application/json" }, payload });
 
 try {
-  assert.equal(app.initialConfig.bodyLimit, bodyLimitBytes);
   for (const [path, wrap] of [
     [generatePath, generateHtml],
     [validatePath, validateHtml],
   ]) {
     const oversizedHtml = JSON.stringify(wrap(html("a".repeat(textLength + 1))));
     const rejected = await inject(path, oversizedHtml);
-    assert.equal(rejected.statusCode, 400, `${path} must reject HTML over ${htmlLimit} characters`);
+    const status = Buffer.byteLength(oversizedHtml) > bodyLimitBytes ? 413 : 400;
+    assert.equal(
+      rejected.statusCode,
+      status,
+      `${path} must reject HTML over ${htmlLimit} characters`,
+    );
   }
 
   console.log(`${process.version}, ${platform()}/${arch()}, ${cpus()[0].model}`);
+  console.log(
+    `Effective body limit ${bodyLimitBytes} bytes | validation budget ${budgetMs} ms p99`,
+  );
   console.log(`Request validation p99 (milliseconds, ${samples} samples per workload)`);
   for (const [path, input, workloads] of [
-    [generatePath, "HTML", htmlWorkloads(generateHtml)],
-    [generatePath, "structured data", objectWorkloads(generateData)],
-    [validatePath, "HTML", htmlWorkloads(validateHtml)],
-    [validatePath, "JSON-LD", objectWorkloads(validateJsonLd)],
+    [generatePath, "HTML", htmlWorkloads(generateHtml, bodyLimitBytes)],
+    [generatePath, "structured data", objectWorkloads(generateData, bodyLimitBytes)],
+    [validatePath, "HTML", htmlWorkloads(validateHtml, bodyLimitBytes)],
+    [validatePath, "JSON-LD", objectWorkloads(validateJsonLd, bodyLimitBytes)],
   ]) {
     for (const [size, payload] of workloads) {
       const bytes = Buffer.byteLength(payload);

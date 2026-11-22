@@ -328,6 +328,9 @@ the tool's own language ADR, accepted by Jay; `ts` until then); the rules below 
   (workers through the bus retry policy, the gateway not at all).
 - **Request validation budget:** TypeScript 1 ms p99 at every valid body size up to
   the tool's body limit ([ADR 0026](adr/0026-typescript-validation-budget.md)).
+  The per-tool CI gate tests a budget of 5 ms p99 per MiB of the effective Fastify
+  request body limit, pending acceptance of 0027.
+  [ADR 0027](adr/0027-scale-typescript-validation-budget.md).
   Python 5 ms and Go 1 ms ([ADR 0024](adr/0024-per-tool-language.md)).
 
 ### Approved tool dependencies

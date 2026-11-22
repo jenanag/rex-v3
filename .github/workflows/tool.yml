@@ -52,7 +52,11 @@ jobs:
         working-directory: services/${{ inputs.tool }}
         run: |
           ../../scripts/offline-tool npm run build
-          ../../scripts/offline-tool node scripts/benchmark-validation.mjs
+          benchmark_env=()
+          if [[ -v BODY_LIMIT_BYTES ]]; then
+            benchmark_env+=("BODY_LIMIT_BYTES=$BODY_LIMIT_BYTES")
+          fi
+          ../../scripts/offline-tool env "${benchmark_env[@]}" node scripts/benchmark-validation.mjs
 
   python:
     name: Python tool checks (${{ inputs.tool }})
