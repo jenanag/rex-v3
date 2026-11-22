@@ -67,14 +67,13 @@ function fieldsFrom(
     }
     if (isObject(value)) {
       if (Object.hasOwn(value, "@value")) {
+        const raw = value["@value"];
+        if (raw === null || (typeof raw === "string" && !raw.trim())) return undefined;
         const type = value["@type"];
         const isUrl = typeof type === "string" && schemaProperty(type) === "URL";
-        if (
-          typeof value["@value"] !== "string" ||
-          (!isUrl && !urlProperties.has(schemaProperty(key)))
-        )
+        if (typeof raw !== "string" || (!isUrl && !urlProperties.has(schemaProperty(key))))
           return value;
-        const literal = clean(value["@value"], "url", at(path, "@value"));
+        const literal = clean(raw, "url", at(path, "@value"));
         return literal === undefined ? undefined : { ...value, "@value": literal };
       }
       const fields = cleanObject(value, path);

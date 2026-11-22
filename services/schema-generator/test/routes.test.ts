@@ -122,7 +122,7 @@ test("uses the first usable exact match, fills blanks, and applies pageUrl to UR
       "@context": schemaContext,
       "@graph": [
         { "@type": "NewsArticle", headline: "Wrong type" },
-        { "@type": "Article", headline: " " },
+        { "@type": "Article", headline: { "@value": " ", "@language": "en" } },
         {
           "@type": "https://schema.org/Article",
           "https://schema.org/headline": "A",
