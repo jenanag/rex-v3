@@ -126,7 +126,7 @@ tools:
       auditPage: {ttl: P30D, scope: shared}                      # DEFAULT (pure function of its input; page freshness comes from extractContent)
       checkCrawlerAccess: {ttl: P30D, scope: shared}             # DEFAULT (pure function of the robots.txt passed in)
   schema-generator:
-    keyVersion: 1
+    keyVersion: 2
     operations:
       # Pure functions of their input (data, HTML or JSON-LD); fetch nothing (ADR 0021).
       generateSchemaMarkup: {ttl: P30D, scope: shared}           # DEFAULT
