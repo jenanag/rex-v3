@@ -41,9 +41,10 @@ configured limit.
 
 ### Enforcement
 
-The per-tool benchmark runs in CI without `--report-only` and fails the build at
-p99 ≥ 1 ms. If a tool cannot meet it, Jay lowers that tool's body limit or decides
-a different budget in a new ADR.
+Each TypeScript tool's step adds a per-tool benchmark to CI that runs without
+`--report-only` and fails the build at p99 ≥ 1 ms. Until then the spike benchmark
+in `contracts.yml` stays report-only. If a tool cannot meet the budget, Jay lowers
+that tool's body limit or decides a different budget in a new ADR.
 
 Measure the warmed validator on CI hardware, including default application.
 Exclude JSON parsing, startup, handler work, and response serialization. Evaluate

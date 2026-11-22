@@ -36,6 +36,11 @@ deterministic behavior, and standalone portability. This first implementation
 exercises the existing TypeScript template against a real tool contract.
 [Vendoring manifest](../../packages/contracts/vendoring.yaml).
 
+Its contract allows `html` up to 2,000,000 characters, above the template's
+default 1 MiB body limit ([ADR 0020](0020-fastify-openapi-validation.md)).
+Before scaffolding, Jay sets schema-generator's `BODY_LIMIT_BYTES` or narrows
+the contract ([ADR 0026](0026-typescript-validation-budget.md)).
+
 ## Alternatives considered
 
 - **Python.** The task has no NLP or other Python-specific dependency. This choice
