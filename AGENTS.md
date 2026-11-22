@@ -17,9 +17,9 @@ through a self-hosted RabbitMQ bus; a thin **gateway** sits at the edge. Details
 
 **Status:** Phase 0 (docs and contracts) was accepted by Jay on 2026-11-22. ADRs 0001
 to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the superseded
-0003, 0004, 0005 and 0008. Jay also accepted ADR 0024 on 2026-11-22. Phase 1 is in
-progress. Jay accepted ADR 0020 on 2026-11-22. Docs and contracts change at Jay’s
-request. A new ADR amends or supersedes an Accepted decision.
+0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
+Phase 1 was completed on 2026-11-22. Docs and contracts change at Jay’s request.
+A new ADR amends or supersedes an Accepted decision.
 
 See the [roadmap](docs/roadmap.md) for the build order and review gates.
 
