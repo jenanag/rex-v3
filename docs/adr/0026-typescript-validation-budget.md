@@ -6,6 +6,7 @@
 - **Amends:** [0020](0020-fastify-openapi-validation.md#validation-budget) (validation
   budget section) and [0024](0024-per-tool-language.md) (TypeScript budget scope).
   Each gets a dated `Amended by` line at acceptance.
+- **Amended by:** [0027](0027-scale-typescript-validation-budget.md), 2026-11-23 (accepted by Jay). Applies to the TypeScript validation budget.
 
 ## Context
 
