@@ -3,7 +3,7 @@
 - **Kind:** tool ([what that means](../architecture.md#service-map))
 - **Phase:** 2
 - **Contract:** source [packages/contracts/openapi/services/llms-txt-generator.yaml](../../packages/contracts/openapi/services/llms-txt-generator.yaml); vendored, self-contained copy in [services/llms-txt-generator/contract/](../../services/llms-txt-generator/contract/openapi.yaml) ([ADR 0018](../adr/0018-tool-portability.md))
-- **Language:** TypeScript (`language: ts` in vendoring.yaml), per [ADR 0028](../adr/0028-llms-txt-generator-language.md) (Proposed). Jay's acceptance is required before scaffolding.
+- **Language:** TypeScript (`language: ts` in vendoring.yaml), per [ADR 0028](../adr/0028-llms-txt-generator-language.md), accepted by Jay on 2026-11-23.
 - **Portability:** a self-contained project in its language: copy `services/llms-txt-generator/` anywhere, then its install, build, test and `docker build` work with nothing else present; no auth, no cache, no bus inside ([ADR 0018](../adr/0018-tool-portability.md))
 - **State:** none (callers cache its results, see below)
 - **Bus:** none

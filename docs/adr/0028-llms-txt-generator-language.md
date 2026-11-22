@@ -1,6 +1,6 @@
 # 0028: Use TypeScript for llms-txt-generator
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-23, accepted by Jay)
 - **Date:** 2026-11-23
 - **Deciders:** Jay Pascual
 - **Tool:** `llms-txt-generator`
@@ -36,9 +36,10 @@ entries, and files in its requests. Only the LLM-assisted mode calls a provider.
 
 ## Consequences
 
-Keep `language: ts` in the vendoring manifest. Jay must accept this ADR before
-`scripts/new-tool llms-txt-generator --lang ts --llm` can run. The tool uses
-the template's contract and standalone portability checks. Its per-tool CI gate
+Keep `language: ts` in the vendoring manifest. Jay's acceptance satisfies ADR 0024's
+language decision requirement for scaffolding with
+`scripts/new-tool llms-txt-generator --lang ts --llm`.
+The tool uses the template's contract and standalone portability checks. Its per-tool CI gate
 measures request-validation overhead against **5 ms p99 per MiB of the effective
 request body limit** for representative, intermediate, and exact-limit workloads.
 [ADR 0027](0027-scale-typescript-validation-budget.md).

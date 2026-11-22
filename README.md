@@ -35,8 +35,9 @@ It is a monorepo with contract-first OpenAPI 3.1 and AsyncAPI specs:
 records the decisions, including ADR 0024 for TypeScript, Python and Go tools. Phase 1
 was completed on 2026-11-22. The [roadmap](docs/roadmap.md) tracks the tool factory, including
 contract vendoring, the tool template and portability CI. Phase 2 has started.
-Jay accepted ADRs 0025 and 0026 on 2026-11-22 and ADR 0027 on 2026-11-23.
-ADR 0028 (TypeScript for `llms-txt-generator`) is Proposed.
+Jay accepted ADRs 0025 and 0026 on 2026-11-22. On 2026-11-23, Jay accepted ADR 0027
+and [ADR 0028](docs/adr/0028-llms-txt-generator-language.md), which selects TypeScript
+for `llms-txt-generator`.
 Phase 2 builds the tools one at a time, before the platform. Open choices are tracked as
 [deferred decisions](docs/roadmap.md#deferred-decisions).
 
