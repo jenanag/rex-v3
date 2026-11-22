@@ -19,8 +19,8 @@ after and only wires the finished tools together.
 **Status:** Phase 0 (docs and contracts) was accepted by Jay on 2026-11-22. ADRs 0001
 to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the superseded
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
-Phase 1 was completed on 2026-11-22. Phase 2 has started with ADRs 0025 and
-0026 Proposed for Jay’s review. Docs and contracts change at Jay’s request.
+Phase 1 was completed on 2026-11-22. Phase 2 has started. Jay accepted ADRs 0025
+and 0026 on 2026-11-22. Docs and contracts change at Jay’s request.
 A new ADR amends or supersedes an Accepted decision.
 
 - [README](../README.md), [architecture](architecture.md), [conventions](conventions.md),
@@ -173,8 +173,8 @@ Deliverables:
 Done when (per spike): the same table of 25 request cases (valid and invalid, one per
 feature above, shared as a JSON file by all three spikes) gives the expected 200 or 400
 with correct pointers on the chosen option; a valid response fails contract validation
-when a required field is removed, and its ADR is accepted. The TypeScript validation
-budget is set by [ADR 0026](adr/0026-typescript-validation-budget.md) once accepted.
+when a required field is removed, and its ADR is accepted. [ADR 0026](adr/0026-typescript-validation-budget.md)
+sets the TypeScript validation budget.
 The Python and Go bring-up spikes use the budgets in [ADR 0024](adr/0024-per-tool-language.md). Each spike is a gate: the first tool in its
 language starts only after it passes. A Python or Go spike that fails, with its fallback
 too, leaves that tool in TypeScript (its tool ADR says so); ADR 0020 is required for
@@ -283,8 +283,8 @@ template, 1.5 lane) with their done criteria above.
 
 **Current phase:** 2
 
-The first step is at language review. [Proposed ADR 0025](adr/0025-schema-generator-language.md)
-records the choice for `schema-generator`.
+[ADR 0025](adr/0025-schema-generator-language.md) selects TypeScript for
+`schema-generator`. Scaffolding awaits Jay's decision on the request body limit.
 
 Built in this order, each started with its language ADR and `scripts/new-tool --lang
 <language>` and finished (definition of done below) before the next one starts. The order goes from no LLM to

@@ -39,11 +39,11 @@ openapi-core with FastAPI, kin-openapi and the validation budgets approved; spik
 before each tool's step; one language ADR per tool) were written into 0024 directly
 before it was marked Accepted, as its header records. The Phase 1 TypeScript route-loader
 spike is recorded in ADR 0020, accepted by Jay on 2026-11-22. Phase 2 opened with
-[ADR 0025](0025-schema-generator-language.md), which proposes TypeScript for the
+[ADR 0025](0025-schema-generator-language.md), which proposed TypeScript for the
 first tool, `schema-generator`. [ADR 0026](0026-typescript-validation-budget.md)
-records the CI measurements and proposes a single TypeScript validation budget
-for all valid body sizes up to each tool's configured limit. Both are Proposed
-for Jay's review.
+records the CI measurements and sets a single TypeScript validation budget
+for all valid body sizes up to each tool's configured limit. Jay accepted both
+on 2026-11-22. ADR 0026 amends the TypeScript validation budget in ADRs 0020 and 0024.
 
 | ADR | Title | Status |
 |---|---|---|
@@ -66,12 +66,12 @@ for Jay's review.
 | [0017](0017-deterministic-first-analysis.md) | Deterministic first, LLMs optional and comparable | Accepted (amended) |
 | [0018](0018-tool-portability.md) | Tool portability: every tool is a self-contained project | Accepted |
 | [0019](0019-internal-packages.md) | Internal packages: only where unavoidable, published and pinned | Accepted |
-| [0020](0020-fastify-openapi-validation.md) | Bind Fastify routes to the vendored OpenAPI 3.1 contract | Accepted |
+| [0020](0020-fastify-openapi-validation.md) | Bind Fastify routes to the vendored OpenAPI 3.1 contract | Accepted (amended) |
 | [0021](0021-content-extraction.md) | Content extraction via external content-extractor, called by workers on orchestrator-issued jobs | Accepted (decided by Jay) |
 | [0022](0022-page-archive.md) | Pages are archived to the external data-aggregator at capture time, before they are cached | Accepted |
 | [0023](0023-llms-txt-pipeline.md) | The llms.txt crawl is an event-driven pipeline: sitemap discovery, page audits, LLM-free assembly | Accepted |
-| [0024](0024-per-tool-language.md) | Per-tool implementation language: TypeScript, Python or Go behind the same contract | Accepted |
-| [0025](0025-schema-generator-language.md) | Use TypeScript for schema-generator | Proposed |
-| [0026](0026-typescript-validation-budget.md) | Keep one TypeScript request validation budget | Proposed |
+| [0024](0024-per-tool-language.md) | Per-tool implementation language: TypeScript, Python or Go behind the same contract | Accepted (amended) |
+| [0025](0025-schema-generator-language.md) | Use TypeScript for schema-generator | Accepted |
+| [0026](0026-typescript-validation-budget.md) | Keep one TypeScript request validation budget | Accepted |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.

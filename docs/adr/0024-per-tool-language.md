@@ -12,6 +12,7 @@
   with ai-traffic-analyzer (Phase 7); uv, openapi-core with FastAPI, kin-openapi and the
   validation budgets approved; spikes right before each tool's step; one language ADR
   per tool, TypeScript tools included
+- **Amended by:** [0026](0026-typescript-validation-budget.md), 2026-11-22 (accepted by Jay). Applies to the TypeScript validation budget scope.
 
 ## Context
 

@@ -34,8 +34,8 @@ It is a monorepo with contract-first OpenAPI 3.1 and AsyncAPI specs:
 **Status: Phase 0 accepted by Jay on 2026-11-22.** The [ADR index](docs/adr/README.md)
 records the decisions, including ADR 0024 for TypeScript, Python and Go tools. Phase 1
 was completed on 2026-11-22. The [roadmap](docs/roadmap.md) tracks the tool factory, including
-contract vendoring, the tool template and portability CI. Phase 2 has started;
-ADRs 0025 and 0026 are Proposed for Jay's review. Phase 2 builds the tools one at
+contract vendoring, the tool template and portability CI. Phase 2 has started.
+Jay accepted ADRs 0025 and 0026 on 2026-11-22. Phase 2 builds the tools one at
 a time, before the platform. Open choices are tracked as
 [deferred decisions](docs/roadmap.md#deferred-decisions).
 

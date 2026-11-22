@@ -1,6 +1,6 @@
 # 0026: Keep one TypeScript request validation budget
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-22)
 - **Date:** 2026-11-22
 - **Deciders:** Jay Pascual
 - **Amends:** [0020](0020-fastify-openapi-validation.md#validation-budget) (validation

@@ -1,6 +1,6 @@
 # 0025: Use TypeScript for schema-generator
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-22)
 - **Date:** 2026-11-22
 - **Deciders:** Jay Pascual
 - **Tool:** `schema-generator`

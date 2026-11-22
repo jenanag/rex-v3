@@ -4,6 +4,7 @@
 - **Date:** 2026-11-22
 - **Deciders:** Jay Pascual
 - **Amended:** 2026-11-22. Deferred the validation budget until tools can be measured.
+- **Amended by:** [0026](0026-typescript-validation-budget.md), 2026-11-22 (accepted by Jay). Applies to the validation budget section.
 
 ## Context
 
