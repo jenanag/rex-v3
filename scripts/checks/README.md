@@ -20,6 +20,7 @@ python3 -m pip install --user pyyaml       # once; the only Python dependency
 scripts/checks/run-all.sh                  # check.py + per-tool AGENTS.md cross-check
 scripts/checks/run-all.sh --negative       # plus agents, review, extractor, external,
                                            # pipeline, byref, adrs and lang suites
+scripts/checks/neg_contract_versions.sh    # current contract checker (Node.js and npm ci)
 ```
 
 - Paths are repo-relative: `check.py` checks the repo it sits in, or `REX=<root>`.

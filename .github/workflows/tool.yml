@@ -47,6 +47,12 @@ jobs:
         run: |
           cd "services/$TOOL"
           ../../scripts/offline-tool npm run test:coverage
+      - name: Request validation budget
+        if: hashFiles(format('services/{0}/scripts/benchmark-validation.mjs', inputs.tool)) != ''
+        working-directory: services/${{ inputs.tool }}
+        run: |
+          ../../scripts/offline-tool npm run build
+          ../../scripts/offline-tool node scripts/benchmark-validation.mjs
 
   python:
     name: Python tool checks (${{ inputs.tool }})

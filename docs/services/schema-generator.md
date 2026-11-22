@@ -38,6 +38,16 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 
 ## Limits
 
+**Jay's decision (2026-11-22).** Keep `BODY_LIMIT_BYTES` unset so Fastify uses
+the template's default 1 MiB request body limit. The shared `html` input schema
+allows up to 250,000 characters on both operations.
+[ADR 0020](../adr/0020-fastify-openapi-validation.md#validation-budget),
+[ADR 0026](../adr/0026-typescript-validation-budget.md).
+
+The CI benchmark checks both routes at exactly 1,048,576 request bytes and
+requires validation p99 below 1 ms for each workload. From the tool folder, run
+`npm run build && node scripts/benchmark-validation.mjs`.
+
 <!-- GENERATED:limits START (source: x-rex-limits in packages/contracts/openapi/services/schema-generator.yaml) -->
 See [the tool's operation limits](../../services/schema-generator/AGENTS.md#limits).
 <!-- GENERATED:limits END -->

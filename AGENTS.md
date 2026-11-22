@@ -48,8 +48,8 @@ Breaking one of these fails review even if CI is green.
    packages exist only per [ADR 0019](docs/adr/0019-internal-packages.md).
 5. **Contracts are edited only in `packages/contracts`, then vendored** into the
    services listed in [vendoring.yaml](packages/contracts/vendoring.yaml)
-   ([ADR 0006](docs/adr/0006-contract-first-openapi.md)). Contract first: change the
-   spec before the code.
+   ([ADR 0006](docs/adr/0006-contract-first-openapi.md)). Contract first: change the spec before the code.
+   Any contract change that rejects a previously valid request bumps info.version major (docs/conventions.md §3).
 6. **Never hand-edit generated files**: anything under `services/*/contract/`, the
    per-tool `AGENTS.md`, files marked `GENERATED - DO NOT EDIT`, and the blocks between
    `<!-- GENERATED:... START -->` and `END` in docs.
@@ -142,7 +142,7 @@ docker build -t <tool> . && docker run -p 8080:8080 <tool>
 
 The tool's own `AGENTS.md` lists the exact commands for its language.
 
-Today a tool folder contains only `AGENTS.md` and its vendored `contract/`.
+An unscaffolded tool folder contains only `AGENTS.md` and its vendored `contract/`.
 
 ## Definition of done for any change
 
