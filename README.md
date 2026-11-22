@@ -38,7 +38,8 @@ contract vendoring, the tool template and portability CI. Phase 2 has started.
 Jay accepted ADRs 0025 and 0026 on 2026-11-22. On 2026-11-23, Jay accepted ADR 0027
 and [ADR 0028](docs/adr/0028-llms-txt-generator-language.md), which selects TypeScript
 for `llms-txt-generator`.
-ADR 0029 is Proposed for the tool's 12 MiB request body limit.
+Jay also accepted [ADR 0029](docs/adr/0029-llms-txt-generator-body-limit.md) on
+2026-11-23. It sets the tool's 12 MiB request body ceiling and retains its request schemas.
 Phase 2 builds the tools one at a time, before the platform. Open choices are tracked as
 [deferred decisions](docs/roadmap.md#deferred-decisions).
 

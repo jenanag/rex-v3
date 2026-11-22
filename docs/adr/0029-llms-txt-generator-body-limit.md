@@ -1,6 +1,6 @@
 # 0029: Set the llms-txt-generator request body limit to 12 MiB
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-23, accepted by Jay)
 - **Date:** 2026-11-23
 - **Deciders:** Jay Pascual
 
@@ -34,11 +34,12 @@ Markdown excerpts from repo docs. The other cases are synthetic.
 
 ## Decision
 
-Set `BODY_LIMIT_BYTES=12582912` when scaffolding `llms-txt-generator` and keep
-the current OpenAPI request schemas. This is the tool-wide Fastify ceiling on
-serialized request body bytes, including `POST /v1/llms-txt/validate`, the public
-validation operation. Requests above the ceiling receive HTTP 413. The assembly
-schema can still describe valid requests larger than the ceiling.
+Keep the current OpenAPI request schemas. The tool-wide Fastify ceiling is
+12 MiB (12,582,912 bytes) of serialized request body data, including on
+`POST /v1/llms-txt/validate`, the public validation operation. Requests above
+the ceiling receive HTTP 413. The assembly schema can still describe valid
+requests larger than the ceiling. Set `BODY_LIMIT_BYTES=12582912` during
+scaffolding.
 [ADR 0026](0026-typescript-validation-budget.md#consequences).
 
 ## Consequences
