@@ -55,6 +55,10 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 See [the tool's operation limits](../../services/llms-txt-generator/AGENTS.md#limits).
 <!-- GENERATED:limits END -->
 
+[ADR 0029](../adr/0029-llms-txt-generator-body-limit.md) (Proposed) sets a planned
+12 MiB tool-wide Fastify request body limit (`BODY_LIMIT_BYTES=12582912`), including
+public validation. The proposal keeps the current OpenAPI request schemas.
+
 ## Shared schemas
 
 <!-- GENERATED:shared START (source: packages/contracts/openapi/services/llms-txt-generator.yaml + common.yaml) -->
