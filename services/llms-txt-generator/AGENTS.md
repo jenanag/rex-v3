@@ -135,8 +135,9 @@ The policy's `resolution` defines caller overrides per environment and per custo
 
 ## Scope and build order
 
-Phase 2, step 2 of 6: language ADR (TypeScript), then validation, then generation with
-the `extractive` summarizer; the `llm` summarizer last.
+Phase 2, step 2 of 6: language ADR (TypeScript), then `validateLlmsTxt`, followed by
+deterministic file assembly and extractive page descriptions, with LLM-assisted page
+descriptions last through the tool's LLM adapter.
 
 ## Build and test standalone
 
