@@ -7,7 +7,15 @@ import { loadConfig } from "../dist/src/config.js";
 import { handlers } from "../dist/src/handlers/index.js";
 
 const spec = JSON.parse(readFileSync(new URL("../dist/contract.json", import.meta.url), "utf8"));
-const app = createApp({ spec, config: loadConfig(), handlers, logs: false });
+const app = createApp({
+  spec,
+  config: loadConfig(),
+  handlers: {
+    ...handlers,
+    validateLlmsTxt: async (_request, reply) => reply.code(204).send(),
+  },
+  logs: false,
+});
 const bodyLimit = app.initialConfig.bodyLimit;
 const budgetMs = (5 * bodyLimit) / 1_048_576;
 const warmups = 200;
@@ -171,8 +179,9 @@ try {
       const payload = serialize(request, size === "exact");
       const label = `POST ${path} | ${shape} | ${size} (${payload.length} bytes)`;
       const response = await post(path, payload);
-      assert.equal(response.statusCode, 501, `${label} should reach the scaffold handler`);
-      assert.equal(response.json().code, "not_implemented", label);
+      const expectedStatus = path === validatePath ? 204 : 501;
+      assert.equal(response.statusCode, expectedStatus, `${label} should reach its handler`);
+      if (expectedStatus === 501) assert.equal(response.json().code, "not_implemented", label);
 
       let boundary = "";
       if (size === "exact") {
@@ -181,7 +190,7 @@ try {
         const rejected = await post(path, oversized);
         assert.equal(rejected.statusCode, 413, `${label} plus one byte`);
         assert.equal(rejected.json().code, "payload_too_large", label);
-        boundary = ` | exact reached handler (501), ${oversized.length} bytes rejected (413)`;
+        boundary = ` | exact reached handler (${expectedStatus}), ${oversized.length} bytes rejected (413)`;
       }
 
       const validate = routeValidators.get(path);

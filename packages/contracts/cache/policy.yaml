@@ -132,7 +132,7 @@ tools:
       generateSchemaMarkup: {ttl: P30D, scope: shared}           # DEFAULT
       validateSchemaMarkup: {ttl: P30D, scope: shared}           # DEFAULT
   llms-txt-generator:
-    keyVersion: 1
+    keyVersion: 2
     operations:
       # Pure functions of the page, entries or file passed in; page freshness comes from extractContent.
       # describePage results are read back by llms-txt-generation (cache, then data-aggregator; ADR 0023).

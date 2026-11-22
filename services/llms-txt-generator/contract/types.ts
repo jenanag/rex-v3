@@ -95,7 +95,18 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Validate an llms.txt given inline or as a fetched file */
+        /**
+         * Validate an llms.txt given inline or as a fetched file
+         * @description Validates supplied CommonMark against the [llms.txt v2 format](https://llmstxt.org/#format).
+         *     The first block must be the only top-level H1 and contain the title. A leading BOM and
+         *     Markdown whitespace are allowed. An optional summary blockquote immediately follows the
+         *     title, and freeform details may precede the optional H2 file-list sections.
+         *     Blank content, missing or duplicate titles, incorrect section order, and
+         *     file-list items without a leading Markdown link with a nonempty label and
+         *     destination are errors. Findings on source blocks use `line:<n>`.
+         *     Relative destinations resolve offline against the supplied file URL. For inline
+         *     content, a relative destination produces a warning because there is no base URL.
+         */
         post: operations["validateLlmsTxt"];
         delete?: never;
         options?: never;
@@ -443,7 +454,15 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Validation result (a missing or invalid file is still a 200). */
+            /**
+             * @description Validation result for present, invalid, or missing files. Inline content
+             *     and a string supplied with a 2xx fetched status are present, including
+             *     blank strings. For fetched files, echo the supplied URL and HTTP status.
+             *     A non-2xx or null status, or null content, gives `found: false`,
+             *     `valid: false`, and an error pointing to the relevant request field.
+             *     For inline input, `url` and `httpStatus` are null. `valid` is true when
+             *     there are no errors.
+             */
             200: {
                 headers: {
                     [name: string]: unknown;

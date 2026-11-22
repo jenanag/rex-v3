@@ -20,7 +20,10 @@ files. Each operation is a pure function of its input
   [ADR 0017](../adr/0017-deterministic-first-analysis.md). This is the only LLM use.
 - `generateLlmsTxt` assembles `llms.txt` (and optionally `llms-full.txt`) from the
   entries, deterministically and without any LLM call.
-- `validateLlmsTxt` checks an existing llms.txt against the format.
+- `validateLlmsTxt` checks supplied CommonMark against [llms.txt v2](https://llmstxt.org/#format)
+  and returns line-based findings. It validates inline text or a supplied fetch result
+  offline. Relative list links resolve against a fetched file's URL and produce warnings
+  for inline content. Missing and invalid files return HTTP 200 with findings.
 
 It never crawls or fetches: the orchestrator's pipeline discovers the pages through the
 sitemap-extractor and extracts them through the content-extractor
@@ -40,7 +43,7 @@ sitemap-extractor and extracts them through the content-extractor
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `1`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `2`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
@@ -74,8 +77,9 @@ node scripts/benchmark-validation.mjs
 The benchmark uses the scaffold's Fastify application and needs no running server,
 network, or credentials. The shared tool workflow runs it offline. It checks the
 12 MiB effective limit and fails if any workload reaches 60 ms p99 for the warmed
-validator. It also checks that each exact-limit request reaches its scaffold
-handler and that adding one byte returns HTTP 413. Exact-limit fixtures exercise
+validator. It checks that each exact-limit request reaches its handler and that
+adding one byte returns HTTP 413. The validation route uses a benchmark-only
+handler so content parsing stays outside the benchmark. Exact-limit fixtures exercise
 bounded content fields at their schema maxima and use trailing JSON whitespace
 where needed.
 [ADR 0027](../adr/0027-scale-typescript-validation-budget.md).
@@ -122,6 +126,7 @@ where needed.
 - `openai`: LLM SDK (also Perplexity and xAI via `baseURL`) (`--llm`)
 - `@anthropic-ai/sdk`: LLM SDK (`--llm`)
 - `@google/genai`: LLM SDK (`--llm`)
+- `mdast-util-from-markdown`: CommonMark parsing with source positions for llms.txt validation
 <!-- GENERATED:deps END -->
 
 ## Notes
