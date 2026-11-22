@@ -50,6 +50,29 @@ derived data are attributed to Schema.org and its sponsors under CC BY-SA 3.0.
 - `GET /healthz`, `GET /readyz`: shared probes
 <!-- GENERATED:endpoints END -->
 
+## Direct smoke check
+
+Use the Node.js version in the repo's [.nvmrc](../../.nvmrc). From the tool
+directory, install dependencies, build, and start the service.
+
+```bash
+npm ci
+npm run build
+npm start
+```
+
+When the service is listening, open another terminal in the tool directory and
+run the smoke check.
+
+```bash
+node scripts/smoke.mjs
+```
+
+The script posts an organization fixture to the generation route and sends the
+returned JSON-LD to the validation route. It checks both responses and exits
+nonzero on failure. It connects to `127.0.0.1:8080` by default. If the service
+uses a different port, set the same `PORT` for the script.
+
 ## Caching (by callers)
 
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
