@@ -17,7 +17,12 @@ import {
 type Entry = { destination: string; source: string; label: string; generator: string };
 
 function plan(manifest: Document, phase: number, selected?: string): Entry[] {
-  if (selected && !manifest.services[selected] && !manifest.handoff[selected]) {
+  if (
+    selected &&
+    !manifest.services[selected] &&
+    !manifest.handoff[selected] &&
+    !manifest.templates?.[selected]
+  ) {
     throw new Error("Unknown service: " + selected);
   }
 
@@ -25,13 +30,18 @@ function plan(manifest: Document, phase: number, selected?: string): Entry[] {
   for (const [group, configs] of Object.entries<Document>({
     services: manifest.services,
     handoff: manifest.handoff,
+    templates: manifest.templates ?? {},
   })) {
     for (const [name, config] of Object.entries<Document>(configs)) {
       if (selected && name !== selected) continue;
-      if (!/^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/.test(name)) {
+      if (
+        !(
+          group === "templates" ? /^_template(?:-[a-z]+)?$/ : /^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$/
+        ).test(name)
+      ) {
         throw new Error("Invalid vendoring service: " + name);
       }
-      const service = group === "services";
+      const service = group !== "handoff";
       const base = service ? toolDir(name) : contractsDir;
       for (const item of config.files) {
         const fromPhase = item.fromPhase ?? 0;

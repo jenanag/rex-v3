@@ -116,11 +116,12 @@ For contract changes, edit the source in `packages/contracts`, run both validato
 regenerate vendored files and docs, then run the checks. See the
 [contracts README](packages/contracts/README.md).
 
-### Arrives in Phase 1 (planned)
+The TypeScript tool factory lives in `services/_template`. Its commands are:
 
 ```bash
-scripts/new-tool <name> [--lang ts|python|go] [--llm]   # ts; python/go at their bring-up
-scripts/new-tool --check | --upgrade <tool>             # template drift / re-apply the template
+scripts/new-tool <name> [--lang ts|python|go] [--llm]  # Python and Go arrive at their bring-ups
+scripts/new-tool --check [<tool>]                     # template drift
+scripts/new-tool --upgrade <tool>                     # re-render template-owned files
 ```
 
 ### Inside a tool folder (from Phase 2, once the tool is scaffolded)

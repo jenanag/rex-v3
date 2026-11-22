@@ -66,7 +66,6 @@ See [the tool's operation limits](../../services/schema-generator/AGENTS.md#limi
 - `fastify`: HTTP server
 - `@fastify/sensible`: HTTP errors and helpers
 - `@fastify/under-pressure`: load shedding, readiness
-- `fastify-openapi-glue`: routes bound to the contract's operationIds (confirmed or replaced by the Phase 1 spike, ADR 0020)
 - `ajv`: JSON Schema 2020-12 validation
 - `ajv-formats`: formats for Ajv
 - `env-schema`: config from env

@@ -318,7 +318,12 @@ const cases: [string, string, (repo: Fixture) => Promise<void>][] = [
   [
     "planned command already exists",
     "agent-instructions",
-    (repo) => repo.write("scripts/new-tool", "#!/bin/sh"),
+    (repo) =>
+      repo.change(
+        "AGENTS.md",
+        "### Inside a tool folder",
+        "### Arrives (planned)\n\n`\`\`bash\nscripts/new-tool\n`\`\`\n\n### Inside a tool folder",
+      ),
   ],
   [
     "tool outbound fetch",

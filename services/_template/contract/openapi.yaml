@@ -1,0 +1,236 @@
+# GENERATED - DO NOT EDIT. Vendored by scripts/vendor-contracts (ADR 0018) from
+# packages/contracts/openapi/templates/echo.yaml. Change the source and re-run the script; CI fails on drift.
+openapi: 3.1.0
+info:
+  title: REx tool template
+  version: 1.0.0
+  description: Standalone example of a tool bound to its OpenAPI contract.
+security: []
+tags:
+  - name: Echo
+  - name: Health
+paths:
+  /healthz:
+    get:
+      operationId: getLiveness
+      summary: Liveness probe
+      description: Returns 200 while the process is running. Never checks dependencies.
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /readyz:
+    get:
+      operationId: getReadiness
+      summary: Readiness probe
+      description: 'Returns 200 when the service can serve traffic: required config loaded and its own dependencies reachable (orchestrator: Postgres and RabbitMQ; workers: RabbitMQ; gateway: Redis; tools: signing keys loaded).'
+      x-internal: true
+      tags:
+        - Health
+      security: []
+      responses:
+        '200':
+          $ref: '#/components/responses/Health'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /v1/echoes:
+    post:
+      operationId: echoText
+      summary: Echo the supplied text
+      tags:
+        - Echo
+      x-rex-limits:
+        llm: none
+        outboundFetch: none
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EchoRequest'
+      responses:
+        '200':
+          description: The echoed text.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EchoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        default:
+          $ref: '#/components/responses/InternalError'
+components:
+  schemas:
+    EchoRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - text
+      properties:
+        text:
+          type: string
+        uppercase:
+          type: boolean
+          default: false
+    EchoResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - text
+        - usage
+      properties:
+        text:
+          type: string
+        usage:
+          $ref: '#/components/schemas/LlmUsageList'
+    Health:
+      type: object
+      required:
+        - status
+        - service
+        - version
+      properties:
+        status:
+          type: string
+          enum:
+            - ok
+            - degraded
+            - down
+        service:
+          type: string
+        version:
+          type: string
+        checks:
+          type: object
+          additionalProperties:
+            type: string
+            enum:
+              - ok
+              - down
+    FieldError:
+      type: object
+      required:
+        - pointer
+        - detail
+      properties:
+        pointer:
+          type: string
+          description: JSON Pointer (RFC 6901) into the request body, or `#/query/<name>` / `#/header/<name>`.
+        detail:
+          type: string
+    Problem:
+      type: object
+      description: RFC 9457 problem details, with REx extension members.
+      required:
+        - type
+        - title
+        - status
+        - code
+      properties:
+        type:
+          type: string
+          format: uri
+          description: 'URI identifying the problem type: `{PROBLEM_BASE_URI}/{code}`. PROBLEM_BASE_URI is a deployment setting; the product domain is deferred, so it is a placeholder until then (docs/roadmap.md#deferred-decisions).'
+        title:
+          type: string
+          description: Short, human-readable summary of the problem type.
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          description: Explanation specific to this occurrence.
+        instance:
+          type: string
+          format: uri-reference
+          description: Request path of this occurrence.
+        code:
+          type: string
+          pattern: ^[a-z][a-z0-9_]*$
+          description: Stable machine-readable error code (snake_case), e.g. `validation_failed`.
+        traceId:
+          type: string
+          description: W3C trace ID for support and log correlation.
+        errors:
+          type: array
+          description: Field-level errors; present for `validation_failed`.
+          items:
+            $ref: '#/components/schemas/FieldError'
+    LlmUsage:
+      type: object
+      description: One LLM call made while serving a request. Tools report it; the orchestrator meters it.
+      required:
+        - provider
+        - model
+        - operation
+        - inputTokens
+        - outputTokens
+        - costMicrosUsd
+      properties:
+        provider:
+          type: string
+          examples:
+            - openai
+        model:
+          type: string
+        operation:
+          type: string
+          description: What the call was for, e.g. `answer_prompt`, `classify_sentiment`, `summarize_page`.
+        inputTokens:
+          type: integer
+          minimum: 0
+        outputTokens:
+          type: integer
+          minimum: 0
+        costMicrosUsd:
+          type: integer
+          minimum: 0
+          description: Cost in millionths of a US dollar from the provider price table at call time.
+    LlmUsageList:
+      type: array
+      description: Every LLM call made for this response; empty when none.
+      items:
+        $ref: '#/components/schemas/LlmUsage'
+  responses:
+    Health:
+      description: Health status.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Health'
+    ServiceUnavailable:
+      description: A dependency is unavailable; retry later.
+      headers:
+        Retry-After:
+          $ref: '#/components/headers/RetryAfter'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalError:
+      description: Unexpected server error.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    BadRequest:
+      description: The request is malformed or fails schema validation.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  headers:
+    RetryAfter:
+      description: Seconds to wait before retrying.
+      schema:
+        type: integer
+        minimum: 0
+x-rex-service:
+  name: echo-template
+  kind: tool

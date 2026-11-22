@@ -295,20 +295,26 @@ function checkVendoring(all: Spec[], manifest: Document, report: Report) {
       if (group === "services" && tool) {
         if (!Object.hasOwn(languages, language))
           report("tool-language", manifestFile, name + ": invalid or missing language " + language);
-        if (!adrTools.has(name))
+        const ops = operations(owner.spec);
+        const example =
+          config.example === true &&
+          ops.length === 1 &&
+          ops[0].op.operationId === "echoText" &&
+          ops[0].path === "/v1/echoes";
+        if (!example && !adrTools.has(name))
           report("tool-language", manifestFile, name + " is missing from ADR 0024");
         if (Object.hasOwn(languages, language)) {
           const llm = operations(owner.spec).some(({ op }) =>
             ["required", "optional"].includes(op["x-rex-limits"]?.llm),
           );
-          if (llm !== llmSwitches.includes(name)) {
+          if (!example && llm !== llmSwitches.includes(name)) {
             report(
               "limits",
               owner.file,
               name + " disagrees with the --llm switches in " + conventionsFile,
             );
           }
-          checkTool(name, language, llm, conventions, report);
+          checkTool(name, language, llm || (example && config.llm === true), conventions, report);
         }
       } else if (language !== undefined) {
         report("tool-language", manifestFile, name + ": language is set only for tools");

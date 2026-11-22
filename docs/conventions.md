@@ -349,7 +349,6 @@ tool's packages from its language's table.
 | `fastify` | HTTP server | all |
 | `@fastify/sensible` | HTTP errors and helpers | all |
 | `@fastify/under-pressure` | load shedding, readiness | all |
-| `fastify-openapi-glue` | routes bound to the contract's operationIds (confirmed or replaced by the Phase 1 spike, ADR 0020) | all |
 | `ajv` | JSON Schema 2020-12 validation | all |
 | `ajv-formats` | formats for Ajv | all |
 | `env-schema` | config from env | all |

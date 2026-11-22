@@ -3,6 +3,8 @@
 extends:
   - recommended
 apis:
+  echo-template:
+    root: packages/contracts/openapi/templates/echo.yaml
   common:
     root: packages/contracts/openapi/common.yaml
   gateway:

@@ -172,9 +172,9 @@ Deliverables:
 Done when (per spike): the same table of 25 request cases (valid and invalid, one per
 feature above, shared as a JSON file by all three spikes) gives the expected 200 or 400
 with correct pointers on the chosen option; a valid response fails contract validation
-when a required field is removed; p99 validation overhead for the answer-analysis
-request within Jay's budgets on CI hardware (1 ms for TypeScript and Go, 5 ms for
-Python; ADR 0024); its ADR is merged. Each spike is a gate: the first tool in its
+when a required field is removed, and its ADR is accepted. TypeScript validation
+budget tuning is deferred until tools can be measured ([ADR 0020](adr/0020-fastify-openapi-validation.md)).
+The Python and Go bring-up spikes use the budgets in [ADR 0024](adr/0024-per-tool-language.md). Each spike is a gate: the first tool in its
 language starts only after it passes. A Python or Go spike that fails, with its fallback
 too, leaves that tool in TypeScript (its tool ADR says so); ADR 0020 is required for
 Phase 1, the others only for their bring-up.
@@ -207,7 +207,9 @@ Deliverables:
   hashes), adds a policy.yaml entry stub and a docs/services stub, and runs the
   language's install to produce the lockfile (`npm install`, `uv lock`,
   `go mod tidy`). A language whose template does not exist yet fails with "run the
-  <language> bring-up first".
+  <language> bring-up first". A new name without a service contract creates an echo
+  example for factory verification. A real tool starts from its contract and an
+  Accepted language ADR with `Tool` and `Language` header fields.
 - `scripts/new-tool --check` (template drift, against the tool's own language template)
   and `--upgrade <tool>` (re-render non-owned files, show a diff, keep `owned: true`
   files).

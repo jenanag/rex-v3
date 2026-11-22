@@ -1,4 +1,4 @@
-<!-- GENERATED - DO NOT EDIT. Rendered from docs/agents/tool-AGENTS.md.tmpl in the REx repo
+<!-- GENERATED - DO NOT EDIT. Rendered from services/_template/AGENTS.md.tmpl in the REx repo
      (scripts/gen-docs). CI fails on
      drift: change the template or its sources (spec, service doc, roadmap, conventions)
      and regenerate. -->
@@ -70,8 +70,6 @@ switches: none). Anything else needs Jay's approval first.
 - `fastify`: HTTP server
 - `@fastify/sensible`: HTTP errors and helpers
 - `@fastify/under-pressure`: load shedding, readiness
-- `fastify-openapi-glue`: routes bound to the contract's operationIds (confirmed or
-  replaced by the Phase 1 spike, ADR 0020)
 - `ajv`: JSON Schema 2020-12 validation
 - `ajv-formats`: formats for Ajv
 - `env-schema`: config from env

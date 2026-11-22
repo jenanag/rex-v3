@@ -251,7 +251,13 @@ const hasLlm = (spec: Document) =>
   operations(spec).some(({ op }) => op["x-rex-limits"]?.llm !== "none");
 function packageLines(name: string, spec: Document) {
   return list(
-    applicablePackages(conventions, manifest.services[name].language, name, hasLlm(spec)).map(
+    applicablePackages(
+      conventions,
+      manifest.services[name].language,
+      name,
+      hasLlm(spec) ||
+        (manifest.services[name].example === true && manifest.services[name].llm === true),
+    ).map(
       ({ name: pkg, purpose, scopes }) =>
         tick(pkg) + ": " + purpose + (scopes.includes("--llm") ? " (`--llm`)" : ""),
     ),
@@ -453,13 +459,14 @@ function languageLine(name: string, language: string, languageName: string) {
 
 function agent(name: string, spec: Document) {
   const config = manifest.services[name];
+  const example = config.example === true;
   const language = config.language as "ts" | "python" | "go";
   const doc = read(serviceDoc(name));
   const languageName = manifest.languages[language].name;
   const step = steps.find((match) => match[2] === name);
-  if (!step) throw new Error(name + ": missing Phase 2 roadmap step");
+  if (!step && !example) throw new Error(name + ": missing Phase 2 roadmap step");
   const purpose = compact(stripLinks(doc.split("\n## Purpose\n")[1].trim().split("\n\n")[0]));
-  const llm = hasLlm(spec);
+  const llm = hasLlm(spec) || (example && config.llm === true);
   const bundle = config.files.find((entry: Document) => entry.target === "contract/openapi.yaml");
   const values: Record<string, string> = {
     name,
@@ -470,7 +477,9 @@ function agent(name: string, spec: Document) {
         .filter((sentence) => !sentence.startsWith("Replaces the v1"))
         .join(" "),
     ),
-    language_line: languageLine(name, language, languageName),
+    language_line: example
+      ? languageName + " (Phase 1 echo example)."
+      : languageLine(name, language, languageName),
     from: bundle.from,
     extra_files: config.files
       .filter((entry: Document) => entry.how === "copy")
@@ -512,9 +521,9 @@ function agent(name: string, spec: Document) {
         ),
       )
       .join("\n"),
-    step: step[1],
+    step: step?.[1] ?? "1",
     steps: String(steps.length),
-    scope: compact(step[3]),
+    scope: step ? compact(step[3]) : "Standalone echo example.",
     status: existsSync(
       join(
         toolDir(name),
@@ -529,7 +538,7 @@ function agent(name: string, spec: Document) {
             ". Then these commands work (for the language above):",
         ),
   };
-  return read("docs/agents/tool-AGENTS.md.tmpl")
+  return read("services/_template/AGENTS.md.tmpl")
     .replace(/{{#lang (\w+)}}\n([\s\S]*?){{\/lang}}\n/g, (_, lang, body) =>
       lang === language ? body : "",
     )
@@ -538,7 +547,9 @@ function agent(name: string, spec: Document) {
         throw new Error("Unknown tool AGENTS template field: " + key);
       return values[key];
     })
-    .replace(/^Phase 2, step [^\n]+/m, (line) => wrap(line));
+    .replace(/^Phase 2, step [^\n]+/m, (line) =>
+      example ? "Phase 1 standalone echo example." : wrap(line),
+    );
 }
 
 function blocks(doc: string, expected: string[], render: (name: string) => string) {
@@ -557,7 +568,9 @@ function blocks(doc: string, expected: string[], render: (name: string) => strin
 }
 
 main(() => {
-  const { values } = parseArgs({ options: { check: { type: "boolean" } } });
+  const { values } = parseArgs({
+    options: { check: { type: "boolean" }, service: { type: "string" } },
+  });
   const targets = new Map<string, string>();
   targets.set(
     "docs/events.md",
@@ -566,6 +579,7 @@ main(() => {
   for (const file of files("docs/services", ".md")) {
     const doc = read(file);
     const name = basename(file, ".md");
+    if (values.service && name !== values.service) continue;
     const kind = allSpecs.find((entry) => entry.name === name)?.kind;
     const required =
       kind === "tool"
@@ -593,7 +607,8 @@ main(() => {
     }
   }
   for (const { name, spec, kind } of allSpecs) {
-    if (kind === "tool") targets.set(join(toolDir(name), "AGENTS.md"), agent(name, spec));
+    if (kind === "tool" && (!values.service || values.service === name))
+      targets.set(join(toolDir(name), "AGENTS.md"), agent(name, spec));
   }
   const drift = [];
   for (const [file, result] of targets) {

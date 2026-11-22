@@ -111,3 +111,9 @@ handoff:
   sitemap-extractor:
     files:
       - {target: handoff/sitemap-extractor.openapi.yaml, from: openapi/services/sitemap-extractor.yaml, how: bundle}
+templates:
+  _template:
+    language: ts
+    files:
+      - {target: contract/openapi.yaml, from: openapi/templates/echo.yaml, how: bundle, fromPhase: 1}
+      - {how: types, from: ./contract/openapi.yaml, fromPhase: 1}

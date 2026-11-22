@@ -1,0 +1,57 @@
+openapi: 3.1.0
+info:
+  title: REx tool template
+  version: 1.0.0
+  description: Standalone example of a tool bound to its OpenAPI contract.
+x-rex-service:
+  name: echo-template
+  kind: tool
+security: []
+tags:
+  - name: Echo
+  - name: Health
+paths:
+  /healthz:
+    $ref: ../common.yaml#/components/pathItems/Healthz
+  /readyz:
+    $ref: ../common.yaml#/components/pathItems/Readyz
+  /v1/echoes:
+    post:
+      operationId: echoText
+      summary: Echo the supplied text
+      tags: [Echo]
+      x-rex-limits: {llm: none, outboundFetch: none}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EchoRequest'
+      responses:
+        '200':
+          description: The echoed text.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EchoResponse'
+        '400':
+          $ref: ../common.yaml#/components/responses/BadRequest
+        default:
+          $ref: ../common.yaml#/components/responses/InternalError
+components:
+  schemas:
+    EchoRequest:
+      type: object
+      additionalProperties: false
+      required: [text]
+      properties:
+        text: {type: string}
+        uppercase: {type: boolean, default: false}
+    EchoResponse:
+      type: object
+      additionalProperties: false
+      required: [text, usage]
+      properties:
+        text: {type: string}
+        usage:
+          $ref: ../common.yaml#/components/schemas/LlmUsageList
