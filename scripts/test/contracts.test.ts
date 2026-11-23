@@ -65,7 +65,7 @@ async function fixture(t: { after: (fn: () => Promise<void>) => void }, ownBasel
 }
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
-const cases: [string, string, (repo: Fixture) => Promise<void>][] = [
+const cases: [string, string, (repo: Fixture) => Promise<void>, string?][] = [
   [
     "copied component",
     "copied-components",
@@ -169,18 +169,20 @@ const cases: [string, string, (repo: Fixture) => Promise<void>][] = [
   ],
   [
     "malformed raw URL pointer",
-    "must target a required shared Url at /robotsTxt/~2url",
+    "cache-policy",
     (repo) => repo.change(policy, "robotsTxtUrl: /robotsTxt/url", "robotsTxtUrl: /robotsTxt/~2url"),
+    "must target a required shared Url at /robotsTxt/~2url",
   ],
   [
     "conflicting raw URL alias",
-    "has an invalid or conflicting alias siteUrl",
+    "cache-policy",
     (repo) =>
       repo.change(
         policy,
         "        rawUrlKeyInputs:",
         "        extraKeyInputs: [siteUrl]\n        rawUrlKeyInputs:",
       ),
+    "has an invalid or conflicting alias siteUrl",
   ],
   [
     "bad cache scope",
@@ -399,7 +401,7 @@ test("cross-file rule fixtures", { concurrency: 4 }, async (t) => {
   const clean = await fixture(t);
   await clean.run("check-contracts", "--source-only");
   await Promise.all(
-    cases.map(([name, rule, mutate]) =>
+    cases.map(([name, rule, mutate, detail]) =>
       t.test(name, async (subtest) => {
         const repo = await fixture(subtest);
         await mutate(repo);
@@ -408,7 +410,8 @@ test("cross-file rule fixtures", { concurrency: 4 }, async (t) => {
           (error: unknown) =>
             error instanceof Error &&
             "stderr" in error &&
-            String(error.stderr).includes("[" + rule + "]"),
+            String(error.stderr).includes("[" + rule + "]") &&
+            (!detail || String(error.stderr).includes(detail)),
         );
       }),
     ),
