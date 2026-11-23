@@ -134,7 +134,8 @@ async function benchmark(url, expectedLimit, workload) {
       await post(url, oversized, 413, "payload_too_large");
       boundary = " | exact reached stub (501), " + oversized.length + " bytes rejected (413)";
     }
-    const measured = p99(validate, request);
+    // Match Fastify's parsed body without charging JSON parsing to the validator.
+    const measured = p99(validate, JSON.parse(payload.toString("utf8")));
     const label = "POST " + url + " | " + size + " (" + payload.length + " bytes)";
     console.log(label + " | p99 " + measured.toFixed(4) + " ms" + boundary);
     if (measured >= budget) {
