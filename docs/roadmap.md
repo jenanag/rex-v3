@@ -297,6 +297,9 @@ was accepted the same day. It retains the current request schemas and sets a
 limit and verify the 60 ms validator-only p99 target in CI with valid bodies at
 the exact limit.
 
+[ADR 0030](adr/0030-content-auditor-language.md) proposes TypeScript for
+`content-auditor`. Scaffolding is pending Jay's acceptance.
+
 Built in this order, each started with its language ADR and `scripts/new-tool --lang
 <language>` and finished (definition of done below) before the next one starts. The order goes from no LLM to
 LLM-heavy, so the template is hardened on the simple tools first:
