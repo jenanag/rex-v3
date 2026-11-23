@@ -43,6 +43,10 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 
 ## Limits
 
+[ADR 0031](../adr/0031-content-auditor-body-limits.md) records the proposed
+request body limits and validation gates for both operations, pending Jay's
+acceptance before scaffolding.
+
 <!-- GENERATED:limits START (source: x-rex-limits in packages/contracts/openapi/services/content-auditor.yaml) -->
 See [the tool's operation limits](../../services/content-auditor/AGENTS.md#limits).
 <!-- GENERATED:limits END -->
