@@ -20,6 +20,7 @@ function visibleText(nodes: readonly Inline[]): string {
       if ("children" in node) return visibleText(node.children);
       if (node.type === "text" || node.type === "inlineCode") return node.value;
       if (node.type === "image" || node.type === "imageReference") return node.alt ?? "";
+      if (node.type === "html" && /^<br(?=[\s/>])/i.test(node.value)) return " ";
       return node.type === "break" ? " " : "";
     })
     .join("");

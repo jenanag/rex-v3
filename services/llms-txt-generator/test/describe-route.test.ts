@@ -49,6 +49,32 @@ test("returns the extractive result using supplied Markdown and blank metadata f
 });
 
 test.each([
+  ["<br>", "<br />"],
+  ["<BR>", "<br/>"],
+])(
+  "normalizes inline HTML breaks %s and %s in extractive text",
+  async (headingBreak, proseBreak) => {
+    expect(
+      await post(
+        {
+          ...base,
+          summarizer: "extractive",
+          metadata: { ...metadata, title: " ", description: "\t" },
+          content: {
+            text: "",
+            markdown: `# Quick${headingBreak}start\n\nStart${proseBreak}here. Then run setup.`,
+          },
+        },
+        200,
+      ),
+    ).toEqual({
+      entry: { url: base.url, title: "Quick start", description: "Start here. Then run setup." },
+      usage: [],
+    });
+  },
+);
+
+test.each([
   ["https://example.org:8443/", "example.org:8443"],
   ["https://example.org/guide?a=1", "/guide"],
 ])("uses the fallback title for %s and echoes the original URL", async (url, title) => {
