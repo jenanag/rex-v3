@@ -121,7 +121,7 @@ See [the tool's operation limits](../../services/content-auditor/AGENTS.md#limit
   in neither array. Categories follow contract order, with fixed check order
   and vendored crawler order within categories.
 - When all selected checks are `not_applicable`, return HTTP 200 with
-  `score: 0`, empty `categoryScores`, and the `not_applicable` findings.
+  `score: 0`, an empty categoryScores array, and the `not_applicable` findings.
   If all applicable checks fail, the response includes their zero category scores.
 - JSON-LD checks cover local syntax and shape. Custom, aliased, and remote
   contexts are outside the offline check. Freshness reports date evidence and

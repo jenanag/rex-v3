@@ -92,10 +92,10 @@ paths:
         exclude them from scoring. Omit unselected categories from both arrays
         and categories with no applicable checks from categoryScores. Average the
         unrounded applicable category scores with equal weight. Round each
-        published score once to the nearest integer, with halves rounding up.
+        returned score once to the nearest integer, with halves rounding up.
         When all selected checks are not_applicable, return HTTP 200 with score 0,
         an empty categoryScores array, and the not_applicable findings. Applicable
-        categories whose checks all fail still have a published score of 0.
+        categories whose checks all fail still return a score of 0.
       tags:
         - Audits
       requestBody:
