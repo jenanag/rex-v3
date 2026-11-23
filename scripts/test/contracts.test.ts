@@ -163,9 +163,10 @@ const cases: [string, string, (repo: Fixture) => Promise<void>, string?][] = [
   ],
   [
     "raw URL mapped to a non-URL property",
-    "must target a required shared Url at /robotsTxt/status",
+    "cache-policy",
     (repo) =>
       repo.change(policy, "robotsTxtUrl: /robotsTxt/url", "robotsTxtUrl: /robotsTxt/status"),
+    "must target a required shared Url at /robotsTxt/status",
   ],
   [
     "malformed raw URL pointer",
