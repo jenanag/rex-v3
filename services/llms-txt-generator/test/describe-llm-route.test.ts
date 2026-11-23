@@ -49,16 +49,16 @@ async function post(payload: Record<string, unknown> | string, status: number, t
 }
 
 test.each([{}, { summarizer: "llm", model }])(
-  "uses the priced Luna fixture for %j",
+  "replays the recorded Luna completion and usage for %j",
   async (options) => {
     const { result } = await post({ ...base, ...options }, 200, app);
     expect(result).toEqual({
       entry: {
         url: base.url,
         title: "Setup Guide",
-        description: "Run setup to prepare the service.",
+        description: "Run setup before starting the service.",
       },
-      usage: [usage],
+      usage: [{ ...usage, inputTokens: 81, outputTokens: 14, costMicrosUsd: 15 }],
     });
   },
 );

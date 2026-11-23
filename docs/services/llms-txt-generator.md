@@ -94,8 +94,8 @@ where needed.
 From `services/llms-txt-generator/`, use the repo-pinned Node version and run
 `npm ci`, `npm run build`, and `node scripts/smoke-describe-page.mjs`. The script
 starts and stops a standalone service in `LLM_MODE=mock` and checks both
-`describePage` modes over loopback. The committed mock completion and token counts
-are synthetic. Usage pricing comes from the tool-local catalog and uses
+`describePage` modes over loopback. The LLM case replays the GPT-6 Luna completion and
+token counts recorded for the synthetic setup page. The tool-local catalog uses
 [published OpenAI standard rates](https://developers.openai.com/api/docs/models/gpt-6-luna#pricing).
 
 ## Shared schemas

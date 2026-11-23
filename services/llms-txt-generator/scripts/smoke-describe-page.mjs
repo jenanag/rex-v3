@@ -44,15 +44,15 @@ try {
     [
       "default LLM",
       request,
-      "Run setup to prepare the service.",
+      "Run setup before starting the service.",
       [
         {
           provider: "openai",
           model: "gpt-6-luna",
           operation: "summarize_page",
-          inputTokens: 100,
-          outputTokens: 10,
-          costMicrosUsd: 13,
+          inputTokens: 81,
+          outputTokens: 14,
+          costMicrosUsd: 15,
         },
       ],
     ],

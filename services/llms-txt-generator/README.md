@@ -40,5 +40,6 @@ the REx monorepo and re-vendor contract changes there.
 Mock mode reads the JSON completion in `test/fixtures/llm/` for the request's
 `provider`, `model`, `operation`, `prompt`, `maxOutputTokens`, and optional `reasoningEffort`.
 Record mode writes a fixture and uses the configured provider credentials.
-The `summarize_page` fixture is synthetic. Run `node scripts/smoke-describe-page.mjs`
-after the build to check both page-entry modes over loopback in mock mode.
+The `summarize_page` fixture records a GPT-6 Luna completion and token counts for a synthetic
+page. Run `node scripts/smoke-describe-page.mjs` after the build to check both page-entry
+modes over loopback in mock mode and replay the recorded description and usage.

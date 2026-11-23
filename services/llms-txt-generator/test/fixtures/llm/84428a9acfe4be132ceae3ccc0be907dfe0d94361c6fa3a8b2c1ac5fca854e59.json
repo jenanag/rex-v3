@@ -1,7 +1,7 @@
 {
-  "text": "{\"description\":\"Run setup to prepare the service.\"}",
-  "inputTokens": 100,
-  "cachedInputTokens": 30,
-  "cacheWriteTokens": 20,
-  "outputTokens": 10
+  "text": "{\"description\":\"Run setup before starting the service.\"}",
+  "inputTokens": 81,
+  "outputTokens": 14,
+  "cachedInputTokens": 0,
+  "cacheWriteTokens": 0
 }
