@@ -455,6 +455,41 @@ test("restores the literal Schema.org context inside an overridden subtree", asy
   expect(results(response)).toEqual({ entity_identity: "pass", entity_same_as: "pass" });
 });
 
+test.each([
+  ["invalid graph", { publisher: { "@graph": [7] } }, "fail"],
+  [
+    "unsupported context",
+    { mainEntity: [{ publisher: { "@context": { "@vocab": "https://example.net/" } } }] },
+    "warn",
+  ],
+] as const)("checks nested publisher shape with %s", async (_name, fields, shape) => {
+  const response = await audit({
+    ...base,
+    categories: ["structured_data"],
+    page: { ...base.page, html: script({ ...article, ...fields }) },
+  });
+  expect(results(response)).toEqual({ jsonld_present: "pass", jsonld_shape: shape });
+});
+
+test.each([
+  [
+    { hasPart: [{ item: { "@type": "Article" } }], description: { "@value": { "@graph": [7] } } },
+    "pass",
+  ],
+  [{ publisher: { "@context": { term: { "@graph": [7] } } } }, "warn"],
+  [{ publisher: { "@graph": [{}] } }, "warn"],
+] as const)(
+  "preserves wrapper and payload handling during nested shape checks",
+  async (fields, shape) => {
+    const response = await audit({
+      ...base,
+      categories: ["structured_data"],
+      page: { ...base.page, html: script({ ...article, ...fields }) },
+    });
+    expect(results(response)).toEqual({ jsonld_present: "pass", jsonld_shape: shape });
+  },
+);
+
 test("reads the date of a nested article through containers", async () => {
   const response = await audit({
     ...base,

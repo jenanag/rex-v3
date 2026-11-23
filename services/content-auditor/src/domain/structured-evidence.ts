@@ -2,26 +2,25 @@ import type { CheerioAPI } from "cheerio";
 import { finding, httpUrl, type Finding } from "./types.js";
 
 type JsonObject = Record<string, unknown>;
-type Node = { value: JsonObject; schemaContext: boolean; author: boolean };
+type Node = { value: JsonObject; schemaContext: boolean; author: boolean; requiresMarker: boolean };
 type Block = { nodes: Node[]; shape: "pass" | "warn" | "fail" };
 
 const schemaContextUrl = /^https?:\/\/schema\.org\/?$/;
+const supportedContext = (value: unknown) =>
+  typeof value === "string" && schemaContextUrl.test(value);
 const nonblank = (value: unknown): value is string =>
   typeof value === "string" && value.trim() !== "";
 const isObject = (value: unknown): value is JsonObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const array = (value: unknown): unknown[] => (Array.isArray(value) ? value : [value]);
 
-function blockShape(root: unknown): Block["shape"] {
+function blockShape(root: unknown, nodes: Node[]): Block["shape"] {
   const roots = array(root);
   if (!roots.length || !roots.every(isObject)) return "fail";
-  const stack = [...roots];
   let warn = false;
 
-  while (stack.length) {
-    const value = stack.pop()!;
+  for (const { value, requiresMarker } of nodes) {
     const context = value["@context"];
-    const explicitContext = typeof context === "string" && schemaContextUrl.test(context);
     const type = value["@type"];
     const id = value["@id"];
     const graph = value["@graph"];
@@ -31,39 +30,41 @@ function blockShape(root: unknown): Block["shape"] {
     if (graph !== undefined) {
       const children = array(graph);
       if (!children.length || !children.every(isObject)) return "fail";
-      for (const child of children) stack.push(child);
     }
 
+    // Ordinary wrapper objects may contain nodes without declaring a marker themselves.
     warn ||=
-      (context !== undefined && !explicitContext) ||
-      (type === undefined && id === undefined && graph === undefined);
+      (context !== undefined && !supportedContext(context)) ||
+      (requiresMarker && type === undefined && id === undefined && graph === undefined);
   }
   return warn ? "warn" : "pass";
 }
 
 function collectNodes(root: unknown): Node[] {
-  const stack = [{ value: root, schemaContext: false, author: false }];
+  const stack = [{ value: root, schemaContext: false, author: false, requiresMarker: true }];
   const nodes: Node[] = [];
   while (stack.length) {
-    const { value, schemaContext: inherited, author } = stack.pop()!;
+    const { value, schemaContext: inherited, author, requiresMarker } = stack.pop()!;
     if (Array.isArray(value)) {
       for (let index = value.length - 1; index >= 0; index--)
-        stack.push({ value: value[index], schemaContext: inherited, author });
+        stack.push({ value: value[index], schemaContext: inherited, author, requiresMarker });
       continue;
     }
     if (!isObject(value)) continue;
     const context = value["@context"];
-    const schemaContext =
-      context === undefined
-        ? inherited
-        : typeof context === "string" && schemaContextUrl.test(context);
-    nodes.push({ value, schemaContext, author });
+    const schemaContext = context === undefined ? inherited : supportedContext(context);
+    nodes.push({ value, schemaContext, author, requiresMarker });
     // Context definitions and literal values are not node evidence.
     const entries = Object.entries(value);
     for (let index = entries.length - 1; index >= 0; index--) {
       const [key, child] = entries[index];
       if ((isObject(child) || Array.isArray(child)) && key !== "@context" && key !== "@value")
-        stack.push({ value: child, schemaContext, author: key === "author" });
+        stack.push({
+          value: child,
+          schemaContext,
+          author: key === "author",
+          requiresMarker: key === "@graph",
+        });
     }
   }
   return nodes;
@@ -76,7 +77,8 @@ function parseBlock(text: string): Block {
   } catch {
     return { nodes: [], shape: "fail" };
   }
-  return { nodes: collectNodes(root), shape: blockShape(root) };
+  const nodes = collectNodes(root);
+  return { nodes, shape: blockShape(root, nodes) };
 }
 
 export function readStructuredData(dom: CheerioAPI | undefined) {
