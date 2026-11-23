@@ -25,25 +25,43 @@ export type LlmRequest = {
   prompt: string;
   maxOutputTokens: number;
   timeoutMs: number;
-  price: { inputMicrosPerMillion: number; outputMicrosPerMillion: number };
+  reasoningEffort?: "none";
+  price: {
+    inputMicrosPerMillion: number;
+    cachedInputMicrosPerMillion?: number;
+    cacheWriteMicrosPerMillion?: number;
+    outputMicrosPerMillion: number;
+  };
 };
-type Completion = { text: string; inputTokens: number; outputTokens: number };
+type Completion = {
+  text: string;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens?: number;
+  cacheWriteTokens?: number;
+};
 
 export function fixtureKey(request: LlmRequest) {
-  const { provider, model, operation, prompt, maxOutputTokens } = request;
+  const { provider, model, operation, prompt, maxOutputTokens, reasoningEffort } = request;
   return createHash("sha256")
-    .update(JSON.stringify({ provider, model, operation, prompt, maxOutputTokens }))
+    .update(
+      JSON.stringify({ provider, model, operation, prompt, maxOutputTokens, reasoningEffort }),
+    )
     .digest("hex");
 }
 
 function completion(value: Completion): Completion {
+  const { text, inputTokens, outputTokens, cachedInputTokens = 0, cacheWriteTokens = 0 } = value;
   if (
-    typeof value.text !== "string" ||
-    ![value.inputTokens, value.outputTokens].every((n) => Number.isSafeInteger(n) && n >= 0)
+    typeof text !== "string" ||
+    ![inputTokens, outputTokens, cachedInputTokens, cacheWriteTokens].every(
+      (n) => Number.isSafeInteger(n) && n >= 0,
+    ) ||
+    cachedInputTokens + cacheWriteTokens > inputTokens
   ) {
     throw new Error("Invalid completion or token counts");
   }
-  return { text: value.text, inputTokens: value.inputTokens, outputTokens: value.outputTokens };
+  return { text, inputTokens, outputTokens, cachedInputTokens, cacheWriteTokens };
 }
 
 function key(value: string | undefined, provider: Provider) {
@@ -112,15 +130,68 @@ async function generate(env: LlmEnv, request: LlmRequest): Promise<Completion> {
       ...(provider === "openai"
         ? { max_completion_tokens: maxOutputTokens }
         : { max_tokens: maxOutputTokens }),
+      ...(provider === "openai" && request.reasoningEffort !== undefined
+        ? { reasoning_effort: request.reasoningEffort, service_tier: "default" }
+        : {}),
       messages: [{ role: "user", content: prompt }],
     },
     { signal, timeout: timeoutMs },
   );
+  const content = reply.choices?.[0]?.message?.content;
   return completion({
-    text: reply.choices[0]?.message.content ?? "",
+    text: typeof content === "string" ? content : "",
     inputTokens: reply.usage?.prompt_tokens ?? NaN,
     outputTokens: reply.usage?.completion_tokens ?? NaN,
+    ...(provider === "openai"
+      ? {
+          cachedInputTokens: reply.usage?.prompt_tokens_details?.cached_tokens,
+          cacheWriteTokens: reply.usage?.prompt_tokens_details?.cache_write_tokens,
+        }
+      : {}),
   });
+}
+
+const months = "jan feb mar apr may jun jul aug sep oct nov dec".split(" ");
+const weekdays = "sunday monday tuesday wednesday thursday friday saturday".split(" ");
+
+function validHttpDate(value: string): boolean {
+  // RFC 9110 §5.6.7 requires recipients to accept all three HTTP-date formats.
+  const parts =
+    /^(?<weekday>[a-z]{3}), (?<day>\d{2}) (?<month>[a-z]{3}) (?<year>\d{4}) (?<time>\d{2}:\d{2}:\d{2}) GMT$/i.exec(
+      value,
+    )?.groups ??
+    /^(?<weekday>[a-z]+), (?<day>\d{2})-(?<month>[a-z]{3})-(?<year>\d{2}) (?<time>\d{2}:\d{2}:\d{2}) GMT$/i.exec(
+      value,
+    )?.groups ??
+    /^(?<weekday>[a-z]{3}) (?<month>[a-z]{3}) (?<day>\d{2}| \d) (?<time>\d{2}:\d{2}:\d{2}) (?<year>\d{4})$/i.exec(
+      value,
+    )?.groups;
+  if (!parts) return false;
+  const month = months.indexOf(parts.month.toLowerCase());
+  const day = Number(parts.day);
+  const [hour, minute, second] = parts.time.split(":").map(Number);
+  if (month < 0 || hour > 23 || minute > 59 || second > 60) return false;
+  if (second === 60 && (hour !== 23 || minute !== 59)) return false;
+
+  const date = new Date(0);
+  date.setUTCHours(hour, minute, Math.min(second, 59));
+  const year = Number(parts.year);
+  const obsoleteYear = parts.year.length === 2;
+  if (obsoleteYear) {
+    const cutoff = new Date();
+    cutoff.setUTCFullYear(cutoff.getUTCFullYear() + 50);
+    const candidate = Math.floor(cutoff.getUTCFullYear() / 100) * 100 + year;
+    date.setUTCFullYear(candidate, month, day);
+    if (date > cutoff) date.setUTCFullYear(candidate - 100, month, day);
+  } else {
+    date.setUTCFullYear(year, month, day);
+  }
+  const weekday = weekdays[date.getUTCDay()];
+  return (
+    date.getUTCMonth() === month &&
+    date.getUTCDate() === day &&
+    parts.weekday.toLowerCase() === (obsoleteYear ? weekday : weekday.slice(0, 3))
+  );
 }
 
 function retryAfter(error: unknown) {
@@ -128,7 +199,7 @@ function retryAfter(error: unknown) {
   const headers = error.headers;
   if (!(headers instanceof Headers)) return undefined;
   const value = headers.get("retry-after");
-  return value && (/^\d+$/.test(value) || Number.isFinite(Date.parse(value))) ? value : undefined;
+  return value && (/^\d+$/.test(value) || validHttpDate(value)) ? value : undefined;
 }
 
 export function createLlm({
@@ -164,9 +235,19 @@ export function createLlm({
         throw new ToolProblem(503, "provider_unavailable", "LLM request failed", retryAfter(error));
       }
     }
+    const { cachedInputTokens = 0, cacheWriteTokens = 0 } = result;
+    const {
+      inputMicrosPerMillion,
+      outputMicrosPerMillion,
+      cachedInputMicrosPerMillion = inputMicrosPerMillion,
+      cacheWriteMicrosPerMillion = inputMicrosPerMillion,
+    } = request.price;
+    const uncached = result.inputTokens - cachedInputTokens - cacheWriteTokens;
     const costMicrosUsd = Math.round(
-      (result.inputTokens * request.price.inputMicrosPerMillion +
-        result.outputTokens * request.price.outputMicrosPerMillion) /
+      (uncached * inputMicrosPerMillion +
+        cachedInputTokens * cachedInputMicrosPerMillion +
+        cacheWriteTokens * cacheWriteMicrosPerMillion +
+        result.outputTokens * outputMicrosPerMillion) /
         1_000_000,
     );
     if (!Number.isSafeInteger(costMicrosUsd) || costMicrosUsd < 0)

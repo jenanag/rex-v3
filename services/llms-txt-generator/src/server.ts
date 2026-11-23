@@ -6,11 +6,11 @@ import { startTelemetry } from "./telemetry.js";
 const config = loadConfig();
 const stopTelemetry = await startTelemetry(config);
 const { createApp } = await import("./app.js");
-const { handlers } = await import("./handlers/index.js");
+const { createHandlers } = await import("./handlers/index.js");
 const spec = JSON.parse(
   readFileSync(new URL("../contract.json", import.meta.url), "utf8"),
 ) as ToolSpec;
-const app = createApp({ spec, config, handlers });
+const app = createApp({ spec, config, handlers: createHandlers(config) });
 try {
   await app.listen({ host: "0.0.0.0", port: config.PORT });
 } catch (error) {

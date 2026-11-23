@@ -11,14 +11,15 @@
 ## Purpose
 
 Writes one page's entry, assembles the site's llms.txt files and validates existing
-files. Each operation is a pure function of its input
-([ADR 0023](../adr/0023-llms-txt-pipeline.md)).
+files using content supplied by the caller ([ADR 0023](../adr/0023-llms-txt-pipeline.md)).
 
-- `describePage` writes one page's llms.txt entry from supplied metadata and
-  content when `summarizer: extractive` is explicit. It applies the source contract's
-  title and description fallbacks offline, preserves the supplied URL, and returns
-  empty usage. Requests using the `llm` default or explicitly selecting `llm`
-  receive the scaffold's HTTP 501 until LLM-assisted descriptions are implemented.
+- `describePage` keeps title selection and the supplied URL deterministic.
+  Explicit `extractive` uses the contract's offline description fallbacks and returns
+  empty usage. Default `llm` can make one Chat Completions call for the description,
+  using a prompt capped at 16,384 serialized UTF-8 bytes. With no usable description
+  source it skips the call. Unusable output falls back to the extractive result while
+  preserving the call's usage. The sole initial allowed model and the default for
+  `LLMS_TXT_GENERATOR_DEFAULT_MODEL` are `openai/gpt-6-luna`.
   [ADR 0017](../adr/0017-deterministic-first-analysis.md).
 - `generateLlmsTxt` assembles `llms.txt` (and optionally `llms-full.txt`) from the
   entries in input order. The full file quotes supplied page Markdown and truncates
@@ -47,7 +48,7 @@ sitemap-extractor and extracts them through the content-extractor
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `4`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `5`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
@@ -87,6 +88,15 @@ handlers so their content work stays outside the benchmark. Exact-limit fixtures
 bounded content fields at their schema maxima and use trailing JSON whitespace
 where needed.
 [ADR 0027](../adr/0027-scale-typescript-validation-budget.md).
+
+### Page-entry smoke check
+
+From `services/llms-txt-generator/`, use the repo-pinned Node version and run
+`npm ci`, `npm run build`, and `node scripts/smoke-describe-page.mjs`. The script
+starts and stops a standalone service in `LLM_MODE=mock` and checks both
+`describePage` modes over loopback. The LLM case replays the GPT-6 Luna completion and
+token counts recorded for the synthetic setup page. The tool-local catalog uses
+[published OpenAI standard rates](https://developers.openai.com/api/docs/models/gpt-6-luna#pricing).
 
 ## Shared schemas
 
