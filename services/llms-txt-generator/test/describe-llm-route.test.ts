@@ -1,7 +1,6 @@
 import { afterAll, afterEach, expect, test, vi } from "vitest";
 import { loadConfig } from "../src/config.js";
-import { ToolProblem } from "../src/errors.js";
-import type { createLlm } from "../src/llm/adapter.js";
+import { createLlm } from "../src/llm/adapter.js";
 import { checkResponse, tool } from "./support.js";
 
 const path = "/v1/llms-txt/page-entries";
@@ -22,9 +21,16 @@ const usage = {
 const app = tool();
 const mock = vi.fn<ReturnType<typeof createLlm>>();
 const observed = tool({}, mock);
-afterEach(() => mock.mockReset());
+const provider = tool(
+  {},
+  createLlm({ data: { LLM_MODE: "live", OPENAI_API_KEY: "offline-fixture-key" } }),
+);
+afterEach(() => {
+  mock.mockReset();
+  vi.unstubAllGlobals();
+});
 afterAll(async () => {
-  await Promise.all([app.close(), observed.close()]);
+  await Promise.all([app.close(), observed.close(), provider.close()]);
 });
 
 async function post(payload: Record<string, unknown> | string, status: number, target = observed) {
@@ -221,10 +227,26 @@ test("preserves the supplied URL and clips the model description by Unicode code
   });
 });
 
-test("uses HTTP 503 and forwards Retry-After for a provider failure", async () => {
-  mock.mockRejectedValue(new ToolProblem(503, "provider_unavailable", "LLM request failed", "30"));
-  const { result, headers } = await post(base, 503);
+test.each([
+  ["Tue, 31 Nov 2026 08:00:00 GMT", undefined],
+  ["Wed, 29 Feb 2023 08:00:00 GMT", undefined],
+  ["Thu, 29 Feb 2024 08:00:00 GMT", "Thu, 29 Feb 2024 08:00:00 GMT"],
+  ["Sunday, 06-Nov-94 08:49:37 GMT", "Sunday, 06-Nov-94 08:49:37 GMT"],
+  ["Sun Nov  6 08:49:37 1994", "Sun Nov  6 08:49:37 1994"],
+  ["30", "30"],
+  ["0", "0"],
+])("handles Retry-After %s on an upstream 429 without retrying", async (header, expected) => {
+  const fetch = vi
+    .fn<typeof globalThis.fetch>()
+    .mockImplementation(async () =>
+      Response.json(
+        { error: { message: "Synthetic rate limit" } },
+        { status: 429, headers: { "Retry-After": header } },
+      ),
+    );
+  vi.stubGlobal("fetch", fetch);
+  const { result, headers } = await post(base, 503, provider);
   expect(result).toMatchObject({ status: 503, code: "provider_unavailable" });
-  expect(headers["retry-after"]).toBe("30");
-  expect(mock).toHaveBeenCalledTimes(1);
+  expect(headers["retry-after"]).toBe(expected);
+  expect(fetch).toHaveBeenCalledTimes(1);
 });

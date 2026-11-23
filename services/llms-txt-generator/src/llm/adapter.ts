@@ -151,17 +151,55 @@ async function generate(env: LlmEnv, request: LlmRequest): Promise<Completion> {
   });
 }
 
+const months = "jan feb mar apr may jun jul aug sep oct nov dec".split(" ");
+const weekdays = "sunday monday tuesday wednesday thursday friday saturday".split(" ");
+
+function validHttpDate(value: string): boolean {
+  // RFC 9110 §5.6.7 requires recipients to accept all three HTTP-date formats.
+  const parts =
+    /^(?<weekday>[a-z]{3}), (?<day>\d{2}) (?<month>[a-z]{3}) (?<year>\d{4}) (?<time>\d{2}:\d{2}:\d{2}) GMT$/i.exec(
+      value,
+    )?.groups ??
+    /^(?<weekday>[a-z]+), (?<day>\d{2})-(?<month>[a-z]{3})-(?<year>\d{2}) (?<time>\d{2}:\d{2}:\d{2}) GMT$/i.exec(
+      value,
+    )?.groups ??
+    /^(?<weekday>[a-z]{3}) (?<month>[a-z]{3}) (?<day>\d{2}| \d) (?<time>\d{2}:\d{2}:\d{2}) (?<year>\d{4})$/i.exec(
+      value,
+    )?.groups;
+  if (!parts) return false;
+  const month = months.indexOf(parts.month.toLowerCase());
+  const day = Number(parts.day);
+  const [hour, minute, second] = parts.time.split(":").map(Number);
+  if (month < 0 || hour > 23 || minute > 59 || second > 60) return false;
+  if (second === 60 && (hour !== 23 || minute !== 59)) return false;
+
+  const date = new Date(0);
+  date.setUTCHours(hour, minute, Math.min(second, 59));
+  const year = Number(parts.year);
+  const obsoleteYear = parts.year.length === 2;
+  if (obsoleteYear) {
+    const cutoff = new Date();
+    cutoff.setUTCFullYear(cutoff.getUTCFullYear() + 50);
+    const candidate = Math.floor(cutoff.getUTCFullYear() / 100) * 100 + year;
+    date.setUTCFullYear(candidate, month, day);
+    if (date > cutoff) date.setUTCFullYear(candidate - 100, month, day);
+  } else {
+    date.setUTCFullYear(year, month, day);
+  }
+  const weekday = weekdays[date.getUTCDay()];
+  return (
+    date.getUTCMonth() === month &&
+    date.getUTCDate() === day &&
+    parts.weekday.toLowerCase() === (obsoleteYear ? weekday : weekday.slice(0, 3))
+  );
+}
+
 function retryAfter(error: unknown) {
   if (!error || typeof error !== "object" || !("headers" in error)) return undefined;
   const headers = error.headers;
   if (!(headers instanceof Headers)) return undefined;
   const value = headers.get("retry-after");
-  if (!value) return undefined;
-  if (/^\d+$/.test(value)) return value;
-  // Date.parse accepts non-HTTP values like "3.5", so check the wire format too.
-  const httpDate =
-    /^(?:[a-z]{3}, \d{2} [a-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT|[a-z]+, \d{2}-[a-z]{3}-\d{2} \d{2}:\d{2}:\d{2} GMT|[a-z]{3} [a-z]{3} [ \d]\d \d{2}:\d{2}:\d{2} \d{4})$/i;
-  return httpDate.test(value) && Number.isFinite(Date.parse(value)) ? value : undefined;
+  return value && (/^\d+$/.test(value) || validHttpDate(value)) ? value : undefined;
 }
 
 export function createLlm({
