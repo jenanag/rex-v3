@@ -1,11 +1,8 @@
-import { createRequire } from "node:module";
 import { load, type CheerioAPI } from "cheerio";
+import { readableRobots, robotsParser, sameOrigin } from "./robots-rules.js";
 import { finding, httpUrl, type AiCrawler, type AuditRequest, type Finding } from "./types.js";
 
 type Page = AuditRequest["page"];
-const robotsParser = createRequire(import.meta.url)(
-  "robots-parser",
-) as typeof import("robots-parser").default;
 type Directives = { deny: boolean; limit: boolean };
 const newDirectives = (): Directives => ({ deny: false, limit: false });
 
@@ -81,17 +78,17 @@ export function crawlerChecks(
   directives: ReturnType<typeof readPageDirectives>,
 ): Finding[] {
   const fileUrl = file && httpUrl(file.url);
-  const sameOrigin = !!fileUrl && !!finalUrl && fileUrl.origin === finalUrl.origin;
+  const matchesOrigin = !!fileUrl && !!finalUrl && sameOrigin(fileUrl, finalUrl);
   const status = file?.status;
   const parser =
-    sameOrigin && status != null && status >= 200 && status < 300 && file?.content != null
+    matchesOrigin && file && readableRobots(file.status, file.content)
       ? robotsParser(fileUrl.href, file.content)
       : undefined;
   const checks = crawlers.map(({ id, robotsToken }) => {
     const checkId = "robots_allows_" + id;
     if (!file) return finding(checkId, "not_applicable", "No robots.txt result was supplied.");
     const allowed =
-      sameOrigin && status != null && status >= 400 && status < 500
+      matchesOrigin && status != null && status >= 400 && status < 500
         ? true
         : parser?.isAllowed(finalUrl!.href, robotsToken);
     if (allowed === undefined)

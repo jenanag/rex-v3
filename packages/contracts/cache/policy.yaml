@@ -34,6 +34,7 @@ key:
     inputHash: lowercase hex SHA-256 of the canonical input (below).
   canonicalInput:
     # Steps applied to the request body, in order, before hashing.
+    - Capture original request strings at the JSON Pointers in the operation's `rawUrlKeyInputs` map before applying defaults or normalizing. Add these unchanged to the key input as top-level members named by the map keys prefixed with `$`. Neither URL nor operation normalization applies to these copies.
     - Apply the defaults declared in the tool spec, so an omitted field and its default give the same key.
     - Add `extraKeyInputs` of the operation as top-level members prefixed with `$`.
     - Normalize every value whose schema is common.yaml Url or Domain (lowercase scheme and host, drop default port, fragment and trailing dot; keep path and query).
@@ -55,7 +56,7 @@ resolution:
     environment: 'CACHE_POLICY_OVERRIDES (YAML or JSON) of the calling service: a partial `tools` and `external` tree of the same shape as below, merged over it.'
     default: 'This file.'
   rules:
-    - 'Only scope, ttl and window can be overridden. keyVersion, extraKeyInputs, normalize, skipWhen, cacheable and archiveTo come only from this file.'
+    - 'Only scope, ttl and window can be overridden. keyVersion, extraKeyInputs, rawUrlKeyInputs, normalize, skipWhen, cacheable and archiveTo come only from this file.'
     - 'A customer override may set scope to `tenant`, never to `shared` (an organization can opt out of sharing, not force sharing of an operation that is tenant-scoped by default or by environment).'
     - 'An override sets the same kind of freshness the entry has: `ttl` for ttl entries, `window` for window entries.'
     - 'Durations are clamped to `limits`. The orchestrator validates customer overrides against this file when they are saved; callers clamp and log anything out of range.'
@@ -121,10 +122,15 @@ tools:
     operations:
       extractCitations: {ttl: P30D, scope: shared}              # DEFAULT
   content-auditor:
-    keyVersion: 2
+    keyVersion: 3
     operations:
       auditPage: {ttl: P30D, scope: shared}                      # DEFAULT (pure function of its input; page freshness comes from extractContent)
-      checkCrawlerAccess: {ttl: P30D, scope: shared}             # DEFAULT (pure function of the robots.txt passed in)
+      checkCrawlerAccess:
+        ttl: P30D                                               # DEFAULT
+        scope: shared
+        rawUrlKeyInputs:
+          siteUrl: /siteUrl
+          robotsTxtUrl: /robotsTxt/url
   schema-generator:
     keyVersion: 2
     operations:
