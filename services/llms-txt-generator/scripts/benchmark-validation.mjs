@@ -4,16 +4,16 @@ import { arch, cpus, platform } from "node:os";
 import { performance } from "node:perf_hooks";
 import { createApp } from "../dist/src/app.js";
 import { loadConfig } from "../dist/src/config.js";
-import { handlers } from "../dist/src/handlers/index.js";
 
 const spec = JSON.parse(readFileSync(new URL("../dist/contract.json", import.meta.url), "utf8"));
+const accept = async (_request, reply) => reply.code(204).send();
 const app = createApp({
   spec,
   config: loadConfig(),
   handlers: {
-    ...handlers,
-    generateLlmsTxt: async (_request, reply) => reply.code(204).send(),
-    validateLlmsTxt: async (_request, reply) => reply.code(204).send(),
+    describePage: accept,
+    generateLlmsTxt: accept,
+    validateLlmsTxt: accept,
   },
   logs: false,
 });
@@ -180,9 +180,7 @@ try {
       const payload = serialize(request, size === "exact");
       const label = `POST ${path} | ${shape} | ${size} (${payload.length} bytes)`;
       const response = await post(path, payload);
-      const expectedStatus = path === describePath ? 501 : 204;
-      assert.equal(response.statusCode, expectedStatus, `${label} should reach its handler`);
-      if (expectedStatus === 501) assert.equal(response.json().code, "not_implemented", label);
+      assert.equal(response.statusCode, 204, `${label} should reach its handler`);
 
       let boundary = "";
       if (size === "exact") {
@@ -191,7 +189,7 @@ try {
         const rejected = await post(path, oversized);
         assert.equal(rejected.statusCode, 413, `${label} plus one byte`);
         assert.equal(rejected.json().code, "payload_too_large", label);
-        boundary = ` | exact reached handler (${expectedStatus}), ${oversized.length} bytes rejected (413)`;
+        boundary = ` | exact reached handler (204), ${oversized.length} bytes rejected (413)`;
       }
 
       const validate = routeValidators.get(path);

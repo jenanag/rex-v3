@@ -1,5 +1,6 @@
 import type { components } from "../../contract/types.js";
 import { ToolProblem } from "../errors.js";
+import { codePoints } from "./unicode.js";
 
 type Request = components["schemas"]["LlmsTxtRequest"];
 type Generation = components["schemas"]["LlmsTxtGeneration"];
@@ -14,14 +15,6 @@ function literalText(value: string | null): string {
     .trim()
     .replace(/[\\`*_[\]{}<>#+!&~|]/g, "\\$&")
     .replace(/^(-|\d{1,9}[.)](?=\s|$))/, (marker) => marker.replace(/[-.)]$/, "\\$&"));
-}
-
-function codePoints(text: string): number {
-  let count = 0;
-  for (let index = 0; index < text.length; count++) {
-    index += (text.codePointAt(index) ?? 0) > 0xffff ? 2 : 1;
-  }
-  return count;
 }
 
 function assembleFull(preamble: string, lines: readonly string[], pages: Request["pages"]): string {

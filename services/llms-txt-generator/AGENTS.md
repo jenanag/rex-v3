@@ -97,8 +97,8 @@ switches: `--llm`). Anything else needs Jay's approval first.
 - `openai`: LLM SDK (also Perplexity and xAI via `baseURL`) (--llm)
 - `@anthropic-ai/sdk`: LLM SDK (--llm)
 - `@google/genai`: LLM SDK (--llm)
-- `mdast-util-from-markdown`: CommonMark parsing with source positions for llms.txt
-  validation (llms-txt-generator)
+- `mdast-util-from-markdown`: CommonMark parsing for llms.txt validation and extractive
+  page descriptions (llms-txt-generator)
 
 ## Rules inside this folder
 

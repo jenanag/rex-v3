@@ -14,10 +14,12 @@ Writes one page's entry, assembles the site's llms.txt files and validates exist
 files. Each operation is a pure function of its input
 ([ADR 0023](../adr/0023-llms-txt-pipeline.md)).
 
-- `describePage` writes one page's llms.txt entry (title and description) from its
-  extracted content and metadata. Descriptions are `extractive` (deterministic: meta
-  description or first paragraph, no LLM) or `llm` (model selectable), per
-  [ADR 0017](../adr/0017-deterministic-first-analysis.md). This is the only LLM use.
+- `describePage` writes one page's llms.txt entry from supplied metadata and
+  content when `summarizer: extractive` is explicit. It applies the source contract's
+  title and description fallbacks offline, preserves the supplied URL, and returns
+  empty usage. Requests using the `llm` default or explicitly selecting `llm`
+  receive the scaffold's HTTP 501 until LLM-assisted descriptions are implemented.
+  [ADR 0017](../adr/0017-deterministic-first-analysis.md).
 - `generateLlmsTxt` assembles `llms.txt` (and optionally `llms-full.txt`) from the
   entries in input order. The full file quotes supplied page Markdown and truncates
   at a page boundary with a closing notice. See the source contract for formatting
@@ -45,7 +47,7 @@ sitemap-extractor and extracts them through the content-extractor
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `3`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `4`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
@@ -80,7 +82,7 @@ The benchmark uses the scaffold's Fastify application and needs no running serve
 network, or credentials. The shared tool workflow runs it offline. It checks the
 12 MiB effective limit and fails if any workload reaches 60 ms p99 for the warmed
 validator. It checks that each exact-limit request reaches its handler and that
-adding one byte returns HTTP 413. Assembly and validation use benchmark-only
+adding one byte returns HTTP 413. All three operations use benchmark-only
 handlers so their content work stays outside the benchmark. Exact-limit fixtures exercise
 bounded content fields at their schema maxima and use trailing JSON whitespace
 where needed.
@@ -128,7 +130,7 @@ where needed.
 - `openai`: LLM SDK (also Perplexity and xAI via `baseURL`) (`--llm`)
 - `@anthropic-ai/sdk`: LLM SDK (`--llm`)
 - `@google/genai`: LLM SDK (`--llm`)
-- `mdast-util-from-markdown`: CommonMark parsing with source positions for llms.txt validation
+- `mdast-util-from-markdown`: CommonMark parsing for llms.txt validation and extractive page descriptions
 <!-- GENERATED:deps END -->
 
 ## Notes

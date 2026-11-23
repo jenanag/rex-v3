@@ -360,7 +360,7 @@ tool's packages from its language's table.
 | `robots-parser` | robots.txt rules | content-auditor |
 | `jsonld` | JSON-LD expansion for validation | schema-generator |
 | `marked` | Markdown lexer for inline links in answer text | citation-extractor |
-| `mdast-util-from-markdown` | CommonMark parsing with source positions for llms.txt validation | llms-txt-generator |
+| `mdast-util-from-markdown` | CommonMark parsing for llms.txt validation and extractive page descriptions | llms-txt-generator |
 
 #### Python (`python`)
 
