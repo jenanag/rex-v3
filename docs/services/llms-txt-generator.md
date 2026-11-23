@@ -19,7 +19,9 @@ files. Each operation is a pure function of its input
   description or first paragraph, no LLM) or `llm` (model selectable), per
   [ADR 0017](../adr/0017-deterministic-first-analysis.md). This is the only LLM use.
 - `generateLlmsTxt` assembles `llms.txt` (and optionally `llms-full.txt`) from the
-  entries, deterministically and without any LLM call.
+  entries in input order. The full file quotes supplied page Markdown and truncates
+  at a page boundary with a closing notice. See the source contract for formatting
+  and fallback rules.
 - `validateLlmsTxt` checks supplied CommonMark against [llms.txt v2](https://llmstxt.org/#format)
   and returns line-based findings. It validates inline text or a supplied fetch result
   offline. Relative list links resolve against a fetched file's URL and produce warnings
@@ -43,7 +45,7 @@ sitemap-extractor and extracts them through the content-extractor
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `2`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `3`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
@@ -78,8 +80,8 @@ The benchmark uses the scaffold's Fastify application and needs no running serve
 network, or credentials. The shared tool workflow runs it offline. It checks the
 12 MiB effective limit and fails if any workload reaches 60 ms p99 for the warmed
 validator. It checks that each exact-limit request reaches its handler and that
-adding one byte returns HTTP 413. The validation route uses a benchmark-only
-handler so content parsing stays outside the benchmark. Exact-limit fixtures exercise
+adding one byte returns HTTP 413. Assembly and validation use benchmark-only
+handlers so their content work stays outside the benchmark. Exact-limit fixtures exercise
 bounded content fields at their schema maxima and use trailing JSON whitespace
 where needed.
 [ADR 0027](../adr/0027-scale-typescript-validation-budget.md).
@@ -131,5 +133,7 @@ where needed.
 
 ## Notes
 
-- `fullContent` is capped at 2 MB so results stay within the bus message limit; the
-  worker sends page Markdown only up to that size.
+- `fullContent` is capped at 2,000,000 characters (Unicode code points), including
+  formatting and any truncation notice. This output character cap is separate from
+  the bus message byte limit. The worker limits the page Markdown it supplies as
+  described in [ADR 0023](../adr/0023-llms-txt-pipeline.md).
