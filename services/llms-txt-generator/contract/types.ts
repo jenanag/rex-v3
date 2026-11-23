@@ -57,7 +57,26 @@ export interface paths {
         put?: never;
         /**
          * Write one page's llms.txt entry
-         * @description Synchronous; turns one extracted page into its llms.txt entry (title and description; with `summarizer: llm` the description is written by an LLM); may take up to 2 minutes.
+         * @description With explicit `summarizer: extractive`, generate a page entry offline with
+         *     empty usage. Trim and collapse whitespace and treat blank metadata as absent.
+         *     Select the title from metadata, the first usable top-level Markdown heading,
+         *     or the parsed URL pathname. For a root pathname, use the host including any
+         *     non-default port.
+         *     Select the description from metadata or the first usable top-level Markdown
+         *     paragraph. Use the first usable blank-line-delimited plain-text paragraph
+         *     only when Markdown is blank. Extract visible inline text, including link
+         *     labels, and disregard markup and link destinations. Return a null
+         *     description when no usable source remains.
+         *     Use English Intl.Segmenter sentence boundaries to select up to two sentences
+         *     that fit, or clip an oversized first sentence at a word boundary when
+         *     possible. Treat text without sentence punctuation as one candidate.
+         *     Limit the title to 300 Unicode code points and the description to 1,000,
+         *     including any ellipsis. Clip at grapheme boundaries when possible, falling
+         *     back to code points if a single grapheme exceeds the available space.
+         *     Echo the supplied URL verbatim, regardless of the canonical URL. When the
+         *     supplied URL passes schema validation but fails WHATWG URL parsing, return
+         *     HTTP 422 with Problem code `invalid_page_url` and detail identifying `/url`.
+         *     The default remains `llm`, which is reserved for the LLM implementation.
          */
         post: operations["describePage"];
         delete?: never;
