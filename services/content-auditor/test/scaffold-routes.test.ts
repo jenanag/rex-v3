@@ -7,14 +7,6 @@ afterAll(() => app.close());
 const siteUrl = "https://example.org/";
 const requests = [
   {
-    path: "/v1/audits",
-    payload: {
-      url: siteUrl,
-      page: { finalUrl: siteUrl, status: 200, headers: {}, html: "<h1>Guide</h1>" },
-      content: { text: "Guide", markdown: "# Guide" },
-    },
-  },
-  {
     path: "/v1/crawler-checks",
     payload: { siteUrl, robotsTxt: { url: siteUrl + "robots.txt", status: 404, content: null } },
   },

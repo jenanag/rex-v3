@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: REx content-auditor tool
-  version: 1.0.0
+  version: 1.1.0
   description: |
     Stateless tool: scores one page's AI readiness and checks which AI crawlers a
     site's robots.txt allows. Deterministic, no LLM. No database, no queues, no bus,
@@ -59,9 +59,43 @@ paths:
         notes: audits the page data in the request; fetches nothing
       summary: Audit one page for AI readiness
       description: |
-        Synchronous and deterministic. Fetches nothing: the caller passes the page's
-        extracted content, its raw HTTP response and its robots.txt. The
-        content-extractor service produces all three (ADR 0021).
+        Audits only caller-supplied evidence and the vendored crawler list. Echo
+        url and page.finalUrl as supplied. Use the final URL for robots.txt and
+        canonical checks, raw HTML and headers for document signals, extracted
+        Markdown for answer structure, and plain text for the lead when Markdown
+        is blank. Use the supplied robots.txt and llms.txt results.
+
+        Report per-crawler robots_allows_<id> findings and one crawler_page_directives
+        finding. An omitted robots.txt result makes only the per-crawler findings
+        not_applicable. Score confirmed generic index directives under technical.
+        Ambiguous bare restrictive header clauses after a named scope affect only
+        crawler_page_directives.
+
+        Report jsonld_present and jsonld_shape for embedded JSON-LD. A recognized
+        type can establish node shape without an ID or graph. The offline check
+        does not expand JSON-LD, interpret custom contexts, or verify vocabulary.
+        Evaluate llms_txt_valid from supplied flags and findings. Omission is
+        not_applicable. Inline results can pass with null URL and status. A fetched
+        result with null status warns. Report answer_question_headings,
+        answer_direct_lead and answer_chunkable_sections from extracted content,
+        then entity_identity and entity_same_as from local entity evidence.
+        Technical checks are http_status, server_rendered_copy, canonical_url
+        and page_indexability. A blank eligible HTML body fails server_rendered_copy.
+        Other DOM checks require nonblank eligible HTML. Headers remain available
+        independently. Report freshness_dates from supplied date evidence and
+        chronology without a wall clock.
+
+        Evaluate selected categories in contract order, or all categories when
+        omitted. Return findings in fixed check order and vendored crawler order.
+        Give checks equal weight within a category, awarding 1 for pass, 0.5 for
+        warn, and 0 for fail. Include not_applicable findings in checks and
+        exclude them from scoring. Omit unselected categories from both arrays
+        and categories with no applicable checks from categoryScores. Average the
+        unrounded applicable category scores with equal weight. Round each
+        returned score once to the nearest integer, with halves rounding up.
+        When all selected checks are not_applicable, return HTTP 200 with score 0,
+        an empty categoryScores array, and the not_applicable findings. Applicable
+        categories whose checks all fail still return a score of 0.
       tags:
         - Audits
       requestBody:
@@ -155,7 +189,7 @@ components:
       type: object
       description: |
         Everything the audit reads, already fetched and extracted. `content` (text and
-        Markdown) feeds answer_readiness, entity_signals and freshness. `page` (raw
+        Markdown) feeds answer_readiness and freshness. `page` (raw
         HTML and headers) is needed because main-content extraction drops what the
         other categories check: JSON-LD (structured_data, entity_signals), meta robots
         and X-Robots-Tag (crawler_access, technical), canonical, status and whether the

@@ -26,17 +26,20 @@
       "sha256": "db0e57daccaec7e833782e4da306ef00a22f8df8bbd23e35dde1984e2877109e"
     },
     "package-lock.json": {
-      "sha256": "da42379589a5ad596094549674461d8a2157a29a860e373cc77c44351d51555b"
+      "sha256": "da42379589a5ad596094549674461d8a2157a29a860e373cc77c44351d51555b",
+      "owned": true
     },
     "package.json": {
-      "sha256": "aa99d342ca4a44a1b39bd60a12417ee61346661f7f9cee1135320ae7e7613e82"
+      "sha256": "aa99d342ca4a44a1b39bd60a12417ee61346661f7f9cee1135320ae7e7613e82",
+      "owned": true
     },
     "README.md": {
       "sha256": "d899bcf74642c6c6dd4cda1b048d93bdfa9b31b1de5d1c2606592d68c152bcea",
       "owned": true
     },
     "scripts/build-contract.mjs": {
-      "sha256": "0063f003aacd19685a20ceded97c39b988cd56062f8ac1c990b7b17784f06b47"
+      "sha256": "0063f003aacd19685a20ceded97c39b988cd56062f8ac1c990b7b17784f06b47",
+      "owned": true
     },
     "src/app.ts": {
       "sha256": "a7c2a6d8d4c5ad50db15672af7896bd744a2923854fcaa25237ba66c3097f959",
@@ -73,7 +76,8 @@
       "sha256": "cf5aa07c81b62c2716646f0d6f2c4ae902c6f4e0a11275a1f3420b54bb8c2910"
     },
     "test/support.ts": {
-      "sha256": "2541354cf437d7f2b88579ea50ab0bccf8e09aca04bbb97afa27ad0fad584f0e"
+      "sha256": "2541354cf437d7f2b88579ea50ab0bccf8e09aca04bbb97afa27ad0fad584f0e",
+      "owned": true
     },
     "tsconfig.build.json": {
       "sha256": "1ee531ddfe863deb84b64239434eb8f0e2b7bc4a279c2a6882d0d8fc0ddf461f"

@@ -41,7 +41,7 @@ const representativeAudit = {
 
 function largeAudit(divisor) {
   const html = "<p>" + "😀".repeat(htmlCap / divisor - 7) + "</p>";
-  const markdown = "## Guide\n\n";
+  const markdown = "## Guide\n\nSetup instructions.\n\n";
   const headerValue = "a".repeat(headers.additionalProperties.maxLength);
   return {
     ...representativeAudit,
@@ -77,7 +77,8 @@ async function post(url, payload, status, problemCode) {
     payload,
   });
   assert.equal(response.statusCode, status, "POST " + url + " with " + payload.length + " bytes");
-  assert.equal(response.json().code, problemCode);
+  if (problemCode) assert.equal(response.json().code, problemCode);
+  else assert.equal(typeof response.json().score, "number");
 }
 
 function p99(validate, request) {
@@ -104,9 +105,10 @@ function serialize(request, limit) {
   return exact;
 }
 
-async function benchmark(url, expectedLimit, workload) {
-  // The normal scaffold route supplies both its compiled validator and its effective limit.
-  await post(url, serialize(workload.representative), 501, "not_implemented");
+async function benchmark(url, expectedLimit, status, workload) {
+  // The normal route supplies both its compiled validator and its effective limit.
+  const problemCode = status === 501 ? "not_implemented" : undefined;
+  await post(url, serialize(workload.representative), status, problemCode);
   const route = routes.get(url);
   assert.ok(route, "Expected the request to reach preHandler");
   const { bodyLimit, validate } = route;
@@ -123,26 +125,40 @@ async function benchmark(url, expectedLimit, workload) {
       " ms p99",
   );
 
-  for (const [size, request] of Object.entries(workload)) {
-    const exact = size === "exact";
-    const payload = serialize(request, exact ? bodyLimit : undefined);
-    let boundary = "";
-    if (size !== "representative") await post(url, payload, 501, "not_implemented");
-    if (exact) {
-      assert.equal(payload.length, bodyLimit);
-      const oversized = Buffer.concat([payload, Buffer.from(" ")]);
-      await post(url, oversized, 413, "payload_too_large");
-      boundary = " | exact reached stub (501), " + oversized.length + " bytes rejected (413)";
-    }
+  const exact = serialize(workload.exact, bodyLimit);
+  assert.equal(exact.length, bodyLimit);
+  for (const [size, payload] of [
+    ["representative", serialize(workload.representative)],
+    ["intermediate", serialize(workload.intermediate)],
+    ["exact", exact],
+  ]) {
     // Match Fastify's parsed body without charging JSON parsing to the validator.
     const measured = p99(validate, JSON.parse(payload.toString("utf8")));
     const label = "POST " + url + " | " + size + " (" + payload.length + " bytes)";
-    console.log(label + " | p99 " + measured.toFixed(4) + " ms" + boundary);
+    console.log(label + " | p99 " + measured.toFixed(4) + " ms");
     if (measured >= budget) {
       console.error(label + " must stay below " + budget + " ms p99");
       process.exitCode = 1;
     }
   }
+  return { url, status, problemCode, exact };
+}
+
+async function verifyBoundary({ url, status, problemCode, exact }) {
+  const oversized = Buffer.concat([exact, Buffer.from(" ")]);
+  await post(url, exact, status, problemCode);
+  await post(url, oversized, 413, "payload_too_large");
+  console.log(
+    "POST " +
+      url +
+      " | exact " +
+      exact.length +
+      " bytes reached handler (" +
+      status +
+      "), " +
+      oversized.length +
+      " bytes rejected (413)",
+  );
 }
 
 try {
@@ -150,17 +166,20 @@ try {
   console.log(
     "Request validation p99 (" + samples + " samples per workload after " + warmups + " warmups)",
   );
-  await benchmark("/v1/audits", 25_165_824, {
+  const audit = await benchmark("/v1/audits", 25_165_824, 200, {
     representative: representativeAudit,
     intermediate: largeAudit(2),
     exact: largeAudit(1),
   });
   // A JSON-escaped control character occupies six UTF-8 bytes on the wire.
-  await benchmark("/v1/crawler-checks", 3_145_728, {
+  const crawler = await benchmark("/v1/crawler-checks", 3_145_728, 501, {
     representative: crawlerRequest(rules),
     intermediate: crawlerRequest(robotsWithComment("\u0001", fileCap / 2)),
     exact: crawlerRequest(robotsWithComment("\u0001", fileCap)),
   });
+  // Probe the real large-request handlers after timing both warmed validators.
+  await verifyBoundary(audit);
+  await verifyBoundary(crawler);
 } finally {
   await app.close();
 }
