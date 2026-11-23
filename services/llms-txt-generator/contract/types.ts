@@ -85,6 +85,10 @@ export interface paths {
          *     and descriptions with spaces, render those values as literal Markdown text, and
          *     use angle-bracket link destinations that preserve the supplied URLs.
          *
+         *     If the WHATWG URL parser rejects `siteUrl` or a `pages[].entry.url`, return
+         *     HTTP 422 with Problem code `invalid_assembly_url` and detail identifying the field
+         *     by JSON Pointer.
+         *
          *     When `includeFull` is true, use the same title and summary, followed by page
          *     blocks separated by thematic breaks. Each starts with its entry bullet and
          *     includes any supplied Markdown in a separate blockquote. On overflow, keep the

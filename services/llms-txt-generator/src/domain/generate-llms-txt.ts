@@ -1,4 +1,5 @@
 import type { components } from "../../contract/types.js";
+import { ToolProblem } from "../errors.js";
 
 type Request = components["schemas"]["LlmsTxtRequest"];
 type Generation = components["schemas"]["LlmsTxtGeneration"];
@@ -12,7 +13,7 @@ function literalText(value: string | null): string {
     .replace(/[\r\n\u2028\u2029]+/g, " ")
     .trim()
     .replace(/[\\`*_[\]{}<>#+!&~|]/g, "\\$&")
-    .replace(/^(-|\d{1,9}[.)])(?=\s|$)/, (marker) => marker.replace(/[-.)]$/, "\\$&"));
+    .replace(/^(-|\d{1,9}[.)](?=\s|$))/, (marker) => marker.replace(/[-.)]$/, "\\$&"));
 }
 
 function codePoints(text: string): number {
@@ -54,8 +55,22 @@ function assembleFull(preamble: string, lines: readonly string[], pages: Request
 }
 
 export function generateLlmsTxt({ siteUrl, pages, includeFull }: Request): Generation {
+  const site = URL.parse(siteUrl);
+  if (!site) {
+    throw new ToolProblem(422, "invalid_assembly_url", "/siteUrl is not a valid WHATWG URL.");
+  }
+  for (const [index, { entry }] of pages.entries()) {
+    if (!URL.canParse(entry.url)) {
+      throw new ToolProblem(
+        422,
+        "invalid_assembly_url",
+        `/pages/${index}/entry/url is not a valid WHATWG URL.`,
+      );
+    }
+  }
+
   const home = pages.find(({ entry }) => entry.url === siteUrl)?.entry;
-  const { host, pathname } = new URL(siteUrl);
+  const { host, pathname } = site;
   const title =
     literalText(home?.title ?? null) || literalText(host + (pathname === "/" ? "" : pathname));
   const summary = literalText(home?.description ?? null);
