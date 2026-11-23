@@ -33,7 +33,7 @@ content-extractor service produced them (`content-extraction` job), and the
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `1`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `2`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
@@ -46,15 +46,16 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 Jay accepted [ADR 0031](../adr/0031-content-auditor-body-limits.md) on 2026-11-24.
 The scaffold sets `BODY_LIMIT_BYTES=25165824` (24 MiB) for `auditPage` and a
 3,145,728-byte (3 MiB) Fastify route limit for public `checkCrawlerAccess`.
-Both handlers are HTTP 501 stubs.
+`auditPage` returns an audit. `checkCrawlerAccess` is an HTTP 501 stub.
 
 ### Request validation benchmark
 
 From `services/content-auditor/`, run `npm ci`, `npm run build`, and
 `node scripts/benchmark-validation.mjs` with the Node version in the root
 `.nvmrc`. The shared tool workflow runs the same benchmark offline. It checks
-that each exact-limit request reaches its 501 stub and that adding one byte
-returns HTTP 413. The validator-only p99 gates require less than 120 ms for
+that exact-limit requests reach their handlers (HTTP 200 for audits and 501
+for crawler checks) and that adding one byte returns HTTP 413.
+The validator-only p99 gates require less than 120 ms for
 audits and less than 15 ms for crawler checks. The public route's end-to-end
 target remains p99 under 2 seconds.
 
@@ -105,8 +106,23 @@ See [the tool's operation limits](../../services/content-auditor/AGENTS.md#limit
 - `robots-parser`: robots.txt rules
 <!-- GENERATED:deps END -->
 
-## Notes
+## Audit scoring
 
 - The llms.txt category uses the `llmsTxt` validation passed in by the worker; the
   auditor never calls llms-txt-generator.
-- Category weights are published here when implemented (Phase 2).
+- Each selected category carries equal weight, and its applicable checks
+  carry equal weight. Pass earns 1, warn earns 0.5, and fail earns 0.
+  A category score is 100 times its mean check points. The overall score is
+  the mean of the unrounded applicable category scores. Round each published
+  score to the nearest integer, with halves rounding up.
+- The response lists all checks for selected categories. Exclude
+  `not_applicable` checks from the scoring denominator and omit the score
+  for a category with no applicable checks. Unselected categories appear
+  in neither array. Categories follow contract order, with fixed check order
+  and vendored crawler order within categories.
+- When all selected checks are `not_applicable`, return HTTP 200 with
+  `score: 0`, empty `categoryScores`, and the `not_applicable` findings.
+  If all applicable checks fail, the response includes their zero category scores.
+- JSON-LD checks cover local syntax and shape. Custom, aliased, and remote
+  contexts are outside the offline check. Freshness reports date evidence and
+  chronology from the request, independent of the current time.

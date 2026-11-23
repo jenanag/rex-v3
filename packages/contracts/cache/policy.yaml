@@ -121,7 +121,7 @@ tools:
     operations:
       extractCitations: {ttl: P30D, scope: shared}              # DEFAULT
   content-auditor:
-    keyVersion: 1
+    keyVersion: 2
     operations:
       auditPage: {ttl: P30D, scope: shared}                      # DEFAULT (pure function of its input; page freshness comes from extractContent)
       checkCrawlerAccess: {ttl: P30D, scope: shared}             # DEFAULT (pure function of the robots.txt passed in)

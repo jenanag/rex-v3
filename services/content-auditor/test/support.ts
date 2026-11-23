@@ -3,14 +3,23 @@ import { parse } from "yaml";
 import { createApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { contractRoutes, responseMedia, validators, type ToolSpec } from "../src/contract.js";
-import { handlers } from "../src/handlers/index.js";
+import type { AiCrawler } from "../src/domain/types.js";
+import { createHandlers } from "../src/handlers/create-handlers.js";
 
 const spec = parse(
   readFileSync(new URL("../contract/openapi.yaml", import.meta.url), "utf8"),
 ) as ToolSpec;
+export const { crawlers } = parse(
+  readFileSync(new URL("../contract/ai-crawlers.yaml", import.meta.url), "utf8"),
+) as { crawlers: AiCrawler[] };
 export const config = loadConfig({ NODE_ENV: "test" });
 export const tool = (changes: Partial<typeof config> = {}) =>
-  createApp({ spec, config: { ...config, ...changes }, handlers, logs: false });
+  createApp({
+    spec,
+    config: { ...config, ...changes },
+    handlers: createHandlers(crawlers),
+    logs: false,
+  });
 const compile = validators(spec, false);
 
 export function checkResponse(

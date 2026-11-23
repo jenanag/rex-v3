@@ -303,7 +303,8 @@ selects TypeScript for `content-auditor`. Jay accepted
 sets a 24 MiB audit ceiling and a 3 MiB public crawler-check ceiling. The
 [validation benchmark](services/content-auditor.md#request-validation-benchmark)
 verifies both boundaries and enforces validator-only p99 below 120 ms and 15 ms,
-respectively, in CI. Both handlers are HTTP 501 stubs pending implementation.
+respectively, in CI. `auditPage` scores all seven categories offline.
+`checkCrawlerAccess` remains an HTTP 501 stub pending implementation.
 
 Built in this order, each started with its language ADR and `scripts/new-tool --lang
 <language>` and finished (definition of done below) before the next one starts. The order goes from no LLM to
