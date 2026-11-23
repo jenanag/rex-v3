@@ -167,7 +167,9 @@ export function technicalChecks(
     status >= 200 && status < 300 ? "pass" : status >= 300 && status < 400 ? "warn" : "fail",
     "The final response reported HTTP " + status + ".",
   );
-  const body = dom?.("body").clone();
+  const body = dom?.("body:not([hidden])")
+    .filter((_index, element) => dom(element).parents("[hidden]").length === 0)
+    .clone();
   body?.find("script, style, template, [hidden]").remove();
   const noscript = body?.find("noscript").text().trim();
   body?.find("noscript").remove();

@@ -394,3 +394,12 @@ test("keeps the schema-invalid API request on HTTP 400", async () => {
   expect(response.json()).toMatchObject({ code: "validation_failed" });
   checkResponse("POST", path, 400, "application/problem+json", response.json());
 });
+
+test("excludes hidden body copy from the rendered signal", async () => {
+  const response = await audit({
+    ...base,
+    categories: ["technical"],
+    page: { ...base.page, html: "<body hidden><p>Hidden copy.</p></body>" },
+  });
+  expect(results(response).server_rendered_copy).toBe("fail");
+});
