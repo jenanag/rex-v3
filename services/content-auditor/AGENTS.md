@@ -142,10 +142,7 @@ check, using the vendored `ai-crawlers.yaml` (no LLM).
 
 ## Build and test standalone
 
-Not scaffolded yet: today this folder holds only this file and `contract/`.
-`scripts/new-tool` (built in Phase 1) scaffolds the rest at the start of this tool's
-Phase 2 step, with `--lang` as its language ADR decides. Then these commands work (for
-the language above):
+Scaffolded: these commands work in this folder.
 
 ```bash
 cp -r services/content-auditor /tmp/content-auditor && cd /tmp/content-auditor   # any folder outside the repo

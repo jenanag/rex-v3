@@ -299,9 +299,11 @@ the exact limit.
 
 [ADR 0030](adr/0030-content-auditor-language.md), accepted by Jay on 2026-11-24,
 selects TypeScript for `content-auditor`. Jay accepted
-[ADR 0031](adr/0031-content-auditor-body-limits.md) on the same date. At scaffolding,
-configure the 24 MiB audit ceiling and 3 MiB public crawler-check ceiling, and
-verify the validator-only p99 gates below 120 ms and 15 ms in CI.
+[ADR 0031](adr/0031-content-auditor-body-limits.md) on the same date. The scaffold
+sets a 24 MiB audit ceiling and a 3 MiB public crawler-check ceiling. The
+[validation benchmark](services/content-auditor.md#request-validation-benchmark)
+verifies both boundaries and enforces validator-only p99 below 120 ms and 15 ms,
+respectively, in CI. Both handlers are HTTP 501 stubs pending implementation.
 
 Built in this order, each started with its language ADR and `scripts/new-tool --lang
 <language>` and finished (definition of done below) before the next one starts. The order goes from no LLM to

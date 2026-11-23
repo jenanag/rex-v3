@@ -44,10 +44,19 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 ## Limits
 
 Jay accepted [ADR 0031](../adr/0031-content-auditor-body-limits.md) on 2026-11-24.
-Scaffolding will configure the 24 MiB (25,165,824-byte) audit ceiling and the
-3 MiB (3,145,728-byte) public crawler-check ceiling. Scaffolding CI will verify
-the boundaries and the validator-only p99 gates below 120 ms and 15 ms,
-respectively.
+The scaffold sets `BODY_LIMIT_BYTES=25165824` (24 MiB) for `auditPage` and a
+3,145,728-byte (3 MiB) Fastify route limit for public `checkCrawlerAccess`.
+Both handlers are HTTP 501 stubs.
+
+### Request validation benchmark
+
+From `services/content-auditor/`, run `npm ci`, `npm run build`, and
+`node scripts/benchmark-validation.mjs` with the Node version in the root
+`.nvmrc`. The shared tool workflow runs the same benchmark offline. It checks
+that each exact-limit request reaches its 501 stub and that adding one byte
+returns HTTP 413. The validator-only p99 gates require less than 120 ms for
+audits and less than 15 ms for crawler checks. The public route's end-to-end
+target remains p99 under 2 seconds.
 
 <!-- GENERATED:limits START (source: x-rex-limits in packages/contracts/openapi/services/content-auditor.yaml) -->
 See [the tool's operation limits](../../services/content-auditor/AGENTS.md#limits).
