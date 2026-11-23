@@ -40,7 +40,8 @@ and [ADR 0028](docs/adr/0028-llms-txt-generator-language.md), which selects Type
 for `llms-txt-generator`.
 Jay also accepted [ADR 0029](docs/adr/0029-llms-txt-generator-body-limit.md) on
 2026-11-23. It sets the tool's 12 MiB request body ceiling and retains its request schemas.
-[ADR 0030](docs/adr/0030-content-auditor-language.md) is Proposed for `content-auditor`.
+Jay accepted [ADR 0030](docs/adr/0030-content-auditor-language.md) on 2026-11-24.
+It selects TypeScript for `content-auditor`.
 Phase 2 builds the tools one at a time, before the platform. Open choices are tracked as
 [deferred decisions](docs/roadmap.md#deferred-decisions).
 

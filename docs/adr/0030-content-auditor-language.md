@@ -1,6 +1,6 @@
 # 0030: Use TypeScript for content-auditor
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-24, accepted by Jay)
 - **Date:** 2026-11-24
 - **Deciders:** Jay Pascual
 - **Tool:** `content-auditor`
@@ -21,8 +21,9 @@ and a standalone Docker build.
 
 Use TypeScript and the existing `services/_template`.
 
-1. After Jay accepts this ADR, scaffold with
-   `scripts/new-tool content-auditor --lang ts`.
+Jay's acceptance satisfies the language decision prerequisite in ADR 0024.
+
+1. Scaffold with `scripts/new-tool content-auditor --lang ts`.
 2. Implement `auditPage`. Use approved `cheerio` to inspect the supplied HTML and
    evaluate the audit using the supplied extracted content, raw response, and any
    robots.txt result and llms.txt validation in the request.

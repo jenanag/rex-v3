@@ -51,8 +51,8 @@ Jay accepted [ADR 0028](0028-llms-txt-generator-language.md) on 2026-11-23. It s
 TypeScript for `llms-txt-generator` and records its Phase 2 build order.
 Jay accepted [ADR 0029](0029-llms-txt-generator-body-limit.md) on 2026-11-23. It sets
 the 12 MiB request body ceiling for `llms-txt-generator` and retains its request schemas.
-On 2026-11-24, [ADR 0030](0030-content-auditor-language.md) was added as Proposed.
-It proposes TypeScript for `content-auditor` and records its Phase 2 build order.
+Jay accepted [ADR 0030](0030-content-auditor-language.md) on 2026-11-24. It selects
+TypeScript for `content-auditor` and records its Phase 2 build order.
 
 | ADR | Title | Status |
 |---|---|---|
@@ -85,6 +85,6 @@ It proposes TypeScript for `content-auditor` and records its Phase 2 build order
 | [0027](0027-scale-typescript-validation-budget.md) | Scale the TypeScript validation budget with the body limit | Accepted |
 | [0028](0028-llms-txt-generator-language.md) | Use TypeScript for llms-txt-generator | Accepted |
 | [0029](0029-llms-txt-generator-body-limit.md) | Set the llms-txt-generator request body limit to 12 MiB | Accepted |
-| [0030](0030-content-auditor-language.md) | Use TypeScript for content-auditor | Proposed |
+| [0030](0030-content-auditor-language.md) | Use TypeScript for content-auditor | Accepted |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.
