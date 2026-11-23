@@ -43,9 +43,11 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 
 ## Limits
 
-[ADR 0031](../adr/0031-content-auditor-body-limits.md) records the proposed
-request body limits and validation gates for both operations, pending Jay's
-acceptance before scaffolding.
+Jay accepted [ADR 0031](../adr/0031-content-auditor-body-limits.md) on 2026-11-24.
+Scaffolding will configure the 24 MiB (25,165,824-byte) audit ceiling and the
+3 MiB (3,145,728-byte) public crawler-check ceiling. Scaffolding CI will verify
+the boundaries and the validator-only p99 gates below 120 ms and 15 ms,
+respectively.
 
 <!-- GENERATED:limits START (source: x-rex-limits in packages/contracts/openapi/services/content-auditor.yaml) -->
 See [the tool's operation limits](../../services/content-auditor/AGENTS.md#limits).

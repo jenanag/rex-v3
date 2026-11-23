@@ -42,8 +42,8 @@ Jay also accepted [ADR 0029](docs/adr/0029-llms-txt-generator-body-limit.md) on
 2026-11-23. It sets the tool's 12 MiB request body ceiling and retains its request schemas.
 Jay accepted [ADR 0030](docs/adr/0030-content-auditor-language.md) on 2026-11-24.
 It selects TypeScript for `content-auditor`.
-[ADR 0031](docs/adr/0031-content-auditor-body-limits.md) is Proposed for the tool's
-request body limits.
+Jay accepted [ADR 0031](docs/adr/0031-content-auditor-body-limits.md) on 2026-11-24.
+It sets the 24 MiB audit and 3 MiB public crawler-check ceilings and retains both request schemas.
 Phase 2 builds the tools one at a time, before the platform. Open choices are tracked as
 [deferred decisions](docs/roadmap.md#deferred-decisions).
 

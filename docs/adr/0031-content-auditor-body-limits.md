@@ -1,6 +1,6 @@
 # 0031: Set request body limits for content-auditor
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-24, accepted by Jay)
 - **Date:** 2026-11-24
 - **Deciders:** Jay Pascual
 
@@ -21,7 +21,7 @@ The sizing review validated these synthetic fixtures with the template's Ajv
 configuration against both the source and vendored request schemas. Sizes are
 for the complete request, measured by `Buffer.byteLength(JSON.stringify(request), "utf8")`.
 
-| Operation and fixture | Serialized bytes | Fits proposed ceiling |
+| Operation and fixture | Serialized bytes | Fits accepted ceiling |
 |---|---:|---|
 | `auditPage`, 2,000,000-character ASCII HTML with small extracted content | 2,000,322 | Yes |
 | `auditPage`, combined field caps with ASCII content | 6,142,650 | Yes |
