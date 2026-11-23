@@ -2,8 +2,8 @@ import type { CheerioAPI } from "cheerio";
 import { finding, httpUrl, type Finding } from "./types.js";
 
 type JsonObject = Record<string, unknown>;
-type Node = { value: JsonObject; schemaContext: boolean };
-type Block = { nodes: Node[]; warn: boolean };
+type Node = { value: JsonObject; schemaContext: boolean; author: boolean };
+type Block = { nodes: Node[]; shape: "pass" | "warn" | "fail" };
 
 const schemaContextUrl = /^https?:\/\/schema\.org\/?$/;
 const nonblank = (value: unknown): value is string =>
@@ -12,44 +12,71 @@ const isObject = (value: unknown): value is JsonObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const array = (value: unknown): unknown[] => (Array.isArray(value) ? value : [value]);
 
-function parseBlock(text: string): Block | undefined {
-  let root: unknown;
-  try {
-    root = JSON.parse(text);
-  } catch {
-    return undefined;
-  }
+function blockShape(root: unknown): Block["shape"] {
   const roots = array(root);
-  if (!roots.length || !roots.every(isObject)) return undefined;
-  const stack = roots.map((value) => ({ value, schemaContext: false })).reverse();
-  const nodes: Node[] = [];
+  if (!roots.length || !roots.every(isObject)) return "fail";
+  const stack = [...roots];
   let warn = false;
 
   while (stack.length) {
-    const { value, schemaContext: inherited } = stack.pop()!;
+    const value = stack.pop()!;
     const context = value["@context"];
     const explicitContext = typeof context === "string" && schemaContextUrl.test(context);
-    const schemaContext = context === undefined ? inherited : explicitContext;
     const type = value["@type"];
     const id = value["@id"];
     const graph = value["@graph"];
 
-    if (type !== undefined && (!array(type).length || !array(type).every(nonblank)))
-      return undefined;
-    if (id !== undefined && !nonblank(id)) return undefined;
+    if (type !== undefined && (!array(type).length || !array(type).every(nonblank))) return "fail";
+    if (id !== undefined && !nonblank(id)) return "fail";
     if (graph !== undefined) {
       const children = array(graph);
-      if (!children.length || !children.every(isObject)) return undefined;
-      for (let index = children.length - 1; index >= 0; index--)
-        stack.push({ value: children[index], schemaContext });
+      if (!children.length || !children.every(isObject)) return "fail";
+      for (const child of children) stack.push(child);
     }
 
     warn ||=
       (context !== undefined && !explicitContext) ||
       (type === undefined && id === undefined && graph === undefined);
-    nodes.push({ value, schemaContext });
   }
-  return { nodes, warn };
+  return warn ? "warn" : "pass";
+}
+
+function collectNodes(root: unknown): Node[] {
+  const stack = [{ value: root, schemaContext: false, author: false }];
+  const nodes: Node[] = [];
+  while (stack.length) {
+    const { value, schemaContext: inherited, author } = stack.pop()!;
+    if (Array.isArray(value)) {
+      for (let index = value.length - 1; index >= 0; index--)
+        stack.push({ value: value[index], schemaContext: inherited, author });
+      continue;
+    }
+    if (!isObject(value)) continue;
+    const context = value["@context"];
+    const schemaContext =
+      context === undefined
+        ? inherited
+        : typeof context === "string" && schemaContextUrl.test(context);
+    nodes.push({ value, schemaContext, author });
+    // Context definitions and literal values are not node evidence.
+    const entries = Object.entries(value);
+    for (let index = entries.length - 1; index >= 0; index--) {
+      const [key, child] = entries[index];
+      if ((isObject(child) || Array.isArray(child)) && key !== "@context" && key !== "@value")
+        stack.push({ value: child, schemaContext, author: key === "author" });
+    }
+  }
+  return nodes;
+}
+
+function parseBlock(text: string): Block {
+  let root: unknown;
+  try {
+    root = JSON.parse(text);
+  } catch {
+    return { nodes: [], shape: "fail" };
+  }
+  return { nodes: collectNodes(root), shape: blockShape(root) };
 }
 
 export function readStructuredData(dom: CheerioAPI | undefined) {
@@ -83,12 +110,12 @@ export function structuredChecks(
       present,
       finding(id, "not_applicable", "No embedded JSON-LD blocks were available to check."),
     ];
-  if (!blocks.some(Boolean))
+  if (blocks.every(({ shape }) => shape === "fail"))
     return [
       present,
       finding(id, "fail", "Every embedded JSON-LD block has a JSON or node shape error."),
     ];
-  if (blocks.some((block) => !block || block.warn))
+  if (blocks.some(({ shape }) => shape !== "pass"))
     return [
       present,
       finding(
@@ -113,34 +140,21 @@ function hasType(node: Node, type: string) {
 }
 
 function structuredIdentities(nodes: Node[]): Node[] {
-  const identities: Node[] = [];
   const authorIds = new Set<string>();
   for (const node of nodes) {
     for (const author of array(node.value.author)) {
       const ref =
         typeof author === "string" ? author : isObject(author) ? author["@id"] : undefined;
       if (nonblank(ref)) authorIds.add(ref);
-      if (!isObject(author)) continue;
-      const context = author["@context"];
-      const inline = {
-        value: author,
-        schemaContext:
-          context === undefined
-            ? node.schemaContext
-            : typeof context === "string" && schemaContextUrl.test(context),
-      };
-      if (hasType(inline, "Person") || hasType(inline, "Organization")) identities.push(inline);
     }
   }
-  return identities.concat(
-    nodes.filter((node) => {
-      const id = node.value["@id"];
-      return (
-        hasType(node, "Organization") ||
-        (nonblank(id) && authorIds.has(id) && hasType(node, "Person"))
-      );
-    }),
-  );
+  return nodes.filter((node) => {
+    const id = node.value["@id"];
+    return (
+      hasType(node, "Organization") ||
+      (hasType(node, "Person") && (node.author || (nonblank(id) && authorIds.has(id))))
+    );
+  });
 }
 
 export function entityChecks(dom: CheerioAPI | undefined, nodes: Node[]): Finding[] {

@@ -403,3 +403,105 @@ test("excludes hidden body copy from the rendered signal", async () => {
   });
   expect(results(response).server_rendered_copy).toBe("fail");
 });
+
+test.each([
+  [undefined, "pass", "pass"],
+  [null, "fail", "not_applicable"],
+  [{ "@vocab": "https://example.net/" }, "fail", "not_applicable"],
+  ["https://schema.org/", "pass", "pass"],
+] as const)(
+  "resolves nested publisher types under the effective context %j",
+  async (context, identity, sameAs) => {
+    const publisher = {
+      ...(context === undefined ? {} : { "@context": context }),
+      "@type": "Organization",
+      name: "Example Publisher",
+      sameAs: "https://example.net/publisher",
+    };
+    const response = await audit({
+      ...base,
+      categories: ["entity_signals"],
+      page: { ...base.page, html: script({ ...article, publisher }) },
+    });
+    expect(results(response)).toEqual({ entity_identity: identity, entity_same_as: sameAs });
+  },
+);
+
+test("restores the literal Schema.org context inside an overridden subtree", async () => {
+  const response = await audit({
+    ...base,
+    categories: ["entity_signals"],
+    page: {
+      ...base.page,
+      html: script({
+        ...article,
+        publisher: {
+          "@context": null,
+          "@type": "Organization",
+          name: "Unrecognized Publisher",
+          sameAs: "/invalid",
+          department: [
+            {
+              "@context": "https://schema.org",
+              "@type": "Organization",
+              name: "Example Department",
+              sameAs: "https://example.net/department",
+            },
+          ],
+        },
+      }),
+    },
+  });
+  expect(results(response)).toEqual({ entity_identity: "pass", entity_same_as: "pass" });
+});
+
+test("reads the date of a nested article through containers", async () => {
+  const response = await audit({
+    ...base,
+    categories: ["structured_data", "freshness"],
+    page: {
+      ...base.page,
+      html: script({
+        ...article,
+        hasPart: [{ item: { "@type": "Article", datePublished: "2026-06-14" } }],
+      }),
+    },
+  });
+  expect(results(response)).toEqual({
+    jsonld_present: "pass",
+    jsonld_shape: "pass",
+    freshness_dates: "pass",
+  });
+});
+
+test("checks an invalid date even when the parseable block fails shape", async () => {
+  const response = await audit({
+    ...base,
+    categories: ["structured_data", "freshness"],
+    page: {
+      ...base.page,
+      html: script({
+        ...article,
+        "@type": 42,
+        datePublished: "2026-02-30",
+      }),
+    },
+  });
+  expect(results(response)).toEqual({
+    jsonld_present: "pass",
+    jsonld_shape: "fail",
+    freshness_dates: "fail",
+  });
+});
+
+test.each([
+  ["- Item\n\n  " + lead + "\n\nShort lead.", "warn"],
+  ["1. Item\n\n   " + lead, "fail"],
+] as const)("skips list continuation prose after a blank line", async (markdown, outcome) => {
+  const response = await audit({
+    ...base,
+    categories: ["answer_readiness"],
+    content: { text: "", markdown },
+  });
+  expect(results(response).answer_direct_lead).toBe(outcome);
+});

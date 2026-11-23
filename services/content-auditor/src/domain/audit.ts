@@ -91,7 +91,6 @@ export function auditPage(input: AuditRequest, crawlers: readonly AiCrawler[]): 
       category === "structured_data" || category === "entity_signals" || category === "freshness",
   );
   const blocks = needsStructure ? readStructuredData(dom) : [];
-  const nodes = blocks.flatMap((block) => block?.nodes ?? []);
   const directives =
     categories.includes("crawler_access") || categories.includes("technical")
       ? readPageDirectives(input.page, dom, crawlers)
@@ -102,9 +101,19 @@ export function auditPage(input: AuditRequest, crawlers: readonly AiCrawler[]): 
     structured_data: () => structuredChecks(dom, blocks),
     llms_txt: () => [llmsTxtCheck(input.llmsTxt)],
     answer_readiness: () => answerChecks(input.content),
-    entity_signals: () => entityChecks(dom, nodes),
+    entity_signals: () =>
+      entityChecks(
+        dom,
+        blocks.flatMap(({ shape, nodes }) => (shape === "fail" ? [] : nodes)),
+      ),
     technical: () => technicalChecks(input.page, evidence!, directives!),
-    freshness: () => [freshnessCheck(dom, nodes, input.content.text)],
+    freshness: () => [
+      freshnessCheck(
+        dom,
+        blocks.flatMap(({ nodes }) => nodes),
+        input.content.text,
+      ),
+    ],
   };
   const findings = new Map(categories.map((category) => [category, evaluate[category]()]));
   return { url: input.url, finalUrl: input.page.finalUrl, ...score(findings) };

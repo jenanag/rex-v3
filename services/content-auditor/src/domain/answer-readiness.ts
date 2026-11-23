@@ -2,6 +2,11 @@ import { finding, type AuditRequest, type Finding } from "./types.js";
 
 const words = new Intl.Segmenter("en", { granularity: "word" });
 
+function columnAfter(whitespace: string, column = 0): number {
+  for (const character of whitespace) column += character === "\t" ? 4 - (column % 4) : 1;
+  return column;
+}
+
 function scanMarkdown(markdown: string) {
   const lines = markdown.split(/\r\n?|\n/);
   let headings = 0;
@@ -12,6 +17,7 @@ function scanMarkdown(markdown: string) {
   let headingOpen = false;
   let fence: string | undefined;
   let inOtherBlock = false;
+  let listIndent: number | undefined;
   let lead: string[] = [];
 
   const closeBlock = () => {
@@ -26,16 +32,27 @@ function scanMarkdown(markdown: string) {
       if (marker?.[1].startsWith(fence) && !marker[2].trim()) fence = undefined;
       continue;
     }
-    if (marker) {
-      closeBlock();
-      fence = marker[1];
-      continue;
-    }
     if (!line.trim()) {
       closeBlock();
       continue;
     }
     const heading = /^ {0,3}#{1,6}(?:[ \t]+(.*)|$)/.exec(line);
+    const listItem = /^( {0,3})([-+*]|\d{1,9}[.)])([ \t]+|$)/.exec(line);
+    const quote = /^ {0,3}>/.test(line);
+    if (listIndent !== undefined) {
+      const indentation = columnAfter(/^[ \t]*/.exec(line)![0]);
+      if (indentation >= listIndent) {
+        inOtherBlock = true;
+        continue;
+      }
+      if (inOtherBlock && !marker && !heading && !listItem && !quote) continue;
+      listIndent = undefined;
+    }
+    if (marker) {
+      closeBlock();
+      fence = marker[1];
+      continue;
+    }
     if (heading) {
       closeBlock();
       headings++;
@@ -50,9 +67,14 @@ function scanMarkdown(markdown: string) {
     const cells = next?.split("|").map((cell) => cell.trim()) ?? [];
     const isTable =
       line.includes("|") && cells.length >= 2 && cells.every((cell) => /^:?-{3,}:?$/.test(cell));
-    const isList = /^ {0,3}(?:[-+*]|\d{1,9}[.)])[ \t]+/.test(line);
-    if (isTable || isList) hasListOrTable = true;
-    if (isTable || isList || /^(?: {0,3}>| {4}|\t)/.test(line)) {
+    if (isTable || listItem) hasListOrTable = true;
+    if (listItem) {
+      // A blank separates paragraphs, but the item's content indent still applies.
+      const markerEnd = listItem[1].length + listItem[2].length;
+      const padding = columnAfter(listItem[3], markerEnd) - markerEnd;
+      listIndent = markerEnd + (padding >= 1 && padding <= 4 ? padding : 1);
+    }
+    if (isTable || listItem || quote || /^(?: {4}|\t)/.test(line)) {
       closeBlock();
       inOtherBlock = true;
       continue;
