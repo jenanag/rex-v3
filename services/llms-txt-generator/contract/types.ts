@@ -77,7 +77,20 @@ export interface paths {
         put?: never;
         /**
          * Assemble a site's llms.txt from its page entries
-         * @description Synchronous and deterministic; formats the entries given (and the pages' Markdown for llms-full.txt) without any LLM call; may take up to 30 s.
+         * @description Assembles the supplied entries offline in input order. The first exact URL match
+         *     for `siteUrl` supplies the title and optional summary. If it has no usable title
+         *     or there is no match, use the site's host and non-root path. List every entry
+         *     under a single H2 named Pages. For blank titles, use the entry URL as its link
+         *     label. Omit notes for null or blank descriptions. Replace line breaks in titles
+         *     and descriptions with spaces, render those values as literal Markdown text, and
+         *     use angle-bracket link destinations that preserve the supplied URLs.
+         *
+         *     When `includeFull` is true, use the same title and summary, followed by page
+         *     blocks separated by thematic breaks. Each starts with its entry bullet and
+         *     includes any supplied Markdown in a separate blockquote. On overflow, keep the
+         *     longest prefix of whole page blocks that fits with the closing notice
+         *     "llms-full.txt truncated. See llms.txt for the complete page list."
+         *     Count all formatting, the final newline, and the notice within the output cap.
          */
         post: operations["generateLlmsTxt"];
         delete?: never;
@@ -158,8 +171,8 @@ export interface components {
             usage: components["schemas"]["LlmUsageList"];
         };
         /**
-         * @description The site's entries in the order they should be listed. The entry whose `url`
-         *     equals `siteUrl` (if any) gives the site's name and summary.
+         * @description The site's entries in the order they should be listed. The first entry whose
+         *     `url` exactly equals `siteUrl` (if any) supplies the site's name and summary.
          */
         LlmsTxtRequest: components["schemas"]["LlmsTxtAssemblyOptions"] & {
             siteUrl: components["schemas"]["Url"];
@@ -173,8 +186,9 @@ export interface components {
         LlmsTxtResult: {
             /** @description llms.txt Markdown. */
             content: string;
-            /** @description llms-full.txt Markdown when `includeFull` was set; truncated at 2 MB with a closing notice. */
+            /** @description llms-full.txt Markdown when `includeFull` is true, otherwise null. Capped at 2,000,000 characters (Unicode code points), including formatting and any closing notice. */
             fullContent: string | null;
+            /** @description Number of entries listed in llms.txt, regardless of truncation of llms-full.txt. */
             pageCount: number;
         };
         LlmsTxtGeneration: {

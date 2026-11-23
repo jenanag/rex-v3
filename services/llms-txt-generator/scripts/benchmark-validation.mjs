@@ -12,6 +12,7 @@ const app = createApp({
   config: loadConfig(),
   handlers: {
     ...handlers,
+    generateLlmsTxt: async (_request, reply) => reply.code(204).send(),
     validateLlmsTxt: async (_request, reply) => reply.code(204).send(),
   },
   logs: false,
@@ -179,7 +180,7 @@ try {
       const payload = serialize(request, size === "exact");
       const label = `POST ${path} | ${shape} | ${size} (${payload.length} bytes)`;
       const response = await post(path, payload);
-      const expectedStatus = path === validatePath ? 204 : 501;
+      const expectedStatus = path === describePath ? 501 : 204;
       assert.equal(response.statusCode, expectedStatus, `${label} should reach its handler`);
       if (expectedStatus === 501) assert.equal(response.json().code, "not_implemented", label);
 
