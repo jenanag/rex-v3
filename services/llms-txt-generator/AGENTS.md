@@ -5,7 +5,7 @@
 # AGENTS.md: llms-txt-generator
 
 Writes one page's entry, assembles the site's llms.txt files and validates existing
-files. Each operation is a pure function of its input (ADR 0023).
+files using content supplied by the caller (ADR 0023).
 
 This folder is a self-contained TypeScript project (REx ADRs 0018 and 0024): work
 here as if the rest of the REx repo did not exist. In the repo, the root `AGENTS.md`

@@ -12,7 +12,8 @@ const sentences = new Intl.Segmenter("en", { granularity: "sentence" });
 const words = new Intl.Segmenter("en", { granularity: "word" });
 const graphemes = new Intl.Segmenter("en", { granularity: "grapheme" });
 
-const normalize = (value: string | null) => (value ?? "").replace(/\s+/gu, " ").trim();
+export const normalizePageText = (value: string | null) =>
+  (value ?? "").replace(/\s+/gu, " ").trim();
 
 function visibleText(nodes: readonly Inline[]): string {
   return nodes
@@ -59,7 +60,7 @@ function clip(text: string, limit: number, preferWords = false): string {
   return text.slice(0, end).trimEnd() + "…";
 }
 
-function describe(source: string): string | null {
+export function limitDescription(source: string): string | null {
   if (!source) return null;
 
   const candidates = sentences.segment(source)[Symbol.iterator]();
@@ -73,19 +74,41 @@ function describe(source: string): string | null {
   return first;
 }
 
+export function markdownProse(markdown: string): string {
+  const paragraphs: string[] = [];
+  const blocks = [...fromMarkdown(markdown).children].reverse();
+  while (blocks.length > 0) {
+    const block = blocks.pop()!;
+    if (block.type === "paragraph") paragraphs.push(visibleText(block.children));
+    if (block.type === "blockquote") {
+      for (let index = block.children.length - 1; index >= 0; index--) {
+        blocks.push(block.children[index]);
+      }
+    }
+    if (block.type === "list") {
+      for (let index = block.children.length - 1; index >= 0; index--) {
+        const { children } = block.children[index];
+        for (let child = children.length - 1; child >= 0; child--) blocks.push(children[child]);
+      }
+    }
+  }
+  return normalizePageText(paragraphs.join(" "));
+}
+
 export function describePageExtractively({ url, metadata, content }: Request): Result {
   const parsed = URL.parse(url);
   if (!parsed) {
     throw new ToolProblem(422, "invalid_page_url", "/url is not a valid WHATWG URL.");
   }
 
-  let title = normalize(metadata.title);
-  let description = normalize(metadata.description);
+  let title = normalizePageText(metadata.title);
+  let description = normalizePageText(metadata.description);
   if ((!title || !description) && content.markdown.trim()) {
     for (const block of fromMarkdown(content.markdown).children) {
-      if (!title && block.type === "heading") title = normalize(visibleText(block.children));
+      if (!title && block.type === "heading")
+        title = normalizePageText(visibleText(block.children));
       if (!description && block.type === "paragraph") {
-        description = normalize(visibleText(block.children));
+        description = normalizePageText(visibleText(block.children));
       }
       if (title && description) break;
     }
@@ -94,13 +117,13 @@ export function describePageExtractively({ url, metadata, content }: Request): R
       content.text
         .replace(/\r\n?/g, "\n")
         .split(/\n[^\S\n]*\n/)
-        .map(normalize)
+        .map(normalizePageText)
         .find(Boolean) ?? "";
   }
 
   title ||= parsed.pathname === "/" ? parsed.host : parsed.pathname;
   return {
-    entry: { url, title: clip(title, 300), description: describe(description) },
+    entry: { url, title: clip(title, 300), description: limitDescription(description) },
     usage: [],
   };
 }

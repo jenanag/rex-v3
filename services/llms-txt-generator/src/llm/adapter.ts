@@ -25,25 +25,43 @@ export type LlmRequest = {
   prompt: string;
   maxOutputTokens: number;
   timeoutMs: number;
-  price: { inputMicrosPerMillion: number; outputMicrosPerMillion: number };
+  reasoningEffort?: "none";
+  price: {
+    inputMicrosPerMillion: number;
+    cachedInputMicrosPerMillion?: number;
+    cacheWriteMicrosPerMillion?: number;
+    outputMicrosPerMillion: number;
+  };
 };
-type Completion = { text: string; inputTokens: number; outputTokens: number };
+type Completion = {
+  text: string;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens?: number;
+  cacheWriteTokens?: number;
+};
 
 export function fixtureKey(request: LlmRequest) {
-  const { provider, model, operation, prompt, maxOutputTokens } = request;
+  const { provider, model, operation, prompt, maxOutputTokens, reasoningEffort } = request;
   return createHash("sha256")
-    .update(JSON.stringify({ provider, model, operation, prompt, maxOutputTokens }))
+    .update(
+      JSON.stringify({ provider, model, operation, prompt, maxOutputTokens, reasoningEffort }),
+    )
     .digest("hex");
 }
 
 function completion(value: Completion): Completion {
+  const { text, inputTokens, outputTokens, cachedInputTokens = 0, cacheWriteTokens = 0 } = value;
   if (
-    typeof value.text !== "string" ||
-    ![value.inputTokens, value.outputTokens].every((n) => Number.isSafeInteger(n) && n >= 0)
+    typeof text !== "string" ||
+    ![inputTokens, outputTokens, cachedInputTokens, cacheWriteTokens].every(
+      (n) => Number.isSafeInteger(n) && n >= 0,
+    ) ||
+    cachedInputTokens + cacheWriteTokens > inputTokens
   ) {
     throw new Error("Invalid completion or token counts");
   }
-  return { text: value.text, inputTokens: value.inputTokens, outputTokens: value.outputTokens };
+  return { text, inputTokens, outputTokens, cachedInputTokens, cacheWriteTokens };
 }
 
 function key(value: string | undefined, provider: Provider) {
@@ -112,14 +130,24 @@ async function generate(env: LlmEnv, request: LlmRequest): Promise<Completion> {
       ...(provider === "openai"
         ? { max_completion_tokens: maxOutputTokens }
         : { max_tokens: maxOutputTokens }),
+      ...(provider === "openai" && request.reasoningEffort !== undefined
+        ? { reasoning_effort: request.reasoningEffort, service_tier: "default" }
+        : {}),
       messages: [{ role: "user", content: prompt }],
     },
     { signal, timeout: timeoutMs },
   );
+  const content = reply.choices?.[0]?.message?.content;
   return completion({
-    text: reply.choices[0]?.message.content ?? "",
+    text: typeof content === "string" ? content : "",
     inputTokens: reply.usage?.prompt_tokens ?? NaN,
     outputTokens: reply.usage?.completion_tokens ?? NaN,
+    ...(provider === "openai"
+      ? {
+          cachedInputTokens: reply.usage?.prompt_tokens_details?.cached_tokens,
+          cacheWriteTokens: reply.usage?.prompt_tokens_details?.cache_write_tokens,
+        }
+      : {}),
   });
 }
 
@@ -128,7 +156,12 @@ function retryAfter(error: unknown) {
   const headers = error.headers;
   if (!(headers instanceof Headers)) return undefined;
   const value = headers.get("retry-after");
-  return value && (/^\d+$/.test(value) || Number.isFinite(Date.parse(value))) ? value : undefined;
+  if (!value) return undefined;
+  if (/^\d+$/.test(value)) return value;
+  // Date.parse accepts non-HTTP values like "3.5", so check the wire format too.
+  const httpDate =
+    /^(?:[a-z]{3}, \d{2} [a-z]{3} \d{4} \d{2}:\d{2}:\d{2} GMT|[a-z]+, \d{2}-[a-z]{3}-\d{2} \d{2}:\d{2}:\d{2} GMT|[a-z]{3} [a-z]{3} [ \d]\d \d{2}:\d{2}:\d{2} \d{4})$/i;
+  return httpDate.test(value) && Number.isFinite(Date.parse(value)) ? value : undefined;
 }
 
 export function createLlm({
@@ -164,9 +197,19 @@ export function createLlm({
         throw new ToolProblem(503, "provider_unavailable", "LLM request failed", retryAfter(error));
       }
     }
+    const { cachedInputTokens = 0, cacheWriteTokens = 0 } = result;
+    const {
+      inputMicrosPerMillion,
+      outputMicrosPerMillion,
+      cachedInputMicrosPerMillion = inputMicrosPerMillion,
+      cacheWriteMicrosPerMillion = inputMicrosPerMillion,
+    } = request.price;
+    const uncached = result.inputTokens - cachedInputTokens - cacheWriteTokens;
     const costMicrosUsd = Math.round(
-      (result.inputTokens * request.price.inputMicrosPerMillion +
-        result.outputTokens * request.price.outputMicrosPerMillion) /
+      (uncached * inputMicrosPerMillion +
+        cachedInputTokens * cachedInputMicrosPerMillion +
+        cacheWriteTokens * cacheWriteMicrosPerMillion +
+        result.outputTokens * outputMicrosPerMillion) /
         1_000_000,
     );
     if (!Number.isSafeInteger(costMicrosUsd) || costMicrosUsd < 0)

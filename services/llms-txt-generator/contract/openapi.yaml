@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: REx llms-txt-generator tool
-  version: 3.0.0
+  version: 4.0.0
   description: |
     Stateless tool: writes one page's llms.txt entry from its extracted content
     (extractively or with an LLM), assembles a site's llms.txt (and optionally
@@ -77,7 +77,23 @@ paths:
         Echo the supplied URL verbatim, regardless of the canonical URL. When the
         supplied URL passes schema validation but fails WHATWG URL parsing, return
         HTTP 422 with Problem code `invalid_page_url` and detail identifying `/url`.
-        The default remains `llm`, which is reserved for the LLM implementation.
+        Omitted `summarizer` selects `llm`. The tool uses the same deterministic
+        title and URL. Only the description is model-generated. The initial allowed
+        model and deployment default are `openai/gpt-6-luna`. Unsupported explicit
+        models return HTTP 422 with Problem code `unsupported_model` and detail
+        identifying `/model`. The same `invalid_page_url` rule applies.
+        The prompt uses the deterministic title, supplied metadata description,
+        optional language, and an excerpt of normalized plain text or visible
+        Markdown prose. It excludes
+        URL fields and raw Markdown markup and is capped at 16,384 serialized UTF-8
+        bytes. If no usable description source is available, return null description
+        and empty usage. Otherwise make at most one adapter call, with reasoning
+        disabled, a 256-completion-token cap, a 60-second timeout, and zero retries.
+        Fit the operation within two minutes. Expect a JSON object containing only `description`, a
+        string or null. Apply the same normalization, sentence and character limits.
+        For an unusable completion with valid usage, return the extractive description
+        (or null) and retain the usage item. Provider failures return HTTP 503 with
+        Problem code `provider_unavailable` and forward a valid upstream Retry-After.
       tags:
         - llms.txt
       requestBody:
@@ -214,7 +230,7 @@ components:
             `llm` summarizes the page with an LLM (ADR 0017).
         model:
           type: string
-          description: 'LLM to use when `summarizer` is `llm`, as `<provider>/<model>`. Default: the deployment default.'
+          description: LLM to use when `summarizer` is `llm`, as `<provider>/<model>`. Defaults to LLMS_TXT_GENERATOR_DEFAULT_MODEL.
           pattern: ^[a-z][a-z0-9_-]*/[A-Za-z0-9._:-]+$
     LlmsTxtAssemblyOptions:
       type: object

@@ -120,13 +120,3 @@ test.each(["{", { ...base, url: "not a URL", summarizer: "extractive" }])(
     expect(await post(payload, 400)).toMatchObject({ status: 400, code: "validation_failed" });
   },
 );
-
-test.each([{}, { summarizer: "llm" }])(
-  "keeps the default and explicit llm scaffold responses",
-  async (options) => {
-    // The URL is checked only by the extractive handler.
-    expect(
-      await post({ ...base, url: "https://example.org:65536/", ...options }, 501),
-    ).toMatchObject({ status: 501, code: "not_implemented" });
-  },
-);

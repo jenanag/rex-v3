@@ -3,14 +3,25 @@ import { parse } from "yaml";
 import { createApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { contractRoutes, responseMedia, validators, type ToolSpec } from "../src/contract.js";
-import { handlers } from "../src/handlers/index.js";
+import { createHandlers } from "../src/handlers/index.js";
+import { createLlm } from "../src/llm/adapter.js";
 
 const spec = parse(
   readFileSync(new URL("../contract/openapi.yaml", import.meta.url), "utf8"),
 ) as ToolSpec;
 export const config = loadConfig({ NODE_ENV: "test" });
-export const tool = (changes: Partial<typeof config> = {}) =>
-  createApp({ spec, config: { ...config, ...changes }, handlers, logs: false });
+export function tool(
+  changes: Partial<typeof config> = {},
+  llm = createLlm({ data: { LLM_MODE: "mock" } }),
+) {
+  const settings = { ...config, ...changes };
+  return createApp({
+    spec,
+    config: settings,
+    handlers: createHandlers(settings, llm),
+    logs: false,
+  });
+}
 const compile = validators(spec, false);
 
 export function checkResponse(
