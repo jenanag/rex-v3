@@ -534,9 +534,13 @@ test("docs generation detects drift and refreshes from source", async (t) => {
 
   const readDoc = async (path: string) =>
     (await readFile(join(repo.dir, path), "utf8")).replace(/\s+/g, " ");
+  const analysis = await readDoc(answerDir + "/AGENTS.md");
   const engine = await readDoc("services/engine-query/AGENTS.md");
   const citations = await readDoc("services/citation-extractor/AGENTS.md");
   const llms = await readDoc("docs/services/llms-txt-generator.md");
+  assert.match(analysis, /## Language TypeScript .*accepted by Jay in ADR 0035\./);
+  assert.match(analysis, /## Scope and build order .*TypeScript, ADR 0035 accepted by Jay/);
+  assert.doesNotMatch(analysis, /ADR 0024 proposes Python/);
   assert.doesNotMatch(engine, /prompt-tracker/);
   assert.doesNotMatch(citations, /citation-tracker/);
   assert.match(engine, /Not scaffolded yet.*`scripts\/new-tool` \(built in Phase 1\)/);

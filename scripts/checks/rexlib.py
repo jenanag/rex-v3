@@ -157,4 +157,11 @@ def language_line(root,tool):
         return f'not chosen yet. {adr} proposes {pl}: {why}. Its own language ADR, accepted by Jay, decides {when}.'
     if names.get(cur)==pl:
         return f'{names[cur]} (`language: {cur}` in vendoring.yaml), {src}: {why}. Its own language ADR, accepted by Jay, confirms it {when}.'
+    for path in sorted(glob.glob(f'{root}/docs/adr/*-{tool}-language.md'), reverse=True):
+        header=open(path).read().split('\n## ',1)[0]
+        lines=header.splitlines()
+        if (re.search(r'^- \*\*Status:\*\* Accepted\b',header,re.M)
+                and f'- **Tool:** `{tool}`' in lines and f'- **Language:** `{cur}`' in lines):
+            number=os.path.basename(path).split('-')[0]
+            return f'{names[cur]} (`language: {cur}` in vendoring.yaml), accepted by Jay in ADR {number}.'
     return f'{names.get(cur,cur)} for now (`language: {cur}` in vendoring.yaml). {adr} proposes {pl}: {why}. Its own language ADR, accepted by Jay, decides {when}.'

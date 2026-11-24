@@ -50,7 +50,8 @@ It selects TypeScript for `citation-extractor`. Jay also accepted
 4 MiB (4,194,304-byte) ceiling and retains the current request schema.
 Jay accepted [ADR 0034](docs/adr/0034-python-validation-spike.md) on 2026-11-24.
 Both Python validators missed the large-workload budget. The Python bring-up remains paused.
-[ADR 0035](docs/adr/0035-answer-analysis-language.md) proposes TypeScript for answer-analysis.
+Jay accepted [ADR 0035](docs/adr/0035-answer-analysis-language.md) on 2026-11-24,
+selecting TypeScript for answer-analysis.
 Phase 2 builds the tools one at a time, before the platform. Open choices are tracked as
 [deferred decisions](docs/roadmap.md#deferred-decisions).
 

@@ -1,6 +1,6 @@
 # 0035: Use TypeScript for answer-analysis
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-24, accepted by Jay)
 - **Date:** 2026-11-24
 - **Deciders:** Jay Pascual
 - **Tool:** `answer-analysis`
@@ -23,7 +23,7 @@ The template provides Fastify validation against the vendored OpenAPI spec,
 contract tests, a standalone Docker build, and the LLM adapter for later work.
 Keep the Python bring-up paused.
 
-1. Wait for Jay to accept this ADR before scaffolding with
+1. Jay’s acceptance satisfies the language gate. Scaffold with
    `scripts/new-tool answer-analysis --lang ts --llm`.
 2. Implement deterministic mention detection and the English `det:lexicon` and
    `det:rules` analyzers first. Include the lexicon registry, English pack,
