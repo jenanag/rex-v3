@@ -27,7 +27,11 @@ function utf16Boundaries(text: string) {
   return offsets;
 }
 
-function codeSpans(text: string) {
+type TextRange = { start: number; end: number };
+type FenceClosing = { at: number; lineEnding: string };
+type Fence = TextRange & { closing?: FenceClosing };
+
+function codeSpans(text: string, offset: number) {
   const runs = [...text.matchAll(/`+/g)];
   const nextByWidth = new Map<number, number>();
   const pairs = new Map<number, { start: number; closing: number }>();
@@ -44,15 +48,57 @@ function codeSpans(text: string) {
     nextByWidth.set(width, index);
   }
 
-  const spans: { start: number; end: number }[] = [];
+  const spans: TextRange[] = [];
   for (let index = 0; index < runs.length; index++) {
     const pair = pairs.get(index);
     if (!pair) continue;
     const delimiter = runs[pair.closing];
-    spans.push({ start: pair.start, end: delimiter.index + delimiter[0].length });
+    spans.push({
+      start: offset + pair.start,
+      end: offset + delimiter.index + delimiter[0].length,
+    });
     index = pair.closing;
   }
   return spans;
+}
+
+function markdownCode(text: string) {
+  const spans: TextRange[] = [];
+  const fences: Fence[] = [];
+  let proseStart = 0;
+  let open: { start: number; delimiter: string; lineEnding: string } | undefined;
+
+  for (const line of text.matchAll(/([^\r\n]*)(\r\n|[\r\n]|$)/g)) {
+    const [, content, lineEnding] = line;
+    const end = line.index + line[0].length;
+    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(content);
+    if (open) {
+      if (
+        marker &&
+        marker[1][0] === open.delimiter[0] &&
+        marker[1].length >= open.delimiter.length &&
+        /^[ \t]*$/.test(marker[2])
+      ) {
+        fences.push({
+          start: open.start,
+          end,
+          closing: { at: line.index + content.length, lineEnding: lineEnding || open.lineEnding },
+        });
+        proseStart = end;
+        open = undefined;
+      }
+    } else if (marker && (marker[1][0] === "~" || !marker[2].includes("`"))) {
+      spans.push(...codeSpans(text.slice(proseStart, line.index), proseStart));
+      open = { start: line.index, delimiter: marker[1], lineEnding };
+    } else if (/^[ \t]*$/.test(content)) {
+      spans.push(...codeSpans(text.slice(proseStart, line.index), proseStart));
+      proseStart = end;
+    }
+  }
+
+  if (open) fences.push({ start: open.start, end: text.length });
+  else spans.push(...codeSpans(text.slice(proseStart), proseStart));
+  return { spans, fences };
 }
 
 function markdownLinks(text: string) {
@@ -71,11 +117,13 @@ export function renderAnswer(parts: TextPart[], validUrl: (value: string) => boo
   const sources = new Map<string, Source>();
   const paragraphs = parts.map(({ text, annotations }) => {
     const offsets = utf16Boundaries(text);
-    const code = codeSpans(text);
+    const { spans, fences } = markdownCode(text);
+    const code = [...spans, ...fences];
     const links = markdownLinks(text).filter(
       (link) => !code.some((span) => span.start <= link.start && link.start < span.end),
     );
     const insertions = new Map<number, string[]>();
+    const fenceCitations = new Map<FenceClosing, string[]>();
 
     // Stable sort preserves provider order for equal starts within this text part.
     const citations = annotations.toSorted((left, right) => left.start_index - right.start_index);
@@ -94,7 +142,18 @@ export function renderAnswer(parts: TextPart[], validUrl: (value: string) => boo
       // Responses annotations describe the index of the last cited code point.
       const end = offsets[citation.end_index + 1];
       if (start === undefined || end === undefined || start >= end) continue;
-      const boundary = code.find((span) => span.start < end && end < span.end)?.end ?? end;
+      const label = `[${source.position}](<${url.replaceAll("&", "&amp;")}>)`;
+      const fence = fences.find((range) => range.start < end && end <= range.end);
+      if (fence) {
+        // An unclosed fence has no position for a clickable link. Keep its source row.
+        if (fence.closing) {
+          const labels = fenceCitations.get(fence.closing) ?? [];
+          labels.push(label);
+          fenceCitations.set(fence.closing, labels);
+        }
+        continue;
+      }
+      const boundary = spans.find((span) => span.start < end && end < span.end)?.end ?? end;
       const existing = links.find(
         (link) =>
           (link.start < end && start < link.end) ||
@@ -102,10 +161,15 @@ export function renderAnswer(parts: TextPart[], validUrl: (value: string) => boo
       );
       if (existing && normalizedUrl(existing.url, validUrl) === url) continue;
       const at = existing && existing.start < end ? Math.max(boundary, existing.end) : boundary;
-      const label = ` [${source.position}](<${url.replaceAll("&", "&amp;")}>)`;
       const labels = insertions.get(at) ?? [];
-      labels.push(label);
+      labels.push(" " + label);
       insertions.set(at, labels);
+    }
+
+    for (const [{ at, lineEnding }, labels] of fenceCitations) {
+      const following = text.slice(at + lineEnding.length);
+      const separator = /^[ \t]*(?:[\r\n]|$)/.test(following) ? "" : lineEnding;
+      insertions.set(at, [lineEnding.repeat(2) + labels.join(" ") + separator]);
     }
 
     let rendered = "";

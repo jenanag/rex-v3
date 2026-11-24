@@ -218,6 +218,53 @@ test.each([
   }
 });
 
+test.each([
+  [
+    "literal backticks in separate paragraphs",
+    "See ` Guide for the command.\n\nAnother ` is literal.",
+    "See ` Guide [1](<https://example.test/guide>) for the command.\n\nAnother ` is literal.",
+  ],
+  [
+    "a multiline code span within one paragraph",
+    "See `Guide\nexample` for the command.",
+    "See `Guide\nexample` [1](<https://example.test/guide>) for the command.",
+  ],
+  [
+    "a backtick fence",
+    "```txt\nGuide\n```\n\nFollow the command.",
+    "```txt\nGuide\n```\n\n[1](<https://example.test/guide>)\n\nFollow the command.",
+  ],
+  [
+    "a tilde fence",
+    "~~~txt\nGuide\n~~~\n\nFollow the command.",
+    "~~~txt\nGuide\n~~~\n\n[1](<https://example.test/guide>)\n\nFollow the command.",
+  ],
+  [
+    "a longer closing fence followed by prose without a blank line",
+    "~~~txt\r\nGuide\r\n~~~~\r\nFollow the command.",
+    "~~~txt\r\nGuide\r\n~~~~\r\n\r\n[1](<https://example.test/guide>)\r\n\r\nFollow the command.",
+  ],
+  ["an unclosed fence with a source row and unchanged Markdown", "```txt\nGuide", "```txt\nGuide"],
+])("preserves Markdown and places the citation for %s", async (_name, text, expected) => {
+  const url = "https://example.test/guide";
+  const start = text.indexOf("Guide");
+  const reply = {
+    ...completion,
+    output: [search, message(text, [cite(url, "Guide", start, start + 4)])],
+  };
+  const app = tool(
+    {},
+    provider(async () => Response.json(reply)),
+  );
+  try {
+    const { body } = await post(app, query, 200);
+    expect(body.answer.text).toBe(expected);
+    expect(body.answer.sources).toEqual([{ url, title: "Guide", position: 1 }]);
+  } finally {
+    await app.close();
+  }
+});
+
 test("mock route replays the checked-in synthetic response and reports its usage", async () => {
   const transport = vi.fn(async () => {
     throw new Error("Unexpected provider traffic");
