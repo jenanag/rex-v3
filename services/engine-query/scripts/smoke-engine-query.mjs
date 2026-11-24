@@ -32,6 +32,7 @@ assert.deepEqual(
       displayName: "ChatGPT",
       provider: "openai",
       model: "gpt-6-luna",
+      allowedModels: ["gpt-6-luna"],
       webSearch: true,
       enabled: true,
     },
@@ -40,6 +41,7 @@ assert.deepEqual(
       displayName: "Gemini",
       provider: "google",
       model: "gemini-3.5-flash-lite",
+      allowedModels: ["gemini-3.5-flash-lite"],
       webSearch: false,
       enabled: true,
     },
@@ -53,6 +55,7 @@ const response = await fetch(base + "/v1/engine-answers", {
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
     engine: "chatgpt",
+    model: "gpt-6-luna",
     locale: "en-CA",
     country: "CA",
     prompt:

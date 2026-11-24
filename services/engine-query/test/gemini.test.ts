@@ -34,6 +34,32 @@ function provider(fetch: typeof globalThis.fetch) {
   return tool({}, createLlm({ data: { LLM_MODE: "live", GEMINI_API_KEY: "test-only" }, fetch }));
 }
 
+test("Gemini omitted and explicit default models send identical requests", async () => {
+  const wires: Array<{ url: string; body: unknown }> = [];
+  const transport = vi.fn<typeof globalThis.fetch>(async (input, init) => {
+    const request = new Request(input, init);
+    wires.push({ url: request.url, body: await request.json() });
+    return Response.json(completion);
+  });
+  const app = provider(transport);
+  try {
+    const { body: omitted } = await postAnswer(app, query, 200);
+    const { body: explicit } = await postAnswer(app, { ...query, model }, 200);
+    expect(explicit).toEqual({
+      answer: { ...omitted.answer, model, latencyMs: expect.any(Number) },
+      usage: [expectedUsage],
+    });
+    expect(omitted.usage).toEqual(explicit.usage);
+    expect(transport).toHaveBeenCalledTimes(2);
+    expect(wires[0].url).toBe(
+      "https://generativelanguage.googleapis.com/v1/models/" + model + ":generateContent",
+    );
+    expect(wires[1]).toEqual(wires[0]);
+  } finally {
+    await app.close();
+  }
+});
+
 test.each([
   [{}, "en-US", "US"],
   [{ webSearch: false, locale: "en-CA", country: "CA" }, "en-CA", "CA"],

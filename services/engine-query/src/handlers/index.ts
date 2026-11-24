@@ -7,24 +7,44 @@ import { ToolProblem } from "../errors.js";
 import { createLlm } from "../llm/adapter.js";
 import { deployment } from "../llm/catalog.js";
 
-type Query = Required<Omit<components["schemas"]["EngineQuery"], "webSearch">> &
-  Pick<components["schemas"]["EngineQuery"], "webSearch">;
+type Query = components["schemas"]["EngineQuery"] & { locale: string; country: string };
 
 export function createHandlers(spec: ToolSpec, call = createLlm()): Handlers {
   const urlSchema = spec.components?.schemas?.Url;
   if (!urlSchema) throw new Error("Missing bundled Url schema");
   const validUrl = validators(spec, false)(urlSchema);
   return {
-    listEngines: async () => ({ data: deployment.map(({ engine }) => engine) }),
+    listEngines: async () => ({
+      data: deployment.map(
+        ({ engine, models }) =>
+          ({
+            ...engine,
+            provider: models[0].provider,
+            model: models[0].model,
+            allowedModels: models.map(({ model }) => model),
+          }) satisfies components["schemas"]["Engine"],
+      ),
+    }),
     queryEngine: async (request) => {
-      const { engine, prompt, locale, country, webSearch } = request.body as Query;
+      const { engine, model, prompt, locale, country, webSearch } = request.body as Query;
       const entry = deployment.find(
         ({ engine: configured }) => configured.id === engine && configured.enabled,
       );
       if (!entry)
         throw new ToolProblem(422, "unsupported_engine", "/engine: Engine is not configured");
 
-      const search = webSearch ?? entry.engine.webSearch;
+      const selected =
+        model === undefined
+          ? entry.models[0]
+          : entry.models.find((allowed) => allowed.model === model);
+      if (!selected)
+        throw new ToolProblem(
+          422,
+          "unsupported_model",
+          "/model: Model is not allowed for this engine",
+        );
+
+      const search = webSearch ?? entry.searchDefault;
       if (search && !entry.engine.webSearch)
         throw new ToolProblem(
           422,
@@ -33,11 +53,11 @@ export function createHandlers(spec: ToolSpec, call = createLlm()): Handlers {
         );
 
       const start = performance.now();
-      const { parts, usage } = await call(entry, prompt, locale, country, search);
+      const { parts, usage } = await call(selected, prompt, locale, country, search);
       return {
         answer: {
           engine: entry.engine.id,
-          model: entry.engine.model,
+          model: selected.model,
           ...renderAnswer(parts, validUrl),
           latencyMs: Math.round(performance.now() - start),
         },

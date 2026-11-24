@@ -28,7 +28,7 @@ orchestrator's `tracking` module.
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `3`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `4`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
@@ -109,8 +109,11 @@ source, and usage over loopback HTTP.
 
 ## Notes
 
-- Jay accepted [ADR 0039](../adr/0039-engine-query-per-request-model.md) for
-  per-request model selection on 2026-11-25. Implementation is follow-up work.
+- [ADR 0039](../adr/0039-engine-query-per-request-model.md) adds optional
+  per-request model selection. Discovery reports the default as `model` and the
+  deployment allowlist as **allowedModels**. Each engine currently allows only
+  its default. Unlisted models return HTTP 422 `unsupported_model` with detail
+  identifying `/model`, before any provider call.
 - [ADR 0038](../adr/0038-engine-query-selectable-web-search.md) makes search selectable.
   Discovery reports search capability. ChatGPT uses GPT-6 Luna through OpenAI
   Responses and defaults to required hosted search. Explicit false uses text-only
@@ -124,8 +127,9 @@ source, and usage over loopback HTTP.
   [Gemini pricing](https://aistudio.google.com/docs/pricing#gemini-3.5-flash-lite).
 - Provider failures return 503. The tool converts a valid upstream `Retry-After`
   to seconds. The worker owns retries.
-- Apply the engine-specific search defaults in the caller cache policy before
-  lookup. Refresh discovery on rollout and verify the returned model before storage.
+- Validate and resolve the model and search mode before lookup as defined by the
+  [caller cache policy](../../packages/contracts/cache/policy.yaml).
+  Refresh discovery on rollout and verify the returned model before storage.
   The orchestrator owns future subscription eligibility in
   [Phase 6](../roadmap.md#phase-6-monetization).
 - API answers can differ from the consumer apps; AI Overviews needs a SERP provider

@@ -10,7 +10,7 @@ import type {
 } from "openai/resources/responses/responses";
 import type { TextPart } from "../domain/citations.js";
 import { ToolProblem } from "../errors.js";
-import type { Engine } from "./catalog.js";
+import type { EngineModel } from "./catalog.js";
 import { llmEnvProperties } from "./env.js";
 import { geminiAnswer, geminiEndpoint, geminiRequest, generateGemini } from "./gemini.js";
 import { retryAfter } from "./retry-after.js";
@@ -170,16 +170,16 @@ export function createLlm({
   });
 
   return async (
-    entry: Engine,
+    entry: EngineModel,
     prompt: string,
     locale: string,
     country: string,
-    webSearch = entry.engine.webSearch,
+    webSearch: boolean,
   ) => {
-    const { model } = entry.engine;
+    const { model, provider } = entry;
     const mock = env.LLM_MODE === "mock";
     try {
-      if (entry.kind === "google") {
+      if (provider === "google") {
         const request = geminiRequest(model, prompt, locale, country);
         const key = providerFixtureKey(geminiEndpoint(model), request);
         const file = join(fixtureDir, key + ".json");

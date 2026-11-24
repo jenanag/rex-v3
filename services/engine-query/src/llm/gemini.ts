@@ -7,7 +7,7 @@ import {
 } from "@google/genai";
 import type { components } from "../../contract/types.js";
 import type { TextPart } from "../domain/citations.js";
-import type { GeminiEngine } from "./catalog.js";
+import type { GeminiModel } from "./catalog.js";
 import { count } from "./usage.js";
 
 const baseUrl = "https://generativelanguage.googleapis.com";
@@ -76,7 +76,7 @@ function optionalCount(value: unknown) {
 
 function geminiUsage(
   metadata: GenerateContentResponse["usageMetadata"],
-  { engine, price }: GeminiEngine,
+  { provider, model, price }: GeminiModel,
 ): components["schemas"]["LlmUsage"] {
   // The SDK preserves this REST field but its v3.6.1 type does not declare it.
   const tier = (metadata as typeof metadata & { serviceTier?: unknown })?.serviceTier;
@@ -101,8 +101,8 @@ function geminiUsage(
     BigInt(reads) * BigInt(price.read) +
     BigInt(outputTokens) * BigInt(price.output);
   return {
-    provider: engine.provider,
-    model: engine.model,
+    provider,
+    model,
     operation: "answer_prompt",
     inputTokens,
     outputTokens,
@@ -112,9 +112,9 @@ function geminiUsage(
 
 export function geminiAnswer(
   response: GenerateContentResponse,
-  entry: GeminiEngine,
+  entry: GeminiModel,
 ): { parts: TextPart[]; usage: components["schemas"]["LlmUsage"] } {
-  if (response.modelVersion !== entry.engine.model) throw new Error("Unexpected provider model");
+  if (response.modelVersion !== entry.model) throw new Error("Unexpected provider model");
 
   const block = response.promptFeedback?.blockReason;
   const [candidate] = response.candidates ?? [];

@@ -1,6 +1,6 @@
 import type { Response } from "openai/resources/responses/responses";
 import type { components } from "../../contract/types.js";
-import type { OpenAiEngine } from "./catalog.js";
+import type { OpenAiModel } from "./catalog.js";
 
 export function count(value: unknown): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
@@ -10,7 +10,7 @@ export function count(value: unknown): number {
 
 export function answerUsage(
   response: Response,
-  { engine, price }: OpenAiEngine,
+  { provider, model, price }: OpenAiModel,
   webSearch: boolean,
 ): components["schemas"]["LlmUsage"] {
   if (response.service_tier != null && response.service_tier !== "default")
@@ -44,8 +44,8 @@ export function answerUsage(
       searches * price.searchMicros,
   );
   return {
-    provider: engine.provider,
-    model: engine.model,
+    provider,
+    model,
     operation: "answer_prompt",
     inputTokens,
     outputTokens,

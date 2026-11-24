@@ -29,8 +29,8 @@ confirms it at the start of its Phase 2 step.
 
 Operations:
 
-- `listEngines` (`GET /v1/engines`): Engines this deployment can query and the model
-  each one uses.
+- `listEngines` (`GET /v1/engines`): Engines this deployment can query and their default
+  and allowed models.
 - `queryEngine` (`POST /v1/engine-answers`): Ask one engine one prompt (one sample) and
   return its answer.
 

@@ -36,7 +36,9 @@ key:
     # Steps applied to the request body, in order, before hashing.
     - Capture original request strings at the JSON Pointers in the operation's `rawUrlKeyInputs` map before applying defaults or normalizing. Add these unchanged to the key input as top-level members named by the map keys prefixed with `$`. Neither URL nor operation normalization applies to these copies.
     - Apply the defaults declared in the tool spec, so an omitted field and its default give the same key.
+    - For queryEngine, validate the request and resolve the effective model from the selected engine's discovery catalog before lookup. Omission selects its default. Reject models outside that engine's exact allowlist before key derivation.
     - For an operation with `webSearchDefaults`, resolve the effective boolean by engine before lookup. Keep an explicit value, or fill in the omitted value from the map. Include the effective value in the key and send it to the tool. Reject search-on for engines without search capability before lookup.
+    - For queryEngine, send both resolved settings to the tool. Exclude the request model field from canonical input and include the effective model exactly once as `$engineModel` via `extraKeyInputs`. Omission and an explicitly selected default share a key.
     - Add `extraKeyInputs` of the operation as top-level members prefixed with `$`.
     - Normalize every value whose schema is common.yaml Url or Domain (lowercase scheme and host, drop default port, fragment and trailing dot; keep path and query).
     - Apply the operation's `normalize` rules (`collapse-whitespace` trims and collapses runs of whitespace).
@@ -101,7 +103,7 @@ singleFlight:
 
 tools:
   engine-query:
-    keyVersion: 3
+    keyVersion: 4
     operations:
       listEngines: {ttl: PT5M, scope: shared}                   # DEFAULT
       queryEngine:
@@ -109,7 +111,7 @@ tools:
         window: P1D                                              # DEFAULT
         scope: shared
         webSearchDefaults: {chatgpt: true, gemini: false}
-        extraKeyInputs: [engineModel]   # model listEngines reports for the engine
+        extraKeyInputs: [engineModel]   # effective allowed model, defaulting to the discovery model
   answer-analysis:
     keyVersion: 3
     operations:
