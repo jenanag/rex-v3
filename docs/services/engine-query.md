@@ -112,8 +112,10 @@ source, and usage over loopback HTTP.
 - [ADR 0038](../adr/0038-engine-query-selectable-web-search.md) makes search selectable.
   Discovery reports search capability. ChatGPT uses GPT-6 Luna through OpenAI
   Responses and defaults to required hosted search. Explicit false uses text-only
-  generation with zero search fees. Gemini
-  defaults to text-only generation, and explicit true returns HTTP 422.
+  generation with zero search fees. Gemini advertises `webSearch: false`.
+  Omission and explicit `false` select text-only generation, and explicit `true`
+  returns HTTP 422 before any provider call. See the
+  [deferred decision on opt-in Gemini web search](../roadmap.md#opt-in-gemini-web-search).
 - Gemini uses `gemini-3.5-flash-lite` on the Gemini Developer API v1. Its Standard
   text rates are $0.30 uncached input, $0.03 cached input, and $2.50 output including
   thinking per million tokens. Text-only answers return an empty source list.

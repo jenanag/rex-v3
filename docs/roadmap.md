@@ -506,6 +506,7 @@ in Phases 1 and 2 depends on them.
 | Admin API and UI for per-customer cache overrides | org setting edited internally only | with SSO/roles |
 | Sentiment lexicons beyond English | English pack only; registry and extension path in [answer-analysis](services/answer-analysis.md#languages-and-the-lexicon-registry) | when a customer needs it |
 | Engines: API answers vs consumer apps; Google AI Overviews via a SERP provider | API engines only | Phase 4 |
+| [Opt-in Gemini web search](#opt-in-gemini-web-search): intended use and search source | text-only Gemini under ADR 0038 | before enabling Gemini search |
 | Re-analysis of past answers when brand aliases change | none (new answers only) | Phase 4 |
 | Visibility alert threshold | 0.10 absolute, configurable | Phase 6 |
 | Storing raw provider responses | not stored (tools return normalized output) | Phase 4 |
@@ -521,6 +522,29 @@ in Phases 1 and 2 depends on them.
 | seo-auditor interface (Jay's existing SEO auditor, repurposed for URL-based structured-data checks): endpoint, request and response, errors, auth and location, whether it fetches the URL itself or takes the extractor's output, limits, cacheability, overlap with content-auditor `structured_data` | job name `structured-data-check` reserved; nothing else defined ([seo-auditor](services/seo-auditor.md)) | Phase 5 |
 | data-aggregator interface: write and read-by-cache-key endpoints, what it needs besides the result (capture time, org), sync or queued acceptance, idempotency, errors, auth and location, limits, retention, who queries it | archive at capture time before the cache write ([ADR 0022](adr/0022-page-archive.md)); read back by cache key only in `llms-txt-generation` after a cache miss ([ADR 0023](adr/0023-llms-txt-pipeline.md)); nothing else defined ([data-aggregator](services/data-aggregator.md)) | Phase 5 |
 | Size limits of the llms.txt pipeline messages (8 MiB cap): about 50,000 URLs in `sitemap-discovery.completed`, about 20,000 page refs in `llms-txt-generation.requested` | no page cap; a larger site fails the message size check (reported, not silently capped); tiers or chunked messages if real sites get there | Phase 5 |
+
+### Opt-in Gemini web search
+
+Gemini currently runs text-only. Discovery advertises `webSearch: false`.
+Omitting `webSearch` or passing `false` selects text-only generation. An explicit
+`true` returns HTTP 422 before any provider call.
+
+A future deployment that supports Gemini search would reuse the existing request
+field, advertise `webSearch: true` in discovery, and accept explicit
+`webSearch: true` in requests. Keep Gemini's omitted default off by treating
+capability and the per-engine default separately. Include the effective search
+mode in the caller cache key.
+
+An interactive Google Search grounding flow would need to show the grounded
+results and associated Search Suggestions to the user who submitted the prompt.
+Scheduled REx tracking needs a source whose terms permit caching, storage,
+analysis, and citation extraction. [Google grounding terms](https://aistudio.google.com/docs/terms#grounding-with-google-search).
+
+Jay will decide the use case and search source. Once those are selected, enabling
+Gemini search requires a new ADR amending [ADR 0038](adr/0038-engine-query-selectable-web-search.md).
+The orchestrator owns subscription eligibility in [Phase 6](#phase-6-monetization).
+[Phase 2](#phase-2-tool-services-one-at-a-time-each-built-and-tested-in-isolation)
+still requires at least three engines that return sources and usage.
 
 ## Service definition of done
 
