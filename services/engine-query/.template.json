@@ -13,7 +13,8 @@
       "sha256": "52c48f1b13c9ec45b4b69897741b24ce5f88f07fa341d97bc6b8c7f862f261da"
     },
     ".env.example": {
-      "sha256": "dc759eaeab638bb4e01b2e3bd47375867ab89e20141f4cd213ec7661e6089874"
+      "sha256": "dc759eaeab638bb4e01b2e3bd47375867ab89e20141f4cd213ec7661e6089874",
+      "owned": true
     },
     ".prettierrc": {
       "sha256": "6b380994ae171521d31a3e92447de7e80a8cfdff7ced1e4787a26ce98dcfe6ae"
@@ -43,7 +44,8 @@
       "sha256": "a7c2a6d8d4c5ad50db15672af7896bd744a2923854fcaa25237ba66c3097f959"
     },
     "src/config.ts": {
-      "sha256": "693c8d51300a849c6412c6b6aee2e18653195d43eb253e632823c66b5d849430"
+      "sha256": "693c8d51300a849c6412c6b6aee2e18653195d43eb253e632823c66b5d849430",
+      "owned": true
     },
     "src/contract.ts": {
       "sha256": "b5c0e8c5516ce71a242fd33f31dae1df37d0c349f38e5b1dd625b3fc40ad2e69"

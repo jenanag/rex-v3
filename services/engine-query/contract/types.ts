@@ -74,14 +74,20 @@ export interface paths {
         put?: never;
         /**
          * Ask one engine one prompt (one sample) and return its answer
-         * @description Accepts the configured ChatGPT engine. A declared engine that is unavailable
+         * @description Accepts ChatGPT and Grok when enabled. A declared engine that is unavailable
          *     in this deployment returns 422 unsupported_engine before any provider call.
          *     The tool submits the original prompt to OpenAI Responses with required web
          *     search, uses locale as an answer-language hint, and uses country for approximate
-         *     search location. The answer preserves Markdown and clickable citation locations.
+         *     search location. Grok submits the original prompt to xAI Responses with
+         *     required hosted web search and uses locale and country as language and
+         *     relevance hints. Its turn limit and visible-output cap do not bound
+         *     per-request spend. The answer preserves Markdown and clickable citation locations.
          *     Sources are unique, usable HTTP(S) citation annotations in first-citation order.
+         *     Grok citation numbers are not source titles and are returned as null titles.
          *     An answer with completed search and valid usage can have an empty source list.
-         *     Usage reports one answer_prompt item, including the reported billable search fee.
+         *     Usage reports one catalog-priced answer_prompt item, including the reported
+         *     billable web calls. Grok reconciles the calculated charge against the
+         *     reported provider cost when present.
          *     Provider failures, refusals, incomplete or unusable answers, missing search
          *     evidence, unexpected model or pricing tier, and missing or inconsistent metering
          *     return 503 provider_unavailable. A valid upstream Retry-After is returned as
@@ -304,7 +310,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Configured engines (small list; not paginated). This deployment lists only ChatGPT (OpenAI GPT-6 Luna with web search enabled). */
+            /** @description Configured engines (small list; not paginated). Lists ChatGPT and, when ENGINE_QUERY_GROK_ENABLED is true, Grok. Both use hosted web search. */
             200: {
                 headers: {
                     [name: string]: unknown;

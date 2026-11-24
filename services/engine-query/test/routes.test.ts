@@ -1,4 +1,5 @@
 import { expect, test, vi } from "vitest";
+import { loadConfig } from "../src/config.js";
 import { createLlm } from "../src/llm/adapter.js";
 import { checkResponse, tool } from "./support.js";
 
@@ -487,27 +488,275 @@ test.each([
   }
 });
 
-test("a deadline abort maps to 503 with no SDK retry", async () => {
-  const realTimeout = AbortSignal.timeout.bind(AbortSignal);
-  const deadline = vi
-    .spyOn(AbortSignal, "timeout")
-    .mockImplementation((ms) => realTimeout(ms === 110_000 ? 5 : ms));
-  const transport = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
-    const { signal } = init ?? {};
-    if (!signal) throw new Error("Expected a signal");
-    if (signal.aborted) throw signal.reason;
-    return new Promise<Response>((_resolve, reject) => {
-      signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+test.each(["chatgpt", "grok"])(
+  "%s deadline abort maps to 503 with no SDK retry",
+  async (engine) => {
+    const realTimeout = AbortSignal.timeout.bind(AbortSignal);
+    const deadline = vi
+      .spyOn(AbortSignal, "timeout")
+      .mockImplementation((ms) => realTimeout(ms === 110_000 ? 5 : ms));
+    const transport = vi.fn<typeof globalThis.fetch>(async (_url, init) => {
+      const { signal } = init ?? {};
+      if (!signal) throw new Error("Expected a signal");
+      if (signal.aborted) throw signal.reason;
+      return new Promise<Response>((_resolve, reject) => {
+        signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+      });
     });
+    const grokEnabled = engine === "grok";
+    const app = tool(
+      { ENGINE_QUERY_GROK_ENABLED: grokEnabled },
+      (grokEnabled ? xai : provider)(transport),
+    );
+    try {
+      const { body } = await post(app, { ...query, engine }, 503);
+      expect(body).toMatchObject({ code: "provider_unavailable" });
+      expect(deadline).toHaveBeenCalledWith(110_000);
+      expect(transport).toHaveBeenCalledOnce();
+    } finally {
+      deadline.mockRestore();
+      await app.close();
+    }
+  },
+);
+
+const grokQuery = { ...query, engine: "grok" };
+const grokUsage = {
+  input_tokens: 1_000,
+  input_tokens_details: { cached_tokens: 400 },
+  output_tokens: 200,
+  output_tokens_details: { reasoning_tokens: 20 },
+  total_tokens: 1_200,
+  server_side_tool_usage_details: { web_search_calls: 2 },
+  cost_in_usd_ticks: 113_300_000,
+};
+const grokCompletion = {
+  model: "grok-4.3",
+  status: "completed",
+  service_tier: "default",
+  output: [search, message("Synthetic answer.")],
+  usage: grokUsage,
+};
+
+function xai(fetch: typeof globalThis.fetch) {
+  return createLlm({ data: { LLM_MODE: "live", XAI_API_KEY: "test-only" }, fetch });
+}
+
+test.each([
+  [undefined, false],
+  ["false", false],
+  ["true", true],
+])("startup flag %s controls Grok discovery and eligibility", async (value, enabled) => {
+  const config = loadConfig({
+    ...(value === undefined ? {} : { ENGINE_QUERY_GROK_ENABLED: value }),
   });
-  const app = tool({}, provider(transport));
+  expect(config.ENGINE_QUERY_GROK_ENABLED).toBe(enabled);
+  const transport = vi.fn(async () => Response.json(grokCompletion));
+  const app = tool(config, xai(transport));
   try {
-    const { body } = await post(app, query, 503);
+    const list = await app.inject({ method: "GET", url: "/v1/engines" });
+    expect(list.statusCode).toBe(200);
+    const engines = list.json();
+    checkResponse("GET", "/v1/engines", 200, "application/json", engines);
+    expect(engines).toEqual({
+      data: enabled
+        ? [
+            expectedEngine,
+            {
+              id: "grok",
+              displayName: "Grok",
+              provider: "xai",
+              model: "grok-4.3",
+              webSearch: true,
+              enabled: true,
+            },
+          ]
+        : [expectedEngine],
+    });
+    const { body } = await post(app, grokQuery, enabled ? 200 : 422);
+    if (enabled) {
+      expect(body.answer).toMatchObject({ engine: "grok", model: "grok-4.3" });
+      expect(transport).toHaveBeenCalledOnce();
+    } else {
+      expect(body).toMatchObject({ code: "unsupported_engine" });
+      expect(transport).not.toHaveBeenCalled();
+    }
+  } finally {
+    await app.close();
+  }
+});
+
+test("invalid Grok flag fails startup validation", () => {
+  expect(() => loadConfig({ ENGINE_QUERY_GROK_ENABLED: "yes" })).toThrow(
+    /ENGINE_QUERY_GROK_ENABLED/,
+  );
+});
+
+test.each([{}, { locale: "fr-CA", country: "CA" }])(
+  "Grok submits verbatim text and renders cited Markdown with hints %j",
+  async ({ locale, country }) => {
+    const guide = "https://example.test/guide";
+    const map = "https://example.test/map";
+    const text = `🍁 [Guide](<${guide}>). Again. Map.`;
+    const citation = (url: string, citedText: string, title: string) => {
+      const start = Array.from(text.slice(0, text.indexOf(citedText))).length;
+      return {
+        type: "url_citation",
+        url,
+        start_index: start,
+        end_index: start + Array.from(citedText).length,
+        title,
+      };
+    };
+    const output = [
+      search,
+      message(text, [
+        citation(map, "Map", "Trail map"),
+        citation(guide, `[Guide](<${guide}>)`, "1"),
+        citation(guide, "Again", "2"),
+      ]),
+    ];
+    const transport = vi.fn<typeof globalThis.fetch>(async (url, init) => {
+      const wire = new Request(url, init);
+      expect(wire.url).toBe("https://api.x.ai/v1/responses");
+      expect(wire.method).toBe("POST");
+      expect(wire.headers.get("authorization")).toBe("Bearer test-only");
+      expect(wire.redirect).toBe("error");
+      expect(init?.signal?.aborted).toBe(false);
+      return Response.json({ ...grokCompletion, output });
+    });
+    const app = tool({ ENGINE_QUERY_GROK_ENABLED: true }, xai(transport));
+    try {
+      const prompt = "  Compare A  B.\nUse both lines.  ";
+      const { body } = await post(app, { ...grokQuery, prompt, locale, country }, 200);
+      expect(transport).toHaveBeenCalledOnce();
+      expect(JSON.parse(String(transport.mock.calls[0][1]?.body))).toEqual({
+        model: "grok-4.3",
+        input: [
+          {
+            role: "system",
+            content: `Use hosted web search before answering. Answer concisely in Markdown in ${locale ?? "en-US"}. Prefer sources relevant to country ${country ?? "US"}.`,
+          },
+          { role: "user", content: prompt },
+        ],
+        tools: [{ type: "web_search" }],
+        tool_choice: "required",
+        parallel_tool_calls: false,
+        max_turns: 2,
+        reasoning: { effort: "low" },
+        max_output_tokens: 2_048,
+        stream: false,
+        store: false,
+        service_tier: "default",
+      });
+      expect(body.answer).toEqual({
+        engine: "grok",
+        model: "grok-4.3",
+        text: `🍁 [Guide](<${guide}>). Again [1](<${guide}>). Map [2](<${map}>).`,
+        sources: [
+          { url: guide, title: null, position: 1 },
+          { url: map, title: "Trail map", position: 2 },
+        ],
+        latencyMs: expect.any(Number),
+      });
+      expect(body.usage).toEqual([
+        {
+          provider: "xai",
+          model: "grok-4.3",
+          operation: "answer_prompt",
+          inputTokens: 1_000,
+          outputTokens: 200,
+          costMicrosUsd: 11_330,
+        },
+      ]);
+    } finally {
+      await app.close();
+    }
+  },
+);
+
+test.each([
+  [199_999, 2_600_787_500, 260_079],
+  [200_000, 5_101_600_000, 510_160],
+  [1_000, undefined, 11_330],
+])("prices Grok input tokens %s with reported ticks %s", async (input, ticks, cost) => {
+  const transport = vi.fn(async () =>
+    Response.json({
+      ...grokCompletion,
+      output: [search, { ...message(""), content: [{ type: "output_text", text: "Answer." }] }],
+      usage: {
+        ...grokUsage,
+        input_tokens: input,
+        total_tokens: input + 200,
+        cost_in_usd_ticks: ticks,
+      },
+    }),
+  );
+  const warn = vi.fn();
+  const call = xai(transport);
+  const app = tool({ ENGINE_QUERY_GROK_ENABLED: true }, (entry, prompt, locale, country) =>
+    call(entry, prompt, locale, country, warn),
+  );
+  try {
+    const { body } = await post(app, grokQuery, 200);
+    expect(body.answer.sources).toEqual([]);
+    expect(body.usage).toHaveLength(1);
+    expect(body.usage[0]).toMatchObject({ inputTokens: input, costMicrosUsd: cost });
+    expect(transport).toHaveBeenCalledOnce();
+    if (ticks === undefined)
+      expect(warn).toHaveBeenCalledExactlyOnceWith(
+        "xAI usage omitted cost ticks; using catalog pricing",
+      );
+    else expect(warn).not.toHaveBeenCalled();
+  } finally {
+    await app.close();
+  }
+});
+
+test.each([
+  { output: [message("No search.")] },
+  { output: [search, { ...message(""), content: [{ type: "refusal" }] }] },
+  { output: [search, message(" ")] },
+  { status: "incomplete" },
+  { model: "other-model" },
+  { service_tier: "priority" },
+  { usage: { ...grokUsage, total_tokens: 1_201 } },
+  { usage: { ...grokUsage, input_tokens_details: { cached_tokens: 1_001 } } },
+  { usage: { ...grokUsage, output_tokens_details: { reasoning_tokens: 201 } } },
+  { usage: { ...grokUsage, server_side_tool_usage_details: undefined } },
+  { usage: { ...grokUsage, server_side_tool_usage_details: { web_search_calls: -1 } } },
+  ...[null, -1, 2 ** 53, "113300000", 113_299_999, 113_300_001].map((cost_in_usd_ticks) => ({
+    usage: { ...grokUsage, cost_in_usd_ticks },
+  })),
+])("rejects unusable Grok responses without retry (%j)", async (changes) => {
+  const transport = vi.fn(async () => Response.json({ ...grokCompletion, ...changes }));
+  const app = tool({ ENGINE_QUERY_GROK_ENABLED: true }, xai(transport));
+  try {
+    const { body } = await post(app, grokQuery, 503);
     expect(body).toMatchObject({ code: "provider_unavailable" });
-    expect(deadline).toHaveBeenCalledWith(110_000);
     expect(transport).toHaveBeenCalledOnce();
   } finally {
-    deadline.mockRestore();
+    await app.close();
+  }
+});
+
+test("Grok rate limit uses the existing Retry-After conversion and makes one attempt", async () => {
+  const transport = vi.fn(async () =>
+    Response.json(
+      { error: { message: "Synthetic rate limit" } },
+      {
+        status: 429,
+        headers: { "Retry-After": "7" },
+      },
+    ),
+  );
+  const app = tool({ ENGINE_QUERY_GROK_ENABLED: true }, xai(transport));
+  try {
+    const { body, headers } = await post(app, grokQuery, 503);
+    expect(body).toMatchObject({ code: "provider_unavailable" });
+    expect(headers["retry-after"]).toBe("7");
+    expect(transport).toHaveBeenCalledOnce();
+  } finally {
     await app.close();
   }
 });

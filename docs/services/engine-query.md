@@ -28,7 +28,7 @@ orchestrator's `tracking` module.
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `2`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `3`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
@@ -113,6 +113,17 @@ source, and usage over loopback HTTP.
   ChatGPT. Each query uses one required provider-hosted search and reports one
   usage item at Standard rates, including the reported billable search fee.
   [OpenAI pricing](https://developers.openai.com/api/docs/pricing#tools).
+- The Grok integration uses xAI Responses with `grok-4.3`. It is disabled
+  unless the deployment sets `ENGINE_QUERY_GROK_ENABLED=true`. Locale and
+  country guide the answer and source selection as text instructions. The
+  two-turn limit and 2,048 visible-output-token cap do not bound per-request
+  spend. Metering uses Standard global catalog rates and reconciles them
+  against provider cost ticks when reported.
+  [xAI pricing](https://docs.x.ai/developers/pricing).
+- Grok verification uses synthetic responses. A separately authorized recording
+  must confirm the endpoint accepts the settings, returns completed search
+  evidence and usable citations, and reports reconcilable usage. Funding and
+  rollout are separate decisions.
 - Provider failures return 503. The tool converts a valid upstream `Retry-After`
   to seconds. The worker owns retries.
 - The caller key includes the original prompt, effective locale and country, and

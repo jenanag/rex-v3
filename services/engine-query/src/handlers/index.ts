@@ -1,6 +1,7 @@
 import { performance } from "node:perf_hooks";
 import type { components } from "../../contract/types.js";
 import type { Handlers } from "../app.js";
+import type { Config } from "../config.js";
 import { validators, type ToolSpec } from "../contract.js";
 import { renderAnswer } from "../domain/citations.js";
 import { ToolProblem } from "../errors.js";
@@ -9,22 +10,27 @@ import { deployment } from "../llm/catalog.js";
 
 type Query = Required<components["schemas"]["EngineQuery"]>;
 
-export function createHandlers(spec: ToolSpec, call = createLlm()): Handlers {
+export function createHandlers(
+  spec: ToolSpec,
+  config: Pick<Config, "ENGINE_QUERY_GROK_ENABLED">,
+  call = createLlm(),
+): Handlers {
+  const engines = deployment(config.ENGINE_QUERY_GROK_ENABLED);
   const urlSchema = spec.components?.schemas?.Url;
   if (!urlSchema) throw new Error("Missing bundled Url schema");
   const validUrl = validators(spec, false)(urlSchema);
   return {
-    listEngines: async () => ({ data: deployment.map(({ engine }) => engine) }),
+    listEngines: async () => ({ data: engines.map(({ engine }) => engine) }),
     queryEngine: async (request) => {
       const { engine, prompt, locale, country } = request.body as Query;
-      const entry = deployment.find(
-        ({ engine: configured }) => configured.id === engine && configured.enabled,
-      );
+      const entry = engines.find(({ engine: configured }) => configured.id === engine);
       if (!entry)
         throw new ToolProblem(422, "unsupported_engine", "/engine: Engine is not configured");
 
       const start = performance.now();
-      const { parts, usage } = await call(entry, prompt, locale, country);
+      const { parts, usage } = await call(entry, prompt, locale, country, (message) =>
+        request.log.warn({ provider: entry.engine.provider, model: entry.engine.model }, message),
+      );
       return {
         answer: {
           engine: entry.engine.id,

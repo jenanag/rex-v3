@@ -28,6 +28,7 @@ the REx monorepo and re-vendor contract changes there.
 | `PROBLEM_BASE_URI` | https://problems.rex.invalid | Base URI for problem types. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | OTLP collector. Export is off when unset. |
 | `BODY_LIMIT_BYTES` | unset | Optional override of the Fastify request-body limit. |
+| `ENGINE_QUERY_GROK_ENABLED` | false | Advertise and accept the opt-in Grok engine. |
 | `LLM_MODE` | unset | Mock by default in tests, live otherwise. |
 | `OPENAI_API_KEY` | unset | OpenAI credential for live or record mode. |
 | `ANTHROPIC_API_KEY` | unset | Anthropic credential for live or record mode. |

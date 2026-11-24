@@ -11,7 +11,7 @@ const [{ createApp }, { createHandlers }] = await Promise.all([
   import("./app.js"),
   import("./handlers/index.js"),
 ]);
-const app = createApp({ spec, config, handlers: createHandlers(spec) });
+const app = createApp({ spec, config, handlers: createHandlers(spec, config) });
 app.addHook("onClose", async () => stopTelemetry());
 
 let shutdown: Promise<void> | undefined;
