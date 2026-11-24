@@ -1,3 +1,4 @@
+import { fromMarkdown } from "mdast-util-from-markdown";
 import type { components } from "../../contract/types.js";
 
 type Source = components["schemas"]["AnswerSource"];
@@ -28,100 +29,65 @@ function utf16Boundaries(text: string) {
 }
 
 type TextRange = { start: number; end: number };
-type FenceClosing = { at: number; lineEnding: string };
-type Fence = TextRange & { closing?: FenceClosing };
+type FenceClosing = { at: number; lineEnding: string; prefix: string };
+type CodeBlock = TextRange & { closing?: FenceClosing };
 
-function codeSpans(text: string, offset: number) {
-  const runs = [...text.matchAll(/`+/g)];
-  const nextByWidth = new Map<number, number>();
-  const pairs = new Map<number, { start: number; closing: number }>();
-  for (let index = runs.length - 1; index >= 0; index--) {
-    const run = runs[index];
-    let before = run.index;
-    while (text[before - 1] === "\\") before--;
-    // An escape outside code consumes only the first backtick. Inside code,
-    // the full run can close the span regardless of preceding backslashes.
-    const escaped = (run.index - before) % 2;
-    const width = run[0].length;
-    const closing = nextByWidth.get(width - escaped);
-    if (closing !== undefined) pairs.set(index, { start: run.index + escaped, closing });
-    nextByWidth.set(width, index);
-  }
-
+function markdownPositions(text: string) {
+  // The parser strips an initial byte-order mark before assigning positions.
+  const sourceOffset = text.startsWith("\uFEFF") ? 1 : 0;
+  const delimiters = new Map<number, number>();
+  const tree = fromMarkdown(text, {
+    mdastExtensions: [
+      {
+        enter: {
+          codeFencedFence({ start, end }) {
+            delimiters.set(end.offset + sourceOffset, start.offset + sourceOffset);
+          },
+        },
+      },
+    ],
+  });
   const spans: TextRange[] = [];
-  for (let index = 0; index < runs.length; index++) {
-    const pair = pairs.get(index);
-    if (!pair) continue;
-    const delimiter = runs[pair.closing];
-    spans.push({
-      start: offset + pair.start,
-      end: offset + delimiter.index + delimiter[0].length,
-    });
-    index = pair.closing;
-  }
-  return spans;
-}
+  const blocks: CodeBlock[] = [];
+  const links: (TextRange & { url: string })[] = [];
 
-function markdownCode(text: string) {
-  const spans: TextRange[] = [];
-  const fences: Fence[] = [];
-  let proseStart = 0;
-  let open: { start: number; delimiter: string; lineEnding: string } | undefined;
+  const nodes = [...tree.children];
+  for (const node of nodes) {
+    if ("children" in node) nodes.push(...node.children);
+    const { start: point, end: limit } = node.position ?? {};
+    if (point?.offset === undefined || limit?.offset === undefined) continue;
+    const start = point.offset + sourceOffset;
+    const end = limit.offset + sourceOffset;
 
-  for (const line of text.matchAll(/([^\r\n]*)(\r\n|[\r\n]|$)/g)) {
-    const [, content, lineEnding] = line;
-    const end = line.index + line[0].length;
-    const marker = /^ {0,3}(`{3,}|~{3,})(.*)$/.exec(content);
-    if (open) {
-      if (
-        marker &&
-        marker[1][0] === open.delimiter[0] &&
-        marker[1].length >= open.delimiter.length &&
-        /^[ \t]*$/.test(marker[2])
-      ) {
-        fences.push({
-          start: open.start,
-          end,
-          closing: { at: line.index + content.length, lineEnding: lineEnding || open.lineEnding },
-        });
-        proseStart = end;
-        open = undefined;
+    if (node.type === "inlineCode") spans.push({ start, end });
+    if (node.type === "link") links.push({ start, end, url: node.url });
+    if (node.type === "code") {
+      const block: CodeBlock = { start, end };
+      // The parser emits a delimiter token for each fence line. An unclosed
+      // block can end at its opener, which does not provide an insertion point.
+      const marker = delimiters.get(end);
+      if (marker !== undefined && marker > start) {
+        const lineStart =
+          Math.max(text.lastIndexOf("\n", marker - 1), text.lastIndexOf("\r", marker - 1)) + 1;
+        const lineEnding =
+          /^(?:\r\n|[\r\n])/.exec(text.slice(end))?.[0] ??
+          /\r\n|[\r\n]/.exec(text.slice(start, end))?.[0] ??
+          "\n";
+        block.closing = { at: end, lineEnding, prefix: text.slice(lineStart, marker) };
       }
-    } else if (marker && (marker[1][0] === "~" || !marker[2].includes("`"))) {
-      spans.push(...codeSpans(text.slice(proseStart, line.index), proseStart));
-      open = { start: line.index, delimiter: marker[1], lineEnding };
-    } else if (/^[ \t]*$/.test(content)) {
-      spans.push(...codeSpans(text.slice(proseStart, line.index), proseStart));
-      proseStart = end;
+      blocks.push(block);
     }
   }
 
-  if (open) fences.push({ start: open.start, end: text.length });
-  else spans.push(...codeSpans(text.slice(proseStart), proseStart));
-  return { spans, fences };
-}
-
-function markdownLinks(text: string) {
-  // Recognize the inline link and autolink forms used in provider Markdown.
-  // A balanced parenthesis pair inside a destination is part of the URL.
-  const links =
-    /(?<![\\!])\[(?:\\.|[^\]\\\n])*\]\(\s*(?:<([^<>\n]*)>|((?:[^()\s]|\([^()\n]*\))+))(?:\s+(?:"[^"\n]*"|'[^'\n]*'))?\s*\)|<(https?:\/\/[^<>\s]+)>/gi;
-  return [...text.matchAll(links)].map((match) => ({
-    start: match.index,
-    end: match.index + match[0].length,
-    url: (match[1] ?? match[2] ?? match[3]).replaceAll("&amp;", "&"),
-  }));
+  links.sort((left, right) => left.start - right.start);
+  return { spans, blocks, links };
 }
 
 export function renderAnswer(parts: TextPart[], validUrl: (value: string) => boolean) {
   const sources = new Map<string, Source>();
   const paragraphs = parts.map(({ text, annotations }) => {
     const offsets = utf16Boundaries(text);
-    const { spans, fences } = markdownCode(text);
-    const code = [...spans, ...fences];
-    const links = markdownLinks(text).filter(
-      (link) => !code.some((span) => span.start <= link.start && link.start < span.end),
-    );
+    const { spans, blocks, links } = markdownPositions(text);
     const insertions = new Map<number, string[]>();
     const fenceCitations = new Map<FenceClosing, string[]>();
 
@@ -143,9 +109,9 @@ export function renderAnswer(parts: TextPart[], validUrl: (value: string) => boo
       const end = offsets[citation.end_index + 1];
       if (start === undefined || end === undefined || start >= end) continue;
       const label = `[${source.position}](<${url.replaceAll("&", "&amp;")}>)`;
-      const fence = fences.find((range) => range.start < end && end <= range.end);
+      const fence = blocks.find((range) => range.start < end && end <= range.end);
       if (fence) {
-        // An unclosed fence has no position for a clickable link. Keep its source row.
+        // A code block without a closing fence keeps its source row.
         if (fence.closing) {
           const labels = fenceCitations.get(fence.closing) ?? [];
           labels.push(label);
@@ -166,10 +132,14 @@ export function renderAnswer(parts: TextPart[], validUrl: (value: string) => boo
       insertions.set(at, labels);
     }
 
-    for (const [{ at, lineEnding }, labels] of fenceCitations) {
+    for (const [{ at, lineEnding, prefix }, labels] of fenceCitations) {
+      // The closing line already has the continuation markers for its containers.
+      const blankPrefix = prefix.trimEnd();
       const following = text.slice(at + lineEnding.length);
-      const separator = /^[ \t]*(?:[\r\n]|$)/.test(following) ? "" : lineEnding;
-      insertions.set(at, [lineEnding.repeat(2) + labels.join(" ") + separator]);
+      const separator = /^[ \t>]*(?:[\r\n]|$)/.test(following) ? "" : lineEnding + blankPrefix;
+      insertions.set(at, [
+        lineEnding + blankPrefix + lineEnding + prefix + labels.join(" ") + separator,
+      ]);
     }
 
     let rendered = "";

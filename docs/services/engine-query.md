@@ -87,6 +87,7 @@ At the limit, the Perplexity request reaches the handler and returns HTTP 422
 - `openai`: LLM SDK (also Perplexity and xAI via `baseURL`) (`--llm`)
 - `@anthropic-ai/sdk`: LLM SDK (`--llm`)
 - `@google/genai`: LLM SDK (`--llm`)
+- `mdast-util-from-markdown`: CommonMark source positions for citation placement
 <!-- GENERATED:deps END -->
 
 ## Notes

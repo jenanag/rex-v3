@@ -230,6 +230,11 @@ test.each([
     "See `Guide\nexample` [1](<https://example.test/guide>) for the command.",
   ],
   [
+    "an inline code span after a leading byte-order mark",
+    "\uFEFFSee `Guide` for the command.",
+    "\uFEFFSee `Guide` [1](<https://example.test/guide>) for the command.",
+  ],
+  [
     "a backtick fence",
     "```txt\nGuide\n```\n\nFollow the command.",
     "```txt\nGuide\n```\n\n[1](<https://example.test/guide>)\n\nFollow the command.",
@@ -238,6 +243,16 @@ test.each([
     "a tilde fence",
     "~~~txt\nGuide\n~~~\n\nFollow the command.",
     "~~~txt\nGuide\n~~~\n\n[1](<https://example.test/guide>)\n\nFollow the command.",
+  ],
+  [
+    "a tilde fence inside a blockquote",
+    "> ~~~txt\n> Guide\n> ~~~\n>\n> Follow the command.",
+    "> ~~~txt\n> Guide\n> ~~~\n>\n> [1](<https://example.test/guide>)\n>\n> Follow the command.",
+  ],
+  [
+    "a backtick fence inside a list item",
+    "12. ```txt\n    Guide\n    ```\n\n    Follow the command.",
+    "12. ```txt\n    Guide\n    ```\n\n    [1](<https://example.test/guide>)\n\n    Follow the command.",
   ],
   [
     "a longer closing fence followed by prose without a blank line",

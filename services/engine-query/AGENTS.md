@@ -91,6 +91,8 @@ switches: `--llm`). Anything else needs Jay's approval first.
 - `openai`: LLM SDK (also Perplexity and xAI via `baseURL`) (--llm)
 - `@anthropic-ai/sdk`: LLM SDK (--llm)
 - `@google/genai`: LLM SDK (--llm)
+- `mdast-util-from-markdown`: CommonMark source positions for citation placement
+  (engine-query)
 
 ## Rules inside this folder
 

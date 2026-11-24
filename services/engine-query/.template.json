@@ -25,10 +25,12 @@
       "sha256": "db0e57daccaec7e833782e4da306ef00a22f8df8bbd23e35dde1984e2877109e"
     },
     "package-lock.json": {
-      "sha256": "ddca0933d01a1a3c7effda36cd399142fdb3b9024a7233139467fb98e0bca0ff"
+      "sha256": "ddca0933d01a1a3c7effda36cd399142fdb3b9024a7233139467fb98e0bca0ff",
+      "owned": true
     },
     "package.json": {
-      "sha256": "10c411c3460217ea314c280269931567293a2cca96191888a4c4c2b78095f10f"
+      "sha256": "10c411c3460217ea314c280269931567293a2cca96191888a4c4c2b78095f10f",
+      "owned": true
     },
     "README.md": {
       "sha256": "3385a002752de30c66eda38b488a86ea77df38ffae63c3fce34905af7098448e",

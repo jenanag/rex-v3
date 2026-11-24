@@ -26,6 +26,7 @@
     "ajv-formats": "3.0.1",
     "env-schema": "8.0.2",
     "fastify": "5.12.8",
+    "mdast-util-from-markdown": "2.1.0",
     "openai": "7.62.0",
     "pino": "10.4.0"
   },
