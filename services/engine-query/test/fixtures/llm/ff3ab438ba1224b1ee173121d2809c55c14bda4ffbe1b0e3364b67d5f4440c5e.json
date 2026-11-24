@@ -1,0 +1,22 @@
+{
+  "modelVersion": "gemini-3.5-flash-lite",
+  "candidates": [
+    {
+      "finishReason": "STOP",
+      "content": {
+        "role": "model",
+        "parts": [
+          {
+            "text": "Here are two prominent Canadian outdoor brands and the product categories they are best known for:\n\n1. **Arc'teryx**\n   * **Known for:** **Technical Weatherproof Outerwear** (specifically GORE-TEX jackets and shells). Originating in the Coast Mountains of British Columbia, Arc'teryx is globally renowned for its high-performance alpine climbing and skiing apparel, characterized by meticulous craftsmanship, articulated fits, and weather-resistant innovation (such as the iconic *Alpha* and *Beta* series jackets).\n\n2. **Herschel Supply Co.**\n   * **Known for:** **Lifestyle Backpacks and Travel Accessories.** Based in Vancouver, British Columbia, Herschel has become a household name for its classic, vintage mountaineering-inspired backpacks, duffels, and travel gear that bridge the gap between everyday urban commuting and outdoor utility."
+          }
+        ]
+      }
+    }
+  ],
+  "usageMetadata": {
+    "serviceTier": "standard",
+    "promptTokenCount": 35,
+    "candidatesTokenCount": 172,
+    "totalTokenCount": 207
+  }
+}

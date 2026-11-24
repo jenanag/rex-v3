@@ -57,7 +57,7 @@ setting the 3 MiB request body ceiling for answer-analysis at scaffolding.
 Jay accepted [ADR 0037](docs/adr/0037-engine-query-language.md) on 2026-11-24,
 confirming TypeScript and the existing LLM template for engine-query.
 Jay accepted [ADR 0038](docs/adr/0038-engine-query-selectable-web-search.md) on
-2026-11-25. Selectable web search is follow-up work.
+2026-11-25. Engine-query supports selectable search and text-only Gemini.
 Phase 2 builds the tools one at a time, before the platform. Open choices are tracked as
 [deferred decisions](docs/roadmap.md#deferred-decisions).
 

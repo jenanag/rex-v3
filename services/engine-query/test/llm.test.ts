@@ -31,6 +31,8 @@ test("mock mode replays synthetic Responses output without credentials or transp
 
 test("fixture keys distinguish prompt whitespace, locale and search country", () => {
   const key = fixtureKey(model, prompt, "en-US", "US");
+  expect(fixtureKey(model, prompt, "en-US", "US", true)).toBe(key);
+  expect(fixtureKey(model, prompt, "en-US", "US", false)).not.toBe(key);
   expect(fixtureKey(model, prompt.replace("the ", "the  "), "en-US", "US")).not.toBe(key);
   expect(fixtureKey(model, prompt, "fr-CA", "US")).not.toBe(key);
   expect(fixtureKey(model, prompt, "en-US", "CA")).not.toBe(key);

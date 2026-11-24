@@ -723,17 +723,40 @@ test("engine query cache keys preserve prompt whitespace and apply HTTP defaults
   const { info, components } = parse(
     await readFile(join(root, "packages/contracts/openapi/services/engine-query.yaml"), "utf8"),
   );
-  const { locale, country } = components.schemas.EngineQuery.properties;
+  const { locale, country, webSearch } = components.schemas.EngineQuery.properties;
   const { keyVersion, operations } = tools["engine-query"];
-  const { normalize, extraKeyInputs } = operations.queryEngine;
-  assert.equal(keyVersion, 2);
-  assert.equal(info.version, "2.0.0");
+  const { normalize, extraKeyInputs, webSearchDefaults } = operations.queryEngine;
+  assert.equal(keyVersion, 3);
+  assert.equal(info.version, "2.1.0");
+  assert.equal(webSearch.type, "boolean");
+  assert.equal(webSearch.default, undefined);
+  assert.deepEqual(webSearchDefaults, { chatgpt: true, gemini: false });
+  assert.ok(!components.schemas.EngineQuery.required.includes("webSearch"));
   assert.deepEqual(extraKeyInputs, ["engineModel"]);
   assert.equal(normalize?.prompt, undefined);
 
   // Fixture for the caller policy, with a fixed scope, window and sample.
-  function cacheKey(prompt: string, hints = {}, model = "gpt-6-luna") {
-    const input = { engine: "chatgpt", prompt, locale: locale.default, country: country.default, ...hints };
+  function cacheKey(
+    prompt: string,
+    hints: {
+      engine?: "chatgpt" | "gemini";
+      locale?: string;
+      country?: string;
+      webSearch?: boolean;
+    } = {},
+    model = "gpt-6-luna",
+  ) {
+    const { engine = "chatgpt", webSearch, ...region } = hints;
+    const effectiveSearch = webSearch ?? webSearchDefaults[engine];
+    assert.ok(!effectiveSearch || engine === "chatgpt", "unsupported search must bypass lookup");
+    const input = {
+      engine,
+      prompt,
+      locale: locale.default,
+      country: country.default,
+      ...region,
+      webSearch: effectiveSearch,
+    };
     const keyInput = { ...input, ["$" + extraKeyInputs[0]]: model };
     const canonical = JSON.stringify(keyInput, Object.keys(keyInput).sort());
     return `rex:c:engine-query:queryEngine:v${info.version.split(".")[0]}.${keyVersion}:shared:2026-11-24:0:` +
@@ -744,6 +767,17 @@ test("engine query cache keys preserve prompt whitespace and apply HTTP defaults
   assert.notEqual(cacheKey(prompt), cacheKey("Print 'A B' verbatim."));
   assert.notEqual(cacheKey(prompt), cacheKey(prompt, { country: "CA" }));
   assert.notEqual(cacheKey(prompt), cacheKey(prompt, {}, "another-model"));
+  assert.equal(cacheKey(prompt), cacheKey(prompt, { webSearch: true }));
+  assert.notEqual(cacheKey(prompt), cacheKey(prompt, { webSearch: false }));
+  const geminiModel = "gemini-3.5-flash-lite";
+  assert.equal(
+    cacheKey(prompt, { engine: "gemini" }, geminiModel),
+    cacheKey(prompt, { engine: "gemini", webSearch: false }, geminiModel),
+  );
+  assert.throws(
+    () => cacheKey(prompt, { engine: "gemini", webSearch: true }, geminiModel),
+    /unsupported search/,
+  );
 });
 
 test("answer-analysis environment docs follow the service schema", async (t) => {

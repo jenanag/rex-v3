@@ -7,7 +7,8 @@ import { ToolProblem } from "../errors.js";
 import { createLlm } from "../llm/adapter.js";
 import { deployment } from "../llm/catalog.js";
 
-type Query = Required<components["schemas"]["EngineQuery"]>;
+type Query = Required<Omit<components["schemas"]["EngineQuery"], "webSearch">> &
+  Pick<components["schemas"]["EngineQuery"], "webSearch">;
 
 export function createHandlers(spec: ToolSpec, call = createLlm()): Handlers {
   const urlSchema = spec.components?.schemas?.Url;
@@ -16,15 +17,23 @@ export function createHandlers(spec: ToolSpec, call = createLlm()): Handlers {
   return {
     listEngines: async () => ({ data: deployment.map(({ engine }) => engine) }),
     queryEngine: async (request) => {
-      const { engine, prompt, locale, country } = request.body as Query;
+      const { engine, prompt, locale, country, webSearch } = request.body as Query;
       const entry = deployment.find(
         ({ engine: configured }) => configured.id === engine && configured.enabled,
       );
       if (!entry)
         throw new ToolProblem(422, "unsupported_engine", "/engine: Engine is not configured");
 
+      const search = webSearch ?? entry.engine.webSearch;
+      if (search && !entry.engine.webSearch)
+        throw new ToolProblem(
+          422,
+          "unsupported_web_search",
+          "/webSearch: Engine does not support web search",
+        );
+
       const start = performance.now();
-      const { parts, usage } = await call(entry, prompt, locale, country);
+      const { parts, usage } = await call(entry, prompt, locale, country, search);
       return {
         answer: {
           engine: entry.engine.id,

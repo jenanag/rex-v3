@@ -1,8 +1,7 @@
 import { expect, test, vi } from "vitest";
 import { createLlm } from "../src/llm/adapter.js";
-import { checkResponse, tool } from "./support.js";
+import { checkResponse, postAnswer as post, tool } from "./support.js";
 
-const path = "/v1/engine-answers";
 const query = { engine: "chatgpt", prompt: "What is the Discovery Pass?" };
 const expectedEngine = {
   id: "chatgpt",
@@ -48,20 +47,6 @@ function provider(fetch: typeof globalThis.fetch) {
   return createLlm({ data: { LLM_MODE: "live", OPENAI_API_KEY: "test-only" }, fetch });
 }
 
-async function post(app: ReturnType<typeof tool>, payload: object, status: number) {
-  const response = await app.inject({ method: "POST", url: path, payload });
-  expect(response.statusCode).toBe(status);
-  const body = response.json();
-  checkResponse(
-    "POST",
-    path,
-    status,
-    status === 200 ? "application/json" : "application/problem+json",
-    body,
-  );
-  return { body, headers: response.headers };
-}
-
 test("discovery and ineligible requests make no provider request", async () => {
   const transport = vi.fn(async () => {
     throw new Error("Unexpected provider traffic");
@@ -70,10 +55,22 @@ test("discovery and ineligible requests make no provider request", async () => {
   try {
     const list = await app.inject({ method: "GET", url: "/v1/engines" });
     expect(list.statusCode).toBe(200);
-    expect(list.json()).toEqual({ data: [expectedEngine] });
+    expect(list.json()).toEqual({
+      data: [
+        expectedEngine,
+        {
+          id: "gemini",
+          displayName: "Gemini",
+          provider: "google",
+          model: "gemini-3.5-flash-lite",
+          webSearch: false,
+          enabled: true,
+        },
+      ],
+    });
     checkResponse("GET", "/v1/engines", 200, "application/json", list.json());
 
-    for (const engine of ["claude", "gemini", "perplexity", "grok"]) {
+    for (const engine of ["claude", "perplexity", "grok"]) {
       const { body } = await post(app, { ...query, engine }, 422);
       expect(body).toMatchObject({
         code: "unsupported_engine",
@@ -84,6 +81,20 @@ test("discovery and ineligible requests make no provider request", async () => {
     expect(invalid).toMatchObject({ code: "validation_failed", errors: [{ pointer: "/engine" }] });
     const { body: missing } = await post(app, { engine: "chatgpt" }, 400);
     expect(missing).toMatchObject({ code: "validation_failed", errors: [{ pointer: "/prompt" }] });
+    const { body: unsupported } = await post(
+      app,
+      { ...query, engine: "gemini", webSearch: true },
+      422,
+    );
+    expect(unsupported).toMatchObject({
+      code: "unsupported_web_search",
+      detail: expect.stringContaining("/webSearch"),
+    });
+    const { body: badSearch } = await post(app, { ...query, webSearch: "false" }, 400);
+    expect(badSearch).toMatchObject({
+      code: "validation_failed",
+      errors: [{ pointer: "/webSearch" }],
+    });
     expect(transport).not.toHaveBeenCalled();
   } finally {
     await app.close();
@@ -100,7 +111,10 @@ test("registered defaults and explicit hints map verbatim prompts to one Respons
   const app = tool({}, provider(transport));
   try {
     const prompt = "  Compare A  B.\nUse both lines.  ";
-    for (const [index, hints] of [{}, { locale: "fr-CA", country: "CA" }].entries()) {
+    for (const [index, hints] of [
+      {},
+      { locale: "fr-CA", country: "CA", webSearch: true },
+    ].entries()) {
       const { body } = await post(app, { ...query, prompt, ...hints }, 200);
       expect(body).toEqual({
         answer: {
@@ -134,6 +148,62 @@ test("registered defaults and explicit hints map verbatim prompts to one Respons
         prompt_cache_options: { ttl: "30m" },
       });
     }
+  } finally {
+    await app.close();
+  }
+});
+
+const textOnlyAnswer = "Synthetic text-only answer.";
+const textOnlyRequest = {
+  model: "gpt-6-luna",
+  instructions: "Answer in Markdown. Prefer locale en-US. Use US as a regional relevance hint.",
+  input: [{ role: "user", content: query.prompt }],
+  reasoning: { effort: "low" },
+  max_output_tokens: 2_048,
+  service_tier: "default",
+  store: false,
+  prompt_cache_options: { ttl: "30m" },
+};
+
+test.each([
+  ["absent", undefined],
+  ["zero", { web_search: { num_requests: 0 } }],
+])(
+  "ChatGPT text-only mode accepts %s search usage without search fees",
+  async (_name, toolUsage) => {
+    const transport = vi.fn<typeof globalThis.fetch>(async () =>
+      Response.json({ ...completion, output: [message(textOnlyAnswer)], tool_usage: toolUsage }),
+    );
+    const app = tool({}, provider(transport));
+    try {
+      const { body } = await post(app, { ...query, webSearch: false }, 200);
+      expect(body.answer).toMatchObject({ text: textOnlyAnswer, sources: [] });
+      expect(body.usage).toEqual([{ ...expectedUsage, costMicrosUsd: 211 }]);
+      expect(transport).toHaveBeenCalledOnce();
+      expect(JSON.parse(String(transport.mock.calls[0][1]?.body))).toEqual(textOnlyRequest);
+    } finally {
+      await app.close();
+    }
+  },
+);
+
+test.each([
+  [
+    "a billable search without an execution record",
+    [message(textOnlyAnswer)],
+    { web_search: { num_requests: 1 } },
+  ],
+  ["a completed search without search usage", [search, message(textOnlyAnswer)], undefined],
+])("ChatGPT text-only mode rejects %s", async (_name, output, toolUsage) => {
+  const transport = vi.fn<typeof globalThis.fetch>(async () =>
+    Response.json({ ...completion, output, tool_usage: toolUsage }),
+  );
+  const app = tool({}, provider(transport));
+  try {
+    const { body } = await post(app, { ...query, webSearch: false }, 503);
+    expect(body).toMatchObject({ code: "provider_unavailable" });
+    expect(transport).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(transport.mock.calls[0][1]?.body))).toEqual(textOnlyRequest);
   } finally {
     await app.close();
   }

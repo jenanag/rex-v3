@@ -19,7 +19,7 @@ to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the super
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
 Phase 1 was completed on 2026-11-22. Phase 2 has started. Jay accepted ADRs 0025
 and 0026 on 2026-11-22, ADR 0027, ADR 0028, and ADR 0029 on 2026-11-23, and ADR 0030, ADR 0031, ADR 0032, and ADR 0033
-on 2026-11-24. Jay accepted ADR 0034 on 2026-11-24, recording that both Python validators missed the large-workload budget. The Python bring-up remains paused. Jay accepted ADR 0035 on 2026-11-24, selecting TypeScript for answer-analysis. Jay accepted ADR 0036 on 2026-11-24, setting its request body limit for scaffolding. Jay accepted ADR 0037 on 2026-11-24, confirming TypeScript for engine-query. Jay accepted ADR 0038 on 2026-11-25, making selectable engine-query web search follow-up work. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
+on 2026-11-24. Jay accepted ADR 0034 on 2026-11-24, recording that both Python validators missed the large-workload budget. The Python bring-up remains paused. Jay accepted ADR 0035 on 2026-11-24, selecting TypeScript for answer-analysis. Jay accepted ADR 0036 on 2026-11-24, setting its request body limit for scaffolding. Jay accepted ADR 0037 on 2026-11-24, confirming TypeScript for engine-query. Jay accepted ADR 0038 on 2026-11-25 for selectable engine-query web search. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
 
 See the [roadmap](docs/roadmap.md) for the build order and review gates.
 

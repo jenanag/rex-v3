@@ -1,8 +1,8 @@
 import type { Response } from "openai/resources/responses/responses";
 import type { components } from "../../contract/types.js";
-import type { Engine } from "./catalog.js";
+import type { OpenAiEngine } from "./catalog.js";
 
-function count(value: unknown): number {
+export function count(value: unknown): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0)
     throw new Error("Invalid or missing provider usage");
   return value;
@@ -10,7 +10,8 @@ function count(value: unknown): number {
 
 export function answerUsage(
   response: Response,
-  { engine, price }: Engine,
+  { engine, price }: OpenAiEngine,
+  webSearch: boolean,
 ): components["schemas"]["LlmUsage"] {
   if (response.service_tier != null && response.service_tier !== "default")
     throw new Error("Unexpected provider service tier");
@@ -20,7 +21,10 @@ export function answerUsage(
   const outputTokens = count(usage?.output_tokens);
   const reads = count(usage?.input_tokens_details?.cached_tokens);
   const writes = count(usage?.input_tokens_details?.cache_write_tokens);
-  const searches = count(response.tool_usage?.web_search?.num_requests);
+  const reportedSearches = response.tool_usage?.web_search?.num_requests;
+  const searches = count(!webSearch && reportedSearches === undefined ? 0 : reportedSearches);
+  if (!webSearch && searches !== 0)
+    throw new Error("Provider reported billable web search in text-only mode");
   const writeDetails = usage?.input_tokens_details?.cache_write_tokens_details;
   const reasoning = usage?.output_tokens_details?.reasoning_tokens;
   if (

@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { GenerateContentResponse } from "@google/genai";
 import { envSchema } from "env-schema";
 import OpenAI from "openai";
 import type {
@@ -11,34 +12,51 @@ import type { TextPart } from "../domain/citations.js";
 import { ToolProblem } from "../errors.js";
 import type { Engine } from "./catalog.js";
 import { llmEnvProperties } from "./env.js";
+import { geminiAnswer, geminiEndpoint, geminiRequest, generateGemini } from "./gemini.js";
 import { retryAfter } from "./retry-after.js";
 import { answerUsage } from "./usage.js";
 
 type LlmEnv = {
   LLM_MODE: "live" | "mock" | "record";
   OPENAI_API_KEY?: string;
+  GEMINI_API_KEY?: string;
 };
 
 export const providerTimeoutMs = 110_000;
 const endpoint = "https://api.openai.com/v1";
 
-function responsesRequest(model: string, prompt: string, locale: string, country: string) {
+function responsesRequest(
+  model: string,
+  prompt: string,
+  locale: string,
+  country: string,
+  webSearch: boolean,
+) {
   return {
     model,
-    instructions:
-      "Use the web search tool to answer the user's prompt in Markdown. Prefer answer locale " +
-      locale +
-      ".",
+    instructions: webSearch
+      ? "Use the web search tool to answer the user's prompt in Markdown. Prefer answer locale " +
+        locale +
+        "."
+      : "Answer in Markdown. Prefer locale " +
+        locale +
+        ". Use " +
+        country +
+        " as a regional relevance hint.",
     input: [{ role: "user", content: prompt }],
-    tools: [
-      {
-        type: "web_search",
-        search_context_size: "low",
-        user_location: { type: "approximate", country },
-      },
-    ],
-    tool_choice: "required",
-    max_tool_calls: 1,
+    ...(webSearch
+      ? {
+          tools: [
+            {
+              type: "web_search" as const,
+              search_context_size: "low" as const,
+              user_location: { type: "approximate" as const, country },
+            },
+          ],
+          tool_choice: "required" as const,
+          max_tool_calls: 1,
+        }
+      : {}),
     reasoning: { effort: "low" },
     max_output_tokens: 2_048,
     store: false,
@@ -47,22 +65,29 @@ function responsesRequest(model: string, prompt: string, locale: string, country
   } satisfies ResponseCreateParamsNonStreaming;
 }
 
-export function fixtureKey(model: string, prompt: string, locale: string, country: string) {
-  return createHash("sha256")
-    .update(
-      JSON.stringify({
-        endpoint: endpoint + "/responses",
-        request: responsesRequest(model, prompt, locale, country),
-      }),
-    )
-    .digest("hex");
+function providerFixtureKey(endpoint: string, request: object) {
+  return createHash("sha256").update(JSON.stringify({ endpoint, request })).digest("hex");
 }
 
-function answerParts(result: Response, model: string): TextPart[] {
+export function fixtureKey(
+  model: string,
+  prompt: string,
+  locale: string,
+  country: string,
+  webSearch = true,
+) {
+  return providerFixtureKey(
+    endpoint + "/responses",
+    responsesRequest(model, prompt, locale, country, webSearch),
+  );
+}
+
+function answerParts(result: Response, model: string, webSearch: boolean): TextPart[] {
   if (result.model !== model) throw new Error("Unexpected provider model");
   if (result.status !== "completed" || result.error || result.incomplete_details)
     throw new Error("Provider response did not complete");
   if (
+    webSearch &&
     !result.output.some(
       (item) =>
         item.type === "web_search_call" &&
@@ -71,6 +96,8 @@ function answerParts(result: Response, model: string): TextPart[] {
     )
   )
     throw new Error("Required web search did not complete");
+  if (!webSearch && result.output.some((item) => item.type === "web_search_call"))
+    throw new Error("Provider reported web search in text-only mode");
 
   const parts = result.output.flatMap((item) => {
     if (item.type !== "message" || item.role !== "assistant") return [];
@@ -78,19 +105,23 @@ function answerParts(result: Response, model: string): TextPart[] {
       throw new Error("Provider answer was refused or incomplete");
     return item.content.filter((part) => part.type === "output_text");
   });
-  if (parts.some((part) => typeof part.text !== "string" || !Array.isArray(part.annotations)))
+  if (
+    parts.some(
+      (part) => typeof part.text !== "string" || (webSearch && !Array.isArray(part.annotations)),
+    )
+  )
     throw new Error("Invalid provider text part");
   if (!parts.some((part) => part.text.trim())) throw new Error("Provider answer was blank");
   return parts.map(({ text, annotations }) => ({
     text,
-    annotations: annotations.filter((item) => item?.type === "url_citation"),
+    annotations: webSearch ? annotations.filter((item) => item?.type === "url_citation") : [],
   }));
 }
 
-async function record(fixtureDir: string, file: string, result: Response) {
+function openAiFixture(result: Response) {
   const { model, status, error, incomplete_details, output, usage, tool_usage, service_tier } =
     result;
-  const fixture = {
+  return {
     model,
     status,
     error,
@@ -100,6 +131,9 @@ async function record(fixtureDir: string, file: string, result: Response) {
     tool_usage,
     service_tier,
   };
+}
+
+async function record(fixtureDir: string, file: string, fixture: object) {
   await mkdir(fixtureDir, { recursive: true });
   const directory = await mkdtemp(join(fixtureDir, ".record-"));
   try {
@@ -135,12 +169,36 @@ export function createLlm({
     },
   });
 
-  return async (entry: Engine, prompt: string, locale: string, country: string) => {
+  return async (
+    entry: Engine,
+    prompt: string,
+    locale: string,
+    country: string,
+    webSearch = entry.engine.webSearch,
+  ) => {
     const { model } = entry.engine;
-    const file = join(fixtureDir, fixtureKey(model, prompt, locale, country) + ".json");
+    const mock = env.LLM_MODE === "mock";
     try {
+      if (entry.kind === "google") {
+        const request = geminiRequest(model, prompt, locale, country);
+        const key = providerFixtureKey(geminiEndpoint(model), request);
+        const file = join(fixtureDir, key + ".json");
+        const result = mock
+          ? (JSON.parse(await readFile(file, "utf8")) as GenerateContentResponse)
+          : await generateGemini(request, env.GEMINI_API_KEY, providerTimeoutMs, fetch);
+        const answer = geminiAnswer(result, entry);
+        if (env.LLM_MODE === "record") {
+          const { modelVersion, candidates, usageMetadata } = result;
+          await record(fixtureDir, file, { modelVersion, candidates, usageMetadata });
+        }
+        return answer;
+      }
+
+      const request = responsesRequest(model, prompt, locale, country, webSearch);
+      const key = providerFixtureKey(endpoint + "/responses", request);
+      const file = join(fixtureDir, key + ".json");
       let result: Response;
-      if (env.LLM_MODE === "mock") {
+      if (mock) {
         result = JSON.parse(await readFile(file, "utf8")) as Response;
       } else {
         if (!env.OPENAI_API_KEY) throw new Error("Missing provider credential");
@@ -150,15 +208,15 @@ export function createLlm({
           maxRetries: 0,
           fetch,
         });
-        result = await client.responses.create(responsesRequest(model, prompt, locale, country), {
+        result = await client.responses.create(request, {
           signal: AbortSignal.timeout(providerTimeoutMs),
           timeout: providerTimeoutMs,
         });
       }
 
-      const usage = answerUsage(result, entry);
-      const parts = answerParts(result, model);
-      if (env.LLM_MODE === "record") await record(fixtureDir, file, result);
+      const usage = answerUsage(result, entry, webSearch);
+      const parts = answerParts(result, model, webSearch);
+      if (env.LLM_MODE === "record") await record(fixtureDir, file, openAiFixture(result));
       return { parts, usage };
     } catch (error) {
       throw new ToolProblem(

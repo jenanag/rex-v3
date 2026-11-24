@@ -36,10 +36,14 @@ the REx monorepo and re-vendor contract changes there.
 | `XAI_API_KEY` | unset | xAI credential for live or record mode. |
 <!-- GENERATED:env END -->
 
-Mock mode reads the matching Responses fixture in `test/fixtures/llm/`. Its
+Mock mode reads the matching provider fixture in `test/fixtures/llm/`. Its
 identity includes the endpoint and full serialized provider request, including
 instructions and search settings. The Parks Canada Discovery Pass fixture was
 recorded from a single GPT-6 Luna Responses request with a synthetic prompt.
 It keeps the answer, citation offsets, completed search status, and usage fields
 needed for replay. The synthetic fixture and metering cases cover additional
 provider behavior. Mock replay runs without credentials or provider traffic.
+The Canadian outdoor brands fixture was recorded from one Gemini 3.5 Flash-Lite
+Developer API v1 request with a synthetic prompt. It preserves the text, finish
+reason, model, and reported Standard usage. The Gemini replay verifies the answer
+and 441-microdollar cost. Synthetic cases cover cache reads and thinking tokens.

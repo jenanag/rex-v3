@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { expect } from "vitest";
 import { parse } from "yaml";
 import { createApp } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
@@ -37,4 +38,19 @@ export function checkResponse(
     throw new Error("Response is absent from the contract: " + method + " " + path + " " + status);
   const validate = compile(media.schema);
   if (!validate(payload)) throw new Error(JSON.stringify(validate.errors));
+}
+
+export async function postAnswer(app: ReturnType<typeof tool>, payload: object, status: number) {
+  const path = "/v1/engine-answers";
+  const response = await app.inject({ method: "POST", url: path, payload });
+  expect(response.statusCode).toBe(status);
+  const body = response.json();
+  checkResponse(
+    "POST",
+    path,
+    status,
+    status === 200 ? "application/json" : "application/problem+json",
+    body,
+  );
+  return { body, headers: response.headers };
 }
