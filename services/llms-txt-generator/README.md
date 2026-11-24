@@ -27,7 +27,6 @@ the REx monorepo and re-vendor contract changes there.
 | `LOG_LEVEL` | info | Structured log level. |
 | `PROBLEM_BASE_URI` | https://problems.rex.invalid | Base URI for problem types. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | OTLP collector. Export is off when unset. |
-| `LLMS_TXT_GENERATOR_DEFAULT_MODEL` | openai/gpt-6-luna | Default priced model for LLM-assisted page descriptions. |
 | `BODY_LIMIT_BYTES` | 12582912 | Fastify request body limit in bytes for all routes (ADR 0029). |
 | `LLM_MODE` | unset | Mock by default in tests, live otherwise. |
 | `OPENAI_API_KEY` | unset | OpenAI credential for live or record mode. |

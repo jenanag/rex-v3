@@ -10,16 +10,22 @@ const path = "/v1/engine-answers";
 const expectedLimit = 1_048_576;
 const warmups = 200;
 const samples = 1_000;
-const representative = { engine: "chatgpt", prompt: "What is REx?" };
+const representative = {
+  provider: "openai",
+  model: "gpt-6-luna",
+  webSearch: true,
+  prompt: "What is REx?",
+};
 const fullPrompt = {
-  engine: "perplexity",
+  provider: "perplexity",
+  model: "test-only",
+  webSearch: false,
   prompt: "😀".repeat(2_000),
   locale: "eng-US",
   country: "US",
 };
 const escaped = Buffer.from(JSON.stringify({ ...fullPrompt, prompt: "\u0001".repeat(2_000) }));
-const padding = 1_036_508;
-assert.equal(escaped.length, 12_068);
+const padding = expectedLimit - escaped.length;
 const exact = Buffer.concat([escaped, Buffer.alloc(padding, " ")]);
 const workloads = [
   { name: "representative", wire: Buffer.from(JSON.stringify(representative)) },
@@ -70,7 +76,7 @@ async function post(wire, status, code) {
 }
 
 try {
-  await post(exact, 422, "unsupported_engine");
+  await post(exact, 422, "unsupported_model");
   assert.ok(route, "The exact-limit request must reach the registered route");
   const { bodyLimit, validate } = route;
   assert.equal(typeof validate, "function");

@@ -7,8 +7,18 @@ const base = "http://127.0.0.1:" + port;
 const catalog = await fetch(base + "/v1/analyzers", { signal: AbortSignal.timeout(10_000) });
 assert.equal(catalog.status, 200);
 assert.deepEqual(
-  (await catalog.json()).data.map(({ id, kind, languages }) => ({ id, kind, languages })),
-  ["det:lexicon", "det:rules"].map((id) => ({ id, kind: "deterministic", languages: ["en"] })),
+  (await catalog.json()).data.map(({ id, selector, kind, languages }) => ({
+    id,
+    selector,
+    kind,
+    languages,
+  })),
+  ["det:lexicon", "det:rules"].map((id) => ({
+    id,
+    selector: id,
+    kind: "deterministic",
+    languages: ["en"],
+  })),
 );
 
 const analysis = await fetch(base + "/v1/answer-analyses", {

@@ -23,6 +23,7 @@ const lunaModel = {
 
 export const luna = {
   id: `llm:${lunaModel.provider}/${lunaModel.model}`,
+  selector: { provider: lunaModel.provider, model: lunaModel.model },
   kind: "llm",
   languages: ["*"],
   description: "Classifies sentiment for mentioned brands with OpenAI GPT-6 Luna.",

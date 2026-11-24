@@ -44,7 +44,10 @@ const domains = Array.from({ length: 20 }, (_, i) =>
     "d".repeat(59) + String(i).padStart(2, "0"),
   ].join("."),
 );
-const analyzers = ["a", "b", "c", "d", "e"].map((letter) => "det:" + letter.repeat(116));
+const analyzers = [
+  ...["a", "b", "c", "d"].map((letter) => "det:" + letter.repeat(116)),
+  { provider: "openai", model: "e".repeat(90) },
+];
 
 function combined(textCharacter, zero, one) {
   return {

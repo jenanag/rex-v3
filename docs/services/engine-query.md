@@ -28,12 +28,12 @@ orchestrator's `tracking` module.
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `4`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `5`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
 | `listEngines` | `PT5M` | shared |  |
-| `queryEngine` | `P1D` | shared | window, extra key inputs `engineModel`, search defaults `chatgpt` = `true`, `gemini` = `false` |
+| `queryEngine` | `P1D` | shared | window |
 <!-- GENERATED:cache END -->
 
 ## Limits
@@ -45,8 +45,8 @@ See [the tool's operation limits](../../services/engine-query/AGENTS.md#limits).
 The tool uses Fastify's default **1,048,576-byte** request body limit when
 `BODY_LIMIT_BYTES` is unset. The validator benchmark runs a representative, a full
 prompt, and an exact-limit request against the strict **p99 < 5 ms** gate.
-At the limit, the Perplexity request reaches the handler and returns HTTP 422
-`unsupported_engine`. One extra byte returns HTTP 413
+At the limit, the unsupported pair reaches the handler and returns HTTP 422
+`unsupported_model`. One extra byte returns HTTP 413
 `payload_too_large`. To run the benchmark from the tool folder, run
 `npm run build` and then `node scripts/benchmark-validation.mjs` with
 `BODY_LIMIT_BYTES` unset.
@@ -62,9 +62,9 @@ At the limit, the Perplexity request reaches the handler and returns HTTP 422
 - [`UnprocessableContent`](../../packages/contracts/openapi/common.yaml) (responses); also used by answer-analysis, content-auditor, content-extractor, llms-txt-generator, orchestrator, schema-generator, sitemap-extractor.
 - [`AnswerSource`](../../packages/contracts/openapi/common.yaml) (schemas); also used by citation-extractor.
 - [`CountryCode`](../../packages/contracts/openapi/common.yaml) (schemas); also used by orchestrator.
-- [`EngineId`](../../packages/contracts/openapi/common.yaml) (schemas); also used by orchestrator.
 - [`LlmUsageList`](../../packages/contracts/openapi/common.yaml) (schemas); also used by answer-analysis, llms-txt-generator.
 - [`Locale`](../../packages/contracts/openapi/common.yaml) (schemas); also used by orchestrator.
+- [`ProviderModel`](../../packages/contracts/openapi/common.yaml) (schemas); also used by answer-analysis, llms-txt-generator.
 <!-- GENERATED:shared END -->
 
 ## Used by
@@ -109,22 +109,14 @@ source, and usage over loopback HTTP.
 
 ## Notes
 
-- [Accepted ADR 0041](../adr/0041-standardize-tool-provider-model-selection.md)
-  calls for replacing tool-request engine labels with explicit provider and
-  model pairs at the cutover. Tracking labels stay at platform boundaries.
-  Implementation follows separately.
-
-- [ADR 0039](../adr/0039-engine-query-per-request-model.md) adds optional
-  per-request model selection. Discovery reports the default as `model` and the
-  deployment allowlist as **allowedModels**. Each engine currently allows only
-  its default. Unlisted models return HTTP 422 `unsupported_model` with detail
-  identifying `/model`, before any provider call.
-- [ADR 0038](../adr/0038-engine-query-selectable-web-search.md) makes search selectable.
-  Discovery reports search capability. ChatGPT uses GPT-6 Luna through OpenAI
-  Responses and defaults to required hosted search. Explicit false uses text-only
-  generation with zero search fees. Gemini advertises `webSearch: false`.
-  Omission and explicit `false` select text-only generation, and explicit `true`
-  returns HTTP 422 before any provider call. See the
+- [ADR 0041](../adr/0041-standardize-tool-provider-model-selection.md) uses
+  explicit provider and model pairs for tool selection. Discovery lists
+  supported pairs and their search capability. Tracking engine labels belong to
+  the platform. An unsupported exact pair returns HTTP 422 before a provider call.
+- OpenAI GPT-6 Luna supports hosted search through the Responses API.
+  Requests explicitly choose whether web search is required. Text-only answers
+  incur zero search fees. Gemini only supports text-only generation and rejects
+  search-on requests before any provider call. See the
   [deferred decision on opt-in Gemini web search](../roadmap.md#opt-in-gemini-web-search).
 - Gemini uses `gemini-3.5-flash-lite` on the Gemini Developer API v1. Its Standard
   text rates are $0.30 uncached input, $0.03 cached input, and $2.50 output including
@@ -132,7 +124,7 @@ source, and usage over loopback HTTP.
   [Gemini pricing](https://aistudio.google.com/docs/pricing#gemini-3.5-flash-lite).
 - Provider failures return 503. The tool converts a valid upstream `Retry-After`
   to seconds. The worker owns retries.
-- Validate and resolve the model and search mode before lookup as defined by the
+- Validate the explicit pair and search mode before lookup as defined by the
   [caller cache policy](../../packages/contracts/cache/policy.yaml).
   Refresh discovery on rollout and verify the returned model before storage.
   The orchestrator owns future subscription eligibility in

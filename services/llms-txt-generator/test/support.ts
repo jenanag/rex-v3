@@ -18,7 +18,7 @@ export function tool(
   return createApp({
     spec,
     config: settings,
-    handlers: createHandlers(settings, llm),
+    handlers: createHandlers(llm),
     logs: false,
   });
 }

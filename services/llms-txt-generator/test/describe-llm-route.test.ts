@@ -1,15 +1,15 @@
 import { afterAll, afterEach, expect, test, vi } from "vitest";
-import { loadConfig } from "../src/config.js";
 import { createLlm } from "../src/llm/adapter.js";
 import { checkResponse, tool } from "./support.js";
 
 const path = "/v1/llms-txt/page-entries";
-const model = "openai/gpt-6-luna";
-const base = {
+const pair = { provider: "openai", model: "gpt-6-luna" };
+const page = {
   url: "https://example.org/guide",
   metadata: { title: "Setup Guide", description: null, canonicalUrl: null, language: "en" },
   content: { text: "Run setup before starting the service.", markdown: "" },
 };
+const base = { ...page, ...pair };
 const usage = {
   provider: "openai" as const,
   model: "gpt-6-luna",
@@ -48,7 +48,7 @@ async function post(payload: Record<string, unknown> | string, status: number, t
   return { result, headers: res.headers };
 }
 
-test.each([{}, { summarizer: "llm", model }])(
+test.each([{}, { summarizer: "llm" }])(
   "replays the recorded Luna completion and usage for %j",
   async (options) => {
     const { result } = await post({ ...base, ...options }, 200, app);
@@ -82,7 +82,7 @@ test.each([
       }),
     );
     vi.stubGlobal("fetch", fetch);
-    const { result } = await post({ ...base, model }, status, provider);
+    const { result } = await post(base, status, provider);
     expect(fetch).toHaveBeenCalledOnce();
     expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({ model: "gpt-6-luna" });
     if (status === 200) {
@@ -98,20 +98,18 @@ test.each([
   },
 );
 
-test("validates the deployment default without credentials", () => {
-  expect(loadConfig({ NODE_ENV: "test" }).LLMS_TXT_GENERATOR_DEFAULT_MODEL).toBe(model);
-  expect(
-    loadConfig({ LLMS_TXT_GENERATOR_DEFAULT_MODEL: model }).LLMS_TXT_GENERATOR_DEFAULT_MODEL,
-  ).toBe(model);
-  expect(() => loadConfig({ LLMS_TXT_GENERATOR_DEFAULT_MODEL: "openai/unpriced" })).toThrow(
-    /LLMS_TXT_GENERATOR_DEFAULT_MODEL/,
-  );
-});
-
 test.each([
   ["{", 400, "validation_failed", ""],
-  [{ ...base, model: "unqualified" }, 400, "validation_failed", ""],
-  [{ ...base, model: "openai/unlisted" }, 422, "unsupported_model", "/model"],
+  [page, 400, "validation_failed", ""],
+  [{ ...page, provider: pair.provider }, 400, "validation_failed", ""],
+  [{ ...page, model: pair.model }, 400, "validation_failed", ""],
+  [{ ...base, provider: "" }, 400, "validation_failed", ""],
+  [{ ...base, model: 42 }, 400, "validation_failed", ""],
+  [{ ...base, summarizer: "extractive" }, 400, "validation_failed", ""],
+  [{ ...page, summarizer: "extractive", model: pair.model }, 400, "validation_failed", ""],
+  [{ ...page, summarizer: "extractive", provider: pair.provider }, 400, "validation_failed", ""],
+  [{ ...base, model: "openai/gpt-6-luna" }, 422, "unsupported_model", "/model"],
+  [{ ...base, provider: "google" }, 422, "unsupported_model", "/provider"],
   [{ ...base, url: "https://example.org:65536/" }, 422, "invalid_page_url", "/url"],
 ] as const)(
   "returns the shared Problem before the provider call (%j)",
@@ -126,11 +124,8 @@ test.each([
   },
 );
 
-test("extractive stays offline even if given an unlisted schema-valid model", async () => {
-  const { result } = await post(
-    { ...base, summarizer: "extractive", model: "openai/unlisted" },
-    200,
-  );
+test("extractive stays offline without a pair", async () => {
+  const { result } = await post({ ...page, summarizer: "extractive" }, 200);
   expect(result).toEqual({
     entry: { url: base.url, title: "Setup Guide", description: base.content.text },
     usage: [],

@@ -215,7 +215,7 @@ test("422s use the approved precedence and first offending field", async () => {
   const sentiment = {
     language: "fr",
     onUnsupportedLanguage: "error",
-    analyzers: [lex, "llm:openai/model", "det:fake"],
+    analyzers: [lex, { provider: "openai", model: "model" }, "det:fake"],
     primary: rules,
   };
   expect(await post({ ...basic, brands: [brand, brand, brand], sentiment }, 422)).toMatchObject({
@@ -228,7 +228,7 @@ test("422s use the approved precedence and first offending field", async () => {
   });
   expect(await post({ ...basic, sentiment: { ...sentiment, primary: lex } }, 422)).toMatchObject({
     code: "unsupported_analyzer",
-    detail: expect.stringMatching(/^\/sentiment\/analyzers\/1: llm:openai\/model/),
+    detail: expect.stringMatching(/^\/sentiment\/analyzers\/1:/),
   });
   expect(
     await post({ ...basic, sentiment: { ...sentiment, analyzers: [lex, rules] } }, 422),

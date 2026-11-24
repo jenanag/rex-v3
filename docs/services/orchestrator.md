@@ -130,7 +130,10 @@ all jobs of a run are terminal).
   the request, else the org setting of the same name, else its default; the resource
   stores the effective value. Limits from the plan (membership tiers, deferred) will
   cap the result: the smaller value wins. Org settings are internal-only to edit, like
-  cache overrides.
+  cache overrides. Public llms.txt creation can omit the pair in LLM mode.
+  The orchestrator records the OpenAI Luna pin in the effective settings and
+  supplies it explicitly when publishing each page job. Extractive jobs omit
+  both selector fields. [ADR 0041](../adr/0041-standardize-tool-provider-model-selection.md).
 - Packages: `@rex/bus` (pinned, [ADR 0019](../adr/0019-internal-packages.md)); public: `fastify`, `jose`, `pg`, a migration runner chosen in Phase 3; the data layer (transactions, RLS org context) lives inside the service.
 - Vendored contracts: own spec, events, topology, cache policy (validates per-customer overrides).
 
@@ -174,7 +177,9 @@ all jobs of a run are terminal).
   come with the seo-auditor's interface ([deferred decisions](../roadmap.md#deferred-decisions)).
 - A prompt run with *p* prompts, *e* engines and *s* samples publishes *p x e x s*
   `answer-capture` jobs (cache variant = sample index); entitlements are checked before
-  publishing.
+  publishing. Resolve each tracking engine to the provider, model, and explicit
+  search setting in the job query. The request and completion payloads carry the
+  tracking engine separately, and stored answers retain it.
 - Sentiment analyzers for a run come from `PromptRunOptions.sentiment` (default
   deterministic), including `language` and `onUnsupportedLanguage`; comparison views
   show each analyzer's results side by side.

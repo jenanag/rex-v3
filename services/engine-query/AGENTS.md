@@ -29,8 +29,8 @@ confirms it at the start of its Phase 2 step.
 
 Operations:
 
-- `listEngines` (`GET /v1/engines`): Engines this deployment can query and their default
-  and allowed models.
+- `listEngines` (`GET /v1/engines`): Provider and model pairs this deployment can query
+  and their capabilities.
 - `queryEngine` (`POST /v1/engine-answers`): Ask one engine one prompt (one sample) and
   return its answer.
 
@@ -47,10 +47,11 @@ folder").
 
 - `AnswerSource` (schema, response); also used by citation-extractor.
 - `CountryCode` (schema, request); also used by orchestrator.
-- `EngineId` (schema, request and response); also used by orchestrator.
 - `LlmUsageList` (schema, response); also used by answer-analysis, llms-txt-generator,
   bus messages.
 - `Locale` (schema, request); also used by orchestrator.
+- `ProviderModel` (schema, request and response); also used by answer-analysis,
+  llms-txt-generator, orchestrator.
 - `BadRequest` (error response); also used by answer-analysis, citation-extractor,
   content-auditor, content-extractor, llms-txt-generator, orchestrator, schema-generator,
   sitemap-extractor.

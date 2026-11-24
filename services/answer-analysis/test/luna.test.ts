@@ -14,6 +14,7 @@ import { checkResponse, tool } from "./support.js";
 type Brand = components["schemas"]["TrackedBrand"];
 const path = "/v1/answer-analyses";
 const model = luna.id;
+const selector = luna.selector;
 const lexicon = "det:lexicon";
 const rules = "det:rules";
 const brand: Brand = { key: "acme", kind: "primary", name: "Acme", aliases: [], domains: [] };
@@ -121,6 +122,7 @@ test.each([
     if (lunaEnabled)
       expect(reply.json().data.at(-1)).toMatchObject({
         id: model,
+        selector,
         kind: "llm",
         languages: ["*"],
       });
@@ -132,13 +134,49 @@ test.each([
   expect(data.usage).toEqual([]);
   const requested = await post(
     handlers,
-    { text, brands, sentiment: { analyzers: [model] } },
+    { text, brands, sentiment: { analyzers: [selector] } },
     lunaEnabled ? 200 : 422,
   );
   expect(requested.data).toMatchObject(
     lunaEnabled ? { usage: [metered] } : { code: "unsupported_analyzer" },
   );
   expect(provider.fetch).toHaveBeenCalledTimes(lunaEnabled ? 1 : 0);
+});
+
+test("rejects malformed, duplicate and unavailable selectors before transport", async () => {
+  const provider = stub(() => completion());
+  const handlers = createHandlers({ lunaEnabled: true, llm: provider.llm });
+  const reordered = { model: selector.model, provider: selector.provider };
+  for (const analyzers of [
+    [selector, reordered],
+    [model],
+    [{ provider: selector.provider }],
+    [{ ...selector, extra: true }],
+  ]) {
+    const { data } = await post(handlers, { text, brands, sentiment: { analyzers } }, 400);
+    expect(data.code).toBe("validation_failed");
+  }
+  const wrongPair = { ...selector, provider: "google" };
+  for (const [primary, code] of [
+    [selector, "invalid_primary"],
+    [wrongPair, "unsupported_analyzer"],
+  ] as const) {
+    const { data } = await post(
+      handlers,
+      { text, brands, sentiment: { analyzers: [wrongPair], primary } },
+      422,
+    );
+    expect(data.code).toBe(code);
+  }
+  expect(provider.fetch).not.toHaveBeenCalled();
+
+  const { data } = await post(handlers, {
+    text,
+    brands,
+    sentiment: { analyzers: [lexicon, selector], primary: reordered },
+  });
+  expect(data.analyzers[1]).toMatchObject({ analyzer: model, primary: true });
+  expect(provider.fetch).toHaveBeenCalledOnce();
 });
 
 test("authorized Luna recording replays offline and preserves mention and analyzer ordering", async () => {
@@ -151,7 +189,7 @@ test("authorized Luna recording replays offline and preserves mention and analyz
   const { data } = await post(handlers, {
     text,
     brands,
-    sentiment: { language: "en", analyzers: [model, lexicon, rules] },
+    sentiment: { language: "en", analyzers: [selector, lexicon, rules] },
   });
   expect(llm).toHaveBeenCalledTimes(1);
   expect(fetch).not.toHaveBeenCalled();
@@ -228,7 +266,7 @@ test("authorized Luna recording replays offline and preserves mention and analyz
 test("wildcard includes undetermined language and strict language validation runs before any provider call", async () => {
   const provider = stub(() => completion(JSON.stringify({ results: [rows[1]] })));
   const handlers = createHandlers({ lunaEnabled: true, llm: provider.llm });
-  const input = { text: "Acme.", brands, sentiment: { analyzers: [lexicon, model] } };
+  const input = { text: "Acme.", brands, sentiment: { analyzers: [lexicon, selector] } };
   const { data: rejected } = await post(
     handlers,
     { ...input, sentiment: { ...input.sentiment, onUnsupportedLanguage: "error" } },
@@ -257,7 +295,7 @@ test("wildcard includes undetermined language and strict language validation run
   expect(promoted.data.primaryFallback).toBe(true);
   const explicit = await post(handlers, {
     ...input,
-    sentiment: { ...input.sentiment, primary: model, language: "en" },
+    sentiment: { ...input.sentiment, primary: selector, language: "en" },
   });
   expect(explicit.data).toMatchObject({
     primaryFallback: false,
@@ -288,7 +326,7 @@ test("actual SDK request fits 64 KiB with all 50 brands and worst-case JSON esca
   const { data } = await post(createHandlers({ lunaEnabled: true, llm: provider.llm }), {
     text: answer,
     brands: tracked,
-    sentiment: { language: "en", analyzers: [model] },
+    sentiment: { language: "en", analyzers: [selector] },
   });
   expect(provider.fetch).toHaveBeenCalledTimes(1);
   const [url, init] = provider.fetch.mock.calls[0];
@@ -341,7 +379,7 @@ test("oversized span is clipped, with in-excerpt offsets and the same brand ID",
   ]);
 });
 
-const input = { text, brands, sentiment: { language: "en", analyzers: [lexicon, model] } };
+const input = { text, brands, sentiment: { language: "en", analyzers: [lexicon, selector] } };
 const jsonRows = (...results: unknown[]) => JSON.stringify({ results });
 
 test.each([
@@ -363,7 +401,10 @@ test.each([
       const status = !matches && primary === model ? 503 : 200;
       const { data } = await post(
         handlers,
-        { ...input, sentiment: { ...input.sentiment, primary } },
+        {
+          ...input,
+          sentiment: { ...input.sentiment, primary: primary === model ? selector : primary },
+        },
         status,
       );
       expect(provider.fetch).toHaveBeenCalledOnce();
@@ -437,7 +478,7 @@ test.each([{ refusal: "refused" }, { finish: "content_filter" }, { finish: "leng
     });
     const { data, retryAfter } = await post(
       handlers,
-      { ...input, sentiment: { ...input.sentiment, primary: model } },
+      { ...input, sentiment: { ...input.sentiment, primary: selector } },
       503,
     );
     expect(data.code).toBe("provider_unavailable");
@@ -481,7 +522,7 @@ test.each([
     createHandlers({ lunaEnabled: true, llm: provider.llm }),
     {
       ...input,
-      sentiment: { ...input.sentiment, primary: model },
+      sentiment: { ...input.sentiment, primary: selector },
     },
     503,
   );
@@ -581,7 +622,7 @@ test.each(["priority", "flex"])(
         }
         const primary = await post(
           handlers,
-          { ...input, sentiment: { ...input.sentiment, primary: model } },
+          { ...input, sentiment: { ...input.sentiment, primary: selector } },
           503,
           warn,
         );

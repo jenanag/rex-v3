@@ -51,6 +51,8 @@ folder").
   messages.
 - `LlmsTxtValidation` (schema, response); also used by content-auditor.
 - `PageMetadata` (schema, request); also used by content-extractor.
+- `ProviderModel` (schema, request); also used by answer-analysis, engine-query,
+  orchestrator.
 - `Url` (schema, request and response); also used by citation-extractor,
   content-auditor, content-extractor, engine-query, orchestrator, schema-generator,
   sitemap-extractor, bus messages.

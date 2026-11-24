@@ -39,6 +39,8 @@ const inlineCap = LlmsTxtValidateRequest.oneOf.find(({ properties }) => properti
 const fileCap = FetchedFile.properties.content.maxLength;
 
 const describe = (text, markdown) => ({
+  provider: "openai",
+  model: "gpt-6-luna",
   url: siteUrl,
   metadata: {
     title: "Example",

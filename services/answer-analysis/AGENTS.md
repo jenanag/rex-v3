@@ -46,6 +46,8 @@ folder").
   llms-txt-generator.
 - `LlmUsageList` (schema, response); also used by engine-query, llms-txt-generator, bus
   messages.
+- `ProviderModel` (schema, request and response); also used by engine-query,
+  llms-txt-generator, orchestrator.
 - `Sentiment` (schema, response); also used by orchestrator.
 - `TrackedBrand` (schema, request); also used by citation-extractor.
 - `BadRequest` (error response); also used by citation-extractor, content-auditor,
@@ -68,8 +70,8 @@ From `x-rex-limits` in the spec (single source); stay within them.
 - `listAnalyzers`: internal (workers only); no max duration stated yet; no LLM; no
   outbound fetch.
 - `analyzeAnswer`: internal (workers only); no max duration stated yet; LLM only when
-  the request asks for it; each LLM call up to PT60S; no outbound fetch (LLM only for llm:
-  analyzers; each adds one batched call).
+  the request asks for it; each LLM call up to PT60S; no outbound fetch (LLM only for
+  provider/model selectors; each adds one batched call).
 
 ## Packages
 

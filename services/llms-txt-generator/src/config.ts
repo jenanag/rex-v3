@@ -10,7 +10,6 @@ export interface Config {
   PROBLEM_BASE_URI: string;
   OTEL_EXPORTER_OTLP_ENDPOINT?: string;
   BODY_LIMIT_BYTES?: number;
-  LLMS_TXT_GENERATOR_DEFAULT_MODEL: string;
 }
 
 export function loadConfig(data: Record<string, unknown> = process.env) {

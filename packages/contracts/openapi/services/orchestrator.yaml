@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: REx orchestrator
-  version: 1.0.0
+  version: 2.0.0
   description: |
     The only stateful REx service: sole owner and writer of the database, the only
     public business API (behind the edge gateway), the scheduler, the job publisher
@@ -2150,7 +2150,7 @@ components:
           minimum: 1
           maximum: 5
         sentiment:
-          description: 'Sentiment analyzers to run side by side (deterministic and/or LLM). Default: the project
+          description: 'Ordered deterministic IDs and provider/model selectors. Default: the project
             default, else `[det:lexicon]`.'
           $ref: ./answer-analysis.yaml#/components/schemas/SentimentOptions
         cacheMode:
@@ -2298,6 +2298,7 @@ components:
             - projectId
             - promptRunId
             - promptId
+            - engine
             - sampleIndex
             - promptText
             - locale
@@ -2315,6 +2316,9 @@ components:
               $ref: ../common.yaml#/components/schemas/PromptRunId
             promptId:
               $ref: ../common.yaml#/components/schemas/PromptId
+            engine:
+              $ref: ../common.yaml#/components/schemas/EngineId
+              description: Platform tracking and routing label from the job.
             sampleIndex:
               type: integer
               minimum: 0
@@ -2711,15 +2715,9 @@ components:
               description: Cache outcome of each cached call (content extraction and tool calls) that produced this resource (empty until it has a result).
               readOnly: true
               $ref: ../common.yaml#/components/schemas/ToolCallCacheList
-    LlmsTxtSettings:
+    LlmsTxtCrawlAndAssemblyOptions:
       type: object
-      description: |
-        llms-txt-generator options (page entries and assembly) plus the crawl settings. A crawl setting left out of
-        the request comes from the organization's settings, else the default
-        (resolution in docs/services/orchestrator.md); the resource shows the effective
-        values.
       allOf:
-        - $ref: ./llms-txt-generator.yaml#/components/schemas/PageEntryOptions
         - $ref: ./llms-txt-generator.yaml#/components/schemas/LlmsTxtAssemblyOptions
         - type: object
           properties:
@@ -2735,10 +2733,44 @@ components:
               description: |
                 Obey the site's robots.txt: disallowed pages are neither selected nor
                 fetched. Default: true. Anonymous requests always obey robots.txt.
+    LlmsTxtSettings:
+      type: object
+      description: Effective options recorded by the orchestrator and used to publish page jobs.
+      allOf:
+        - $ref: '#/components/schemas/LlmsTxtCrawlAndAssemblyOptions'
+        - $ref: ./llms-txt-generator.yaml#/components/schemas/PageEntryOptions
+    LlmsTxtCreatePageOptions:
+      type: object
+      properties:
+        summarizer:
+          $ref: ./llms-txt-generator.yaml#/components/schemas/PageEntryOptions/properties/summarizer
+        provider:
+          $ref: '../common.yaml#/components/schemas/ProviderModel/properties/provider'
+        model:
+          $ref: '../common.yaml#/components/schemas/ProviderModel/properties/model'
+      dependentRequired:
+        provider: [model]
+        model: [provider]
+      if:
+        properties:
+          summarizer:
+            const: extractive
+        required: [summarizer]
+      then:
+        properties:
+          provider: false
+          model: false
     LlmsTxtCreate:
       type: object
+      description: |
+        In LLM mode, an omitted pair resolves to openai / gpt-6-luna. The
+        orchestrator records the effective pair and sends it explicitly in page
+        jobs. Supply both fields together to select the pair explicitly, and omit
+        both in extractive mode. Resolve crawl settings from the request, then the
+        organization's settings, then defaults.
       allOf:
-        - $ref: '#/components/schemas/LlmsTxtSettings'
+        - $ref: '#/components/schemas/LlmsTxtCrawlAndAssemblyOptions'
+        - $ref: '#/components/schemas/LlmsTxtCreatePageOptions'
         - type: object
           required:
             - siteUrl

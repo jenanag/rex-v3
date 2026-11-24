@@ -6,7 +6,12 @@ import { createLlm } from "../src/llm/adapter.js";
 import { postAnswer, tool } from "./support.js";
 
 const model = "gemini-3.5-flash-lite";
-const query = { engine: "gemini", prompt: "  Name two Canadian outdoor brands.\n" };
+const query = {
+  provider: "google",
+  model,
+  webSearch: false,
+  prompt: "  Name two Canadian outdoor brands.\n",
+};
 const usage = {
   promptTokenCount: 1_001,
   cachedContentTokenCount: 400,
@@ -34,7 +39,7 @@ function provider(fetch: typeof globalThis.fetch) {
   return tool({}, createLlm({ data: { LLM_MODE: "live", GEMINI_API_KEY: "test-only" }, fetch }));
 }
 
-test("Gemini omitted and explicit default models send identical requests", async () => {
+test("Gemini omitted and explicit locale and country defaults send identical requests", async () => {
   const wires: Array<{ url: string; body: unknown }> = [];
   const transport = vi.fn<typeof globalThis.fetch>(async (input, init) => {
     const request = new Request(input, init);
@@ -44,7 +49,11 @@ test("Gemini omitted and explicit default models send identical requests", async
   const app = provider(transport);
   try {
     const { body: omitted } = await postAnswer(app, query, 200);
-    const { body: explicit } = await postAnswer(app, { ...query, model }, 200);
+    const { body: explicit } = await postAnswer(
+      app,
+      { ...query, locale: "en-US", country: "US" },
+      200,
+    );
     expect(explicit).toEqual({
       answer: { ...omitted.answer, model, latencyMs: expect.any(Number) },
       usage: [expectedUsage],
@@ -95,7 +104,7 @@ test.each([
   try {
     const { body } = await postAnswer(app, { ...query, ...fields }, 200);
     expect(body).toEqual({
-      answer: { engine: "gemini", model, text, sources: [], latencyMs: expect.any(Number) },
+      answer: { provider: "google", model, text, sources: [], latencyMs: expect.any(Number) },
       usage: [expectedUsage],
     });
     expect(transport).toHaveBeenCalledOnce();
@@ -254,8 +263,7 @@ test("Gemini replays the recorded Canadian outdoor brands answer offline", async
     const { body } = await postAnswer(
       app,
       {
-        engine: "gemini",
-        webSearch: false,
+        ...query,
         locale: "en-CA",
         country: "CA",
         prompt:
@@ -265,7 +273,7 @@ test("Gemini replays the recorded Canadian outdoor brands answer offline", async
     );
     expect(body).toEqual({
       answer: {
-        engine: "gemini",
+        provider: "google",
         model,
         text: recording.candidates[0].content.parts[0].text,
         sources: [],

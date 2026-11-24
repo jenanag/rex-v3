@@ -335,13 +335,24 @@ components:
       default: US
 
     # ---------- Shared enums ----------
+    ProviderModel:
+      type: object
+      description: Exact provider and native model identifiers from the target tool's catalog.
+      required: [provider, model]
+      properties:
+        provider:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
     EngineId:
       type: string
       description: |
         AI answer engine. Consumers must tolerate unknown values (tolerant reader),
         so adding an engine is a non-breaking change; it also adds a per-engine
         answer-capture queue (bus/topology.yaml expands `{engine}` from this enum).
-        The engine-to-model mapping is owned by engine-query (`GET /v1/engines`).
+        The orchestrator maps tracking engines to pairs supported by engine-query (`GET /v1/engines`).
       enum: [chatgpt, claude, gemini, perplexity, grok]
     JobStatus:
       type: string

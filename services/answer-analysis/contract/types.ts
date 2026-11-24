@@ -77,8 +77,10 @@ export interface paths {
          * @description Synchronous. Results follow request order and use the same deterministic
          *     brand mentions. Omitted `sentiment` defaults to `det:lexicon`; an explicit
          *     empty `analyzers` list disables sentiment but still resolves the language.
-         *     In enabled deployments, select `llm:openai/gpt-6-luna` explicitly to run
-         *     one batched call for the mentioned brands. If none are mentioned the
+         *     In enabled deployments, select the provider/model object for OpenAI Luna
+         *     to run one batched call for the mentioned brands. Deterministic selectors
+         *     are strings. Duplicate selectors, including objects with reordered keys,
+         *     fail schema validation. Analyzer result IDs remain unchanged. If none are mentioned the
          *     tool makes no call and returns empty mentions and usage.
          *
          *     A failed secondary LLM analyzer is reported as `failed` with null per-brand
@@ -94,7 +96,7 @@ export interface paths {
          *     After transport and schema validation, semantic errors are checked in
          *     this order: `duplicate_brand_key` (exact duplicate key),
          *     `invalid_primary` (primary is not in the effective list),
-         *     `unsupported_analyzer` (ID is not advertised by `listAnalyzers`),
+         *     `unsupported_analyzer` (selector is not advertised by `listAnalyzers`),
          *     and `unsupported_language`
          *     (policy is `error` and an analyzer does not support the given or detected
          *     language). The 422 detail identifies the first offending field in
@@ -117,10 +119,12 @@ export interface components {
          *     `llm:openai/gpt-4o-mini`). The available set comes from `listAnalyzers`.
          */
         AnalyzerId: string;
+        AnalyzerSelector: string | components["schemas"]["ProviderModel"];
         /** @enum {string} */
         AnalyzerKind: "deterministic" | "llm";
         Analyzer: {
             id: components["schemas"]["AnalyzerId"];
+            selector: components["schemas"]["AnalyzerSelector"];
             kind: components["schemas"]["AnalyzerKind"];
             /** @description Primary language subtags supported, e.g. `en`; `*` means any language (LLM analyzers). For deterministic analyzers this is the set of languages in the lexicon registry. */
             languages: string[];
@@ -133,9 +137,9 @@ export interface components {
              *       "det:lexicon"
              *     ]
              */
-            analyzers: components["schemas"]["AnalyzerId"][];
+            analyzers: components["schemas"]["AnalyzerSelector"][];
             /** @description Analyzer whose result fills `sentiment` and `sentimentScore`; must be in `analyzers` (otherwise 422 `invalid_primary`). Default: the first deterministic analyzer that supports the language, else the first analyzer that does. */
-            primary?: components["schemas"]["AnalyzerId"];
+            primary?: components["schemas"]["AnalyzerSelector"];
             /** @description Language of the text. Default: detected deterministically from the text. */
             language?: components["schemas"]["LanguageTag"];
             /**
@@ -263,6 +267,11 @@ export interface components {
             traceId?: string;
             /** @description Field-level errors; present for `validation_failed`. */
             errors?: components["schemas"]["FieldError"][];
+        };
+        /** @description Exact provider and native model identifiers from the target tool's catalog. */
+        ProviderModel: {
+            provider: string;
+            model: string;
         };
         /**
          * @description Each project has exactly one `primary` brand; all others are `competitor`.
@@ -403,8 +412,9 @@ export interface operations {
         responses: {
             /**
              * @description Available analyzers, deterministic ones first. Deployments with Luna
-             *     enabled advertise `llm:openai/gpt-6-luna` with kind `llm` and
-             *     language support `["*"]`, including undetermined language.
+             *     enabled advertise the openai / gpt-6-luna selector with kind `llm`
+             *     and language support `["*"]`, including undetermined language.
+             *     The id remains the analyzer result identifier.
              */
             200: {
                 headers: {

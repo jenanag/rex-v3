@@ -12,6 +12,12 @@ type ValidatedRequest = Schemas["AnswerAnalysisRequest"] & {
     Required<Pick<Schemas["SentimentOptions"], "analyzers" | "onUnsupportedLanguage">>;
 };
 
+function sameSelector(left: Schemas["AnalyzerSelector"], right: Schemas["AnalyzerSelector"]) {
+  return typeof left === "string" || typeof right === "string"
+    ? left === right
+    : left.provider === right.provider && left.model === right.model;
+}
+
 export function createHandlers({
   lunaEnabled,
   llm = createLlm(),
@@ -23,7 +29,6 @@ export function createHandlers({
   reportFailedPrimaryUsage?: (request: FastifyRequest, usage: Schemas["LlmUsage"]) => void;
 }): Handlers {
   const catalog = listAnalyzers(lunaEnabled);
-  const byId = new Map(catalog.map((analyzer) => [analyzer.id, analyzer]));
   return {
     listAnalyzers: async () => ({ data: catalog }),
     analyzeAnswer: async (request) => {
@@ -41,29 +46,34 @@ export function createHandlers({
 
       // The registered request validator applies these HTTP defaults before this handler.
       const { analyzers, primary, language, onUnsupportedLanguage } = body.sentiment;
-      if (primary !== undefined && !analyzers.includes(primary))
+      const primaryIndex =
+        primary === undefined
+          ? -1
+          : analyzers.findIndex((selector) => sameSelector(selector, primary));
+      if (primary !== undefined && primaryIndex === -1)
         throw new ToolProblem(
           422,
           "invalid_primary",
           "/sentiment/primary must be in /sentiment/analyzers",
         );
-      const index = analyzers.findIndex((id) => !byId.has(id));
-      if (index !== -1) {
-        throw new ToolProblem(
-          422,
-          "unsupported_analyzer",
-          "/sentiment/analyzers/" +
-            index +
-            ": " +
-            analyzers[index] +
-            " is not advertised by this deployment",
-        );
+      const selected = [];
+      for (const [index, selector] of analyzers.entries()) {
+        const analyzer = catalog.find((item) => sameSelector(selector, item.selector));
+        if (!analyzer)
+          throw new ToolProblem(
+            422,
+            "unsupported_analyzer",
+            "/sentiment/analyzers/" +
+              index +
+              ": " +
+              JSON.stringify(selector) +
+              " is not advertised by this deployment",
+          );
+        selected.push(analyzer);
       }
-
-      const selected = analyzers.map((id) => byId.get(id)!);
       const outcome = prepareAnalysis(body, {
         analyzers: selected,
-        primary,
+        primary: selected[primaryIndex]?.id,
         language,
         onUnsupportedLanguage: onUnsupportedLanguage,
       });

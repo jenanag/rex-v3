@@ -10,7 +10,7 @@ const { createHandlers } = await import("./handlers/index.js");
 const spec = JSON.parse(
   readFileSync(new URL("../contract.json", import.meta.url), "utf8"),
 ) as ToolSpec;
-const app = createApp({ spec, config, handlers: createHandlers(config) });
+const app = createApp({ spec, config, handlers: createHandlers() });
 try {
   await app.listen({ host: "0.0.0.0", port: config.PORT });
 } catch (error) {

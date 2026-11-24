@@ -65,11 +65,17 @@ function readDescription(text: string): string | null {
 
 export async function describePageWithLlm(
   request: Request,
-  defaultModel: string,
   llm: ReturnType<typeof createLlm>,
 ): Promise<Result> {
-  const model = pricedModels.get(request.model ?? defaultModel);
-  if (!model) throw new ToolProblem(422, "unsupported_model", "/model is not an allowed model.");
+  const model = pricedModels.find(
+    ({ provider, model }) => provider === request.provider && model === request.model,
+  );
+  if (!model)
+    throw new ToolProblem(
+      422,
+      "unsupported_model",
+      "/provider and /model: Pair is not allowed by this deployment.",
+    );
 
   const fallback = describePageExtractively(request);
   const prompt = makePrompt(request, fallback.entry.title);

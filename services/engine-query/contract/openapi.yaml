@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: REx engine-query tool
-  version: 2.2.0
+  version: 3.0.0
   description: |
     Stateless tool: asks one AI answer engine one prompt and returns the normalized
     answer (Markdown text + engine-reported sources) and the LLM usage. No database,
@@ -50,12 +50,12 @@ paths:
       x-rex-limits:
         llm: none
         outboundFetch: none
-      summary: Engines this deployment can query and their default and allowed models
+      summary: Provider and model pairs this deployment can query and their capabilities
       tags:
         - Engines
       responses:
         '200':
-          description: Configured engines (small list; not paginated). ChatGPT supports web search. Gemini is text-only.
+          description: Supported pairs (small list; not paginated). OpenAI Luna supports web search. Gemini is text-only.
           content:
             application/json:
               schema:
@@ -79,13 +79,11 @@ paths:
         outboundFetch: none
       summary: Ask one engine one prompt (one sample) and return its answer
       description: |
-        Accepts ChatGPT and Gemini. An unavailable engine returns 422 unsupported_engine
-        before any provider call. Omit model to use the engine's deployment default.
-        An exact, schema-valid model ID outside the selected engine's allowlist returns
-        422 unsupported_model identifying /model before any provider call.
-        ChatGPT defaults to required hosted search; Gemini
-        defaults to text-only generation. Explicit false selects text-only generation.
-        Gemini with explicit true returns 422 unsupported_web_search identifying
+        Require an explicit provider, model, and webSearch selection.
+        An exact, schema-valid pair outside the deployment catalog returns
+        422 unsupported_model identifying /provider and /model before any provider call.
+        False selects text-only generation. True requires completed hosted search.
+        Search on a text-only pair returns 422 unsupported_web_search identifying
         /webSearch before any provider call.
         The original prompt is sent verbatim. Locale is an answer-language hint.
         Country is an approximate search location for grounded ChatGPT and a regional
@@ -125,53 +123,28 @@ components:
   schemas:
     Engine:
       type: object
+      allOf:
+        - $ref: '#/components/schemas/ProviderModel'
       required:
-        - id
         - displayName
-        - provider
-        - model
-        - allowedModels
         - webSearch
-        - enabled
       properties:
-        id:
-          $ref: '#/components/schemas/EngineId'
         displayName:
           type: string
           examples:
             - ChatGPT
-        provider:
-          type: string
-          description: API vendor, e.g. `openai`, `anthropic`, `google`, `perplexity`, `xai`.
-        model:
-          type: string
-          description: Default model ID for this engine.
-        allowedModels:
-          type: array
-          minItems: 1
-          uniqueItems: true
-          items:
-            type: string
-            minLength: 1
-          description: Exact model IDs this deployment accepts for the engine, including its default.
         webSearch:
           type: boolean
-          description: True if this deployment can use hosted search when requested.
-        enabled:
-          type: boolean
+          description: True if this pair can use hosted search when requested.
     EngineQuery:
       type: object
+      allOf:
+        - $ref: '#/components/schemas/ProviderModel'
       unevaluatedProperties: false
       required:
-        - engine
+        - webSearch
         - prompt
       properties:
-        engine:
-          $ref: '#/components/schemas/EngineId'
-        model:
-          type: string
-          minLength: 1
-          description: Exact model ID from the selected engine's allowlist. Omission uses the engine's default.
         prompt:
           type: string
           minLength: 3
@@ -184,21 +157,17 @@ components:
           default: US
         webSearch:
           type: boolean
-          description: Require completed hosted search when true. Omission defaults to true for ChatGPT and false for Gemini.
+          description: Require completed hosted search when true.
     EngineAnswer:
       type: object
-      description: A normalized engine answer. The orchestrator stores it as part of its Answer resource.
+      description: A normalized provider answer. The orchestrator stores it as part of its Answer resource.
+      allOf:
+        - $ref: '#/components/schemas/ProviderModel'
       required:
-        - engine
-        - model
         - text
         - sources
         - latencyMs
       properties:
-        engine:
-          $ref: '#/components/schemas/EngineId'
-        model:
-          type: string
         text:
           type: string
           description: Answer text as Markdown, normalized across engines.
@@ -293,19 +262,19 @@ components:
           description: Field-level errors; present for `validation_failed`.
           items:
             $ref: '#/components/schemas/FieldError'
-    EngineId:
-      type: string
-      description: |
-        AI answer engine. Consumers must tolerate unknown values (tolerant reader),
-        so adding an engine is a non-breaking change; it also adds a per-engine
-        answer-capture queue (bus/topology.yaml expands `{engine}` from this enum).
-        The engine-to-model mapping is owned by engine-query (`GET /v1/engines`).
-      enum:
-        - chatgpt
-        - claude
-        - gemini
-        - perplexity
-        - grok
+    ProviderModel:
+      type: object
+      description: Exact provider and native model identifiers from the target tool's catalog.
+      required:
+        - provider
+        - model
+      properties:
+        provider:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
     Locale:
       type: string
       pattern: ^[a-z]{2,3}(-[A-Z]{2})?$
