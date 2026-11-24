@@ -73,9 +73,9 @@ the 3 MiB request body ceiling and validation gate for answer-analysis at scaffo
 Jay accepted [ADR 0037](0037-engine-query-language.md) on 2026-11-24,
 confirming TypeScript and the existing LLM template for engine-query.
 
-[ADR 0038](0038-engine-query-selectable-web-search.md) was proposed on 2026-11-25.
+Jay accepted [ADR 0038](0038-engine-query-selectable-web-search.md) on 2026-11-25.
 It makes web search selectable for engine-query and assigns future subscription
-eligibility to the orchestrator.
+eligibility to the orchestrator. Implementation follows separately.
 
 | ADR | Title | Status |
 |---|---|---|
@@ -116,6 +116,6 @@ eligibility to the orchestrator.
 | [0035](0035-answer-analysis-language.md) | Use TypeScript for answer-analysis | Accepted |
 | [0036](0036-answer-analysis-body-limit.md) | Set the answer-analysis request body limit to 3 MiB | Accepted |
 | [0037](0037-engine-query-language.md) | Use TypeScript for engine-query | Accepted |
-| [0038](0038-engine-query-selectable-web-search.md) | Make web search selectable in engine-query | Proposed |
+| [0038](0038-engine-query-selectable-web-search.md) | Make web search selectable in engine-query | Accepted |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.

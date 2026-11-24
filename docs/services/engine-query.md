@@ -109,8 +109,8 @@ source, and usage over loopback HTTP.
 
 ## Notes
 
-- [ADR 0038](../adr/0038-engine-query-selectable-web-search.md) proposes selectable
-  web search and a text-only Gemini integration, pending Jay's acceptance.
+- Jay accepted [ADR 0038](../adr/0038-engine-query-selectable-web-search.md) on
+  2026-11-25. Selectable web search and text-only Gemini are follow-up work.
 - The first integration uses OpenAI GPT-6 Luna through Responses. Discovery lists
   ChatGPT. Each query uses one required provider-hosted search and reports one
   usage item at Standard rates, including the reported billable search fee.

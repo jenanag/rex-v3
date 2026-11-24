@@ -21,7 +21,7 @@ to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the super
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
 Phase 1 was completed on 2026-11-22. Phase 2 has started. Jay accepted ADRs 0025
 and 0026 on 2026-11-22, ADR 0027, ADR 0028, and ADR 0029 on 2026-11-23, and ADR 0030, ADR 0031, ADR 0032, and ADR 0033
-on 2026-11-24. Jay accepted ADR 0034 on 2026-11-24, recording that both Python validators missed the large-workload budget. The Python bring-up remains paused. Jay accepted ADR 0035 on 2026-11-24, selecting TypeScript for answer-analysis. Jay accepted ADR 0036 on 2026-11-24, setting its request body limit for scaffolding. Jay accepted ADR 0037 on 2026-11-24, confirming TypeScript for engine-query. ADR 0038 is Proposed. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
+on 2026-11-24. Jay accepted ADR 0034 on 2026-11-24, recording that both Python validators missed the large-workload budget. The Python bring-up remains paused. Jay accepted ADR 0035 on 2026-11-24, selecting TypeScript for answer-analysis. Jay accepted ADR 0036 on 2026-11-24, setting its request body limit for scaffolding. Jay accepted ADR 0037 on 2026-11-24, confirming TypeScript for engine-query. Jay accepted ADR 0038 on 2026-11-25, making selectable engine-query web search follow-up work. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
 
 - [README](../README.md), [architecture](architecture.md), [conventions](conventions.md),
   [DRY rule](dry-rule.md), [events](events.md), [glossary](glossary.md), this roadmap.
@@ -345,9 +345,9 @@ ChatGPT shipped in [PR #32](https://github.com/jenanag/rex-v3/pull/32) as the fi
 of the three engines required for Phase 2. The [direct smoke check](services/engine-query.md#direct-smoke-check)
 exercises discovery and the recorded ChatGPT answer over loopback HTTP.
 
-[ADR 0038](adr/0038-engine-query-selectable-web-search.md) proposes selectable web
-search and text-only Gemini for mention and sentiment analysis, pending Jay's
-acceptance. The three-engine sources-and-usage requirement still applies.
+Jay accepted [ADR 0038](adr/0038-engine-query-selectable-web-search.md) on 2026-11-25.
+Selectable web search and text-only Gemini for mention and sentiment analysis
+are follow-up work. The three-engine sources-and-usage requirement still applies.
 [Grok PR #34](https://github.com/jenanag/rex-v3/pull/34) remains deferred.
 
 **Languages and the Python bring-up** ([ADR 0024](adr/0024-per-tool-language.md)): every
@@ -450,8 +450,8 @@ a refresh, and can schedule audits.
 - Orchestrator `billing` (plans, Stripe, entitlements incl. number of LLM analyzers,
   usage metering of non-hit calls) and `alerts`.
 - Engine web-search subscription eligibility and public controls are Phase 6
-  work under [ADR 0038](adr/0038-engine-query-selectable-web-search.md), pending
-  acceptance. The orchestrator owns plan rules.
+  work under [ADR 0038](adr/0038-engine-query-selectable-web-search.md). The
+  orchestrator owns plan rules.
 - Tools `notifier` and `report-renderer` (built and tested in isolation first, like
   Phase 2); messages `notification.*` and `report-render.*`; reports (PDF and
   white-label) uploaded to pre-signed URLs.

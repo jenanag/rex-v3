@@ -1,6 +1,6 @@
 # 0038: Make web search selectable in engine-query
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-25, accepted by Jay)
 - **Date:** 2026-11-25
 - **Deciders:** Jay Pascual
 
@@ -49,8 +49,8 @@ rules and public subscription controls belong to
   still requires three engines returning sources and usage. Text-only Gemini
   does not count toward that criterion. [Grok PR #34](https://github.com/jenanag/rex-v3/pull/34)
   remains deferred.
-- OpenAPI and caller cache policy edits, provider implementation, and live
-  verification follow acceptance.
+- The OpenAPI and caller cache policy edits, Gemini and search-toggle
+  implementation, and live verification are follow-up work.
 
 ## Alternatives considered
 
