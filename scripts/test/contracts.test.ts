@@ -643,7 +643,10 @@ test("answer analysis cache input preserves analyzer order and applies HTTP defa
   assert.deepEqual(preserve, ["/sentiment/analyzers"]);
   assert.ok(
     key.canonicalInput.some(
-      (step: unknown) => typeof step === "string" && step.includes("uniqueItems: true") && step.includes("preserveArrayOrder"),
+      (step: unknown) =>
+        typeof step === "string" &&
+        step.includes("uniqueItems: true") &&
+        step.includes("preserveArrayOrder"),
     ),
   );
   assert.ok(SentimentOptions.properties.analyzers.uniqueItems);
@@ -653,11 +656,11 @@ test("answer analysis cache input preserves analyzer order and applies HTTP defa
   );
   assert.deepEqual(AnswerAnalysisRequest.properties.sentiment.default, {});
   assert.equal(
-    AnswerAnalysisRequest.properties.brands.$ref,
+    AnswerAnalysisRequest.allOf[0].properties.brands.$ref,
     "#/components/schemas/AnswerAnalysisOptions/properties/brands",
   );
   assert.equal(
-    AnswerAnalysisRequest.properties.sentiment.$ref,
+    AnswerAnalysisRequest.properties.sentiment.allOf[0].$ref,
     AnswerAnalysisOptions.properties.sentiment.$ref,
   );
   assert.equal(AnswerAnalysisOptions.properties.sentiment.default, undefined);

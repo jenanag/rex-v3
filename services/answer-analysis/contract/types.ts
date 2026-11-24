@@ -146,11 +146,13 @@ export interface components {
             sentiment?: components["schemas"]["SentimentOptions"];
         };
         AnswerAnalysisRequest: {
-            brands: components["schemas"]["AnswerAnalysisOptions"]["brands"];
             /** @default {} */
             sentiment: components["schemas"]["SentimentOptions"];
+        } & ({
+            brands: components["schemas"]["AnswerAnalysisOptions"]["brands"];
+        } & {
             text: string;
-        };
+        });
         /**
          * @description `ok`; `unsupported` (the analyzer does not support the language); `failed` (provider error or timeout, LLM only).
          * @enum {string}

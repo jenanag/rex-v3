@@ -172,16 +172,23 @@ components:
           $ref: '#/components/schemas/SentimentOptions'
     AnswerAnalysisRequest:
       type: object
-      required: [brands, text]
       properties:
-        brands:
-          $ref: '#/components/schemas/AnswerAnalysisOptions/properties/brands'
         sentiment:
-          $ref: '#/components/schemas/SentimentOptions'
           default: {}
-        text:
-          type: string
-          maxLength: 200000
+          allOf:
+            - $ref: '#/components/schemas/SentimentOptions'
+      allOf:
+        - type: object
+          required: [brands]
+          properties:
+            brands:
+              $ref: '#/components/schemas/AnswerAnalysisOptions/properties/brands'
+        - type: object
+          required: [text]
+          properties:
+            text:
+              type: string
+              maxLength: 200000
       unevaluatedProperties: false
     AnalyzerStatus:
       type: string

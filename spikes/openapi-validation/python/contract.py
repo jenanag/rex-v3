@@ -40,22 +40,21 @@ def load_spec(supplement=False):
         )["components"]["schemas"]
         schemas = spec["components"]["schemas"]
         mention = schemas["MentionDetail"]["properties"]
-        schemas["AnswerAnalysisRequest"]["properties"] = {
-            "spike": {
-                "type": "object",
-                "unevaluatedProperties": False,
-                "properties": {
-                    "score": mention["sentimentScore"],
-                    "sentiment": mention["sentiment"],
-                    "names": {
-                        "type": "object",
-                        "propertyNames": common["CacheDirective"]["properties"][
-                            "overrides"
-                        ]["propertyNames"],
-                    },
-                    "duration": common["IsoDuration"],
+        properties = schemas["AnswerAnalysisRequest"].setdefault("properties", {})
+        properties["spike"] = {
+            "type": "object",
+            "unevaluatedProperties": False,
+            "properties": {
+                "score": mention["sentimentScore"],
+                "sentiment": mention["sentiment"],
+                "names": {
+                    "type": "object",
+                    "propertyNames": common["CacheDirective"]["properties"][
+                        "overrides"
+                    ]["propertyNames"],
                 },
-            }
+                "duration": common["IsoDuration"],
+            },
         }
     return spec
 
