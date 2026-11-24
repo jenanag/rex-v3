@@ -5,7 +5,7 @@ import math
 import secrets
 from dataclasses import dataclass
 from time import perf_counter_ns
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
@@ -28,10 +28,6 @@ from contract import (
 from route_loader import make_route_validator
 
 CANDIDATES = ("openapi-core", "route-loader")
-
-if TYPE_CHECKING:
-    from generated_models import AnswerAnalysisRequest
-
 
 class ParsedBody(bytes):
     def __new__(cls, raw: bytes, value: Any):
@@ -176,7 +172,7 @@ def server(
     @app.api_route(path, methods=[method.upper()])
     async def handler(request: Request):
         if received:
-            received(cast("AnswerAnalysisRequest", request.state.validated_body))
+            received(request.state.validated_body)
         return JSONResponse(result() if result else RESPONSE)
 
     return app
