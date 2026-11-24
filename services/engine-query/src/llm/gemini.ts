@@ -10,9 +10,10 @@ import type { TextPart } from "../domain/citations.js";
 import type { GeminiEngine } from "./catalog.js";
 import { count } from "./usage.js";
 
+const baseUrl = "https://generativelanguage.googleapis.com";
 const apiVersion = "v1";
 export const geminiEndpoint = (model: string) =>
-  `https://generativelanguage.googleapis.com/${apiVersion}/models/${model}:generateContent`;
+  `${baseUrl}/${apiVersion}/models/${model}:generateContent`;
 
 export function geminiRequest(model: string, prompt: string, locale: string, country: string) {
   return {
@@ -45,11 +46,12 @@ export async function generateGemini(
     apiKey,
     vertexai: false,
     httpOptions: {
+      baseUrl,
       apiVersion,
       timeout,
       retryOptions: { attempts: 1 },
       fetch: async (input, init) => {
-        const response = await fetch(input, init);
+        const response = await fetch(input, { ...init, redirect: "error" });
         // ApiError carries the status and message, but drops response headers.
         if (!response.ok) headers = response.headers;
         return response;

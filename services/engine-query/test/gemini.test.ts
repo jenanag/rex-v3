@@ -44,6 +44,7 @@ test.each([
       `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent`,
     );
     expect(request.method).toBe("POST");
+    expect(request.redirect).toBe("error");
     expect(request.signal.aborted).toBe(false);
     expect(request.headers.get("X-Server-Timeout")).toBe("110");
     expect(await request.json()).toEqual({
