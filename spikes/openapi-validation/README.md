@@ -50,3 +50,7 @@ workload reaches or exceeds 5 ms p99. The experiment's CI uses `--report-only` t
 record timing misses as evidence. Contract assertions still fail the job.
 The generated model is a type-only import. No model is instantiated to validate
 the body.
+
+The approved `openapi-core` candidate missed the large-workload budget in CI,
+so the spike also measures the roadmap's Draft 2020-12 route loader. Run it with
+`uv run --frozen --offline python benchmark.py --candidate route-loader`.

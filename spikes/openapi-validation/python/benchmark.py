@@ -12,7 +12,7 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 
 from contract import MEDIA_TYPE, load_spec, operation
-from spike import server
+from spike import CANDIDATES, server
 
 BUDGET_MS = 5
 BRAND = {
@@ -56,9 +56,11 @@ def cpu_model():
     return platform.processor() or platform.machine()
 
 
-def measure(spec, path, payload, warmup, samples):
+def measure(spec, path, payload, warmup, samples, candidate):
     timings = []
-    with TestClient(server(spec, measure=timings.append)) as client:
+    with TestClient(
+        server(spec, measure=timings.append, candidate=candidate)
+    ) as client:
         for _ in range(warmup + samples):
             response = client.post(
                 path, content=payload, headers={"content-type": MEDIA_TYPE}
@@ -76,6 +78,7 @@ def main():
     parser.add_argument(
         "--report-only", action="store_true", help="Record a miss as evidence."
     )
+    parser.add_argument("--candidate", choices=CANDIDATES, default="openapi-core")
     args = parser.parse_args()
     packages = ("fastapi", "openapi-core", "jsonschema")
     print(
@@ -95,11 +98,11 @@ def main():
         payload = json.dumps(body, separators=(",", ":"), ensure_ascii=False).encode(
             "utf-8"
         )
-        p50, p99 = measure(spec, path, payload, warmup, samples)
+        p50, p99 = measure(spec, path, payload, warmup, samples, args.candidate)
         within_budget = p99 < BUDGET_MS
         passed &= within_budget
         print(
-            f"openapi-core | {name} | {len(payload)} bytes | warmup {warmup} | n={samples} | "
+            f"{args.candidate} | {name} | {len(payload)} bytes | warmup {warmup} | n={samples} | "
             f"p50 {p50:.4f} ms | p99 {p99:.4f} ms | {'PASS' if within_budget else 'FAIL'}",
             flush=True,
         )

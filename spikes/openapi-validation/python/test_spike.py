@@ -8,7 +8,13 @@ from openapi_core.datatypes import RequestParameters
 from openapi_core.validation.schemas.exceptions import InvalidSchemaValue
 
 from contract import MEDIA_TYPE, RESPONSE, SPIKES, load_spec, operation
-from spike import OpenAPIRequest, OpenAPIResponse, response_validator, server
+from spike import (
+    CANDIDATES,
+    OpenAPIRequest,
+    OpenAPIResponse,
+    response_validator,
+    server,
+)
 
 CASES = json.loads((SPIKES / "request-cases.json").read_text(encoding="utf-8"))
 assert len(CASES) == 25
@@ -31,11 +37,12 @@ def check_response(response):
     )
 
 
+@pytest.mark.parametrize("candidate", CANDIDATES)
 @pytest.mark.parametrize("case", CASES, ids=[case["name"] for case in CASES])
-def test_shared_request_cases(case):
+def test_shared_request_cases(case, candidate):
     seen = []
     spec = SUPPLEMENTED if case.get("supplement") else SPEC
-    with TestClient(server(spec, received=seen.append)) as client:
+    with TestClient(server(spec, received=seen.append, candidate=candidate)) as client:
         response = client.post(PATH, json=case["body"])
     assert response.status_code == case["status"], response.text
     assert check_response(response) == []
@@ -57,9 +64,12 @@ def test_shared_request_cases(case):
         assert seen == [expected]
 
 
-def test_wire_response_requires_usage():
+@pytest.mark.parametrize("candidate", CANDIDATES)
+def test_wire_response_requires_usage(candidate):
     response_body = deepcopy(RESPONSE)
-    with TestClient(server(result=lambda: response_body)) as client:
+    with TestClient(
+        server(result=lambda: response_body, candidate=candidate)
+    ) as client:
         valid = client.post(PATH, json=CASES[0]["body"])
         del response_body["usage"]
         missing = client.post(PATH, json=CASES[0]["body"])
@@ -74,9 +84,10 @@ def test_wire_response_requires_usage():
     ] == [("required", True)]
 
 
+@pytest.mark.parametrize("candidate", CANDIDATES)
 @pytest.mark.parametrize("content", [b"", b"{", b"NaN", b"null"])
-def test_missing_malformed_and_null_json(content):
-    with TestClient(server()) as client:
+def test_missing_malformed_and_null_json(content, candidate):
+    with TestClient(server(candidate=candidate)) as client:
         response = client.post(
             PATH, content=content, headers={"content-type": MEDIA_TYPE}
         )

@@ -40,3 +40,5 @@ jobs:
         run: uv run --frozen --offline pytest -q
       - name: Measure the approved candidate against ADR 0024
         run: uv run --frozen --offline python benchmark.py --report-only
+      - name: Measure the roadmap fallback against ADR 0024
+        run: uv run --frozen --offline python benchmark.py --candidate route-loader --report-only

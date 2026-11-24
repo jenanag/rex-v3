@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from jsonschema.exceptions import ValidationError
 from jsonschema_path import SchemaPath
 from openapi_core import V31RequestValidator, V31ResponseValidator
 from openapi_core.datatypes import RequestParameters
@@ -23,6 +24,10 @@ from contract import (
     load_spec,
     operation,
 )
+
+from route_loader import make_route_validator
+
+CANDIDATES = ("openapi-core", "route-loader")
 
 if TYPE_CHECKING:
     from generated_models import AnswerAnalysisRequest
@@ -106,10 +111,13 @@ def make_validator(spec, definition):
     return validate
 
 
-def server(spec=None, measure=None, received=None, result=None):
+def server(
+    spec=None, measure=None, received=None, result=None, *, candidate="openapi-core"
+):
     spec = load_spec() if spec is None else spec
     method, path, definition = operation(spec)
-    validate = make_validator(spec, definition)
+    factories = {"openapi-core": make_validator, "route-loader": make_route_validator}
+    validate = factories[candidate](spec, definition)
     app = FastAPI(openapi_url=None, docs_url=None, redoc_url=None)
 
     @app.middleware("http")
@@ -146,12 +154,12 @@ def server(spec=None, measure=None, received=None, result=None):
             errors = validate(adapted)
             measure((perf_counter_ns() - start) / 1_000_000)
         if errors:
-            schema_errors = [
-                item
-                for error in errors
-                if isinstance(error.__cause__, InvalidSchemaValue)
-                for item in error.__cause__.schema_errors
-            ]
+            schema_errors = []
+            for error in errors:
+                if isinstance(error, ValidationError):
+                    schema_errors.append(error)
+                elif isinstance(error.__cause__, InvalidSchemaValue):
+                    schema_errors.extend(error.__cause__.schema_errors)
             return problem(
                 path,
                 findings(spec, schema_errors)
