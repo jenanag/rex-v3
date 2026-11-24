@@ -104,7 +104,7 @@ code points with half-open match offsets. Each serialized provider request is
 capped at 64 KiB UTF-8, including instructions and schema.
 
 Luna uses OpenAI Chat Completions with strict structured output. Gemini uses
-Developer API v1 `generateContent` with a fixed JSON response schema, Standard
+Developer API v1 generateContent with a fixed JSON response schema, Standard
 tier, `thinkingBudget: 0`, and `includeThoughts: false`. Both cap output at 12,288
 tokens and check a 48 KiB reply limit before parsing. The tool requires one
 verdict per request-local ID, a score in `[-1, 1]` with a label consistent after
