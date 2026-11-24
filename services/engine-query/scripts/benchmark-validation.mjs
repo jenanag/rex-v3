@@ -77,33 +77,23 @@ try {
   assert.equal(exact.length, bodyLimit);
   const budget = (5 * bodyLimit) / 1_048_576;
   console.log(
-    [process.version, process.platform + "/" + process.arch, cpus()[0]?.model].join(", "),
+    `Node ${process.version} on ${process.platform}/${process.arch} (${cpus()[0]?.model})`,
   );
-  console.log(
-    "Request validation p99 (%d samples per workload after %d warmups)",
-    samples,
-    warmups,
-  );
-  console.log(
-    "POST %s | effective body limit %d bytes | budget %d ms p99",
-    path,
-    bodyLimit,
-    budget,
-  );
+  console.log(`Request validation p99 (${samples} samples after ${warmups} warmups per workload)`);
+  console.log(`POST ${path} | effective body limit ${bodyLimit} bytes | budget ${budget} ms p99`);
   console.log("Exact fixture | %d compact bytes | %d padding bytes", escaped.length, padding);
 
-  for (const { name, wire } of workloads) {
+  const measured = workloads.map(({ name, wire }) => {
     const parsed = JSON.parse(wire.toString("utf8"));
     const p99 = measure(validate, parsed, name);
-    console.log("%s | %d bytes | p99 %s ms", name, wire.length, p99.toFixed(4));
-    if (p99 >= budget) {
-      console.error(name + " must stay below " + budget + " ms p99");
-      process.exitCode = 1;
-    }
-  }
+    console.log(`${name} | ${wire.length} bytes | p99 ${p99.toFixed(4)} ms`);
+    return { name, p99 };
+  });
 
   await post(exact, 501, "not_implemented");
   await post(Buffer.concat([exact, Buffer.from(" ")]), 413, "payload_too_large");
+  const overBudget = measured.filter(({ p99 }) => p99 >= budget);
+  assert.deepEqual(overBudget, [], `Each workload must stay below ${budget} ms p99`);
 } finally {
   await app.close();
 }
