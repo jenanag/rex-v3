@@ -3,14 +3,18 @@ import { parse } from "yaml";
 import { createApp, type Handlers } from "../src/app.js";
 import { loadConfig } from "../src/config.js";
 import { contractRoutes, responseMedia, validators, type ToolSpec } from "../src/contract.js";
-import { handlers } from "../src/handlers/index.js";
+import { createHandlers } from "../src/handlers/index.js";
 
 const spec = parse(
   readFileSync(new URL("../contract/openapi.yaml", import.meta.url), "utf8"),
 ) as ToolSpec;
 export const config = loadConfig({ NODE_ENV: "test" });
-export const tool = (changes: Partial<typeof config> = {}, operations: Handlers = handlers) =>
-  createApp({ spec, config: { ...config, ...changes }, handlers: operations, logs: false });
+export const tool = (changes: Partial<typeof config> = {}, operations?: Handlers) => {
+  const settings = { ...config, ...changes };
+  const handlers =
+    operations ?? createHandlers({ lunaEnabled: settings.ANSWER_ANALYSIS_LUNA_ENABLED });
+  return createApp({ spec, config: settings, handlers, logs: false });
+};
 const compile = validators(spec, false);
 
 export function checkResponse(

@@ -20,23 +20,43 @@ export type Tracking = {
 
 export const hash = (content: string) => createHash("sha256").update(content).digest("hex");
 
-export function renderEnv(name: string, llm: boolean) {
-  const env = Object.entries({ ...envProperties, ...(llm ? llmEnvProperties : {}) });
-  const fallback = (key: string, spec: { default?: string | number }) =>
+type EnvProperties = Record<string, { description: string; default?: string | number | boolean }>;
+
+export function renderEnv(
+  name: string,
+  llm: boolean,
+  {
+    properties = envProperties,
+    providerProperties = llmEnvProperties,
+    toolProperties,
+  }: {
+    properties?: EnvProperties;
+    providerProperties?: EnvProperties;
+    toolProperties?: EnvProperties;
+  } = {},
+) {
+  const env = Object.entries({
+    ...properties,
+    ...toolProperties,
+    ...(llm ? providerProperties : {}),
+  });
+  const fallback = (key: string, spec: EnvProperties[string]) =>
     key === "SERVICE_NAME" ? name : spec.default;
   return {
     example:
-      "# GENERATED - DO NOT EDIT. Source: src/env.ts and the optional src/llm/env.ts.\n" +
+      "# GENERATED - DO NOT EDIT. Source: src/env.ts" +
+      (toolProperties ? ", src/tool-env.ts" : "") +
+      " and the optional src/llm/env.ts.\n" +
       env
         .map(
           ([key, spec]) =>
             "# " +
             spec.description +
             "\n" +
-            (fallback(key, spec as { default?: string | number }) === undefined ? "# " : "") +
+            (fallback(key, spec) === undefined ? "# " : "") +
             key +
             "=" +
-            (fallback(key, spec as { default?: string | number }) ?? ""),
+            (fallback(key, spec) ?? ""),
         )
         .join("\n\n") +
       "\n",
@@ -45,13 +65,7 @@ export function renderEnv(name: string, llm: boolean) {
       "|---|---|---|",
       ...env.map(
         ([key, spec]) =>
-          "| `" +
-          key +
-          "` | " +
-          (fallback(key, spec as { default?: string | number }) ?? "unset") +
-          " | " +
-          spec.description +
-          " |",
+          "| `" + key + "` | " + (fallback(key, spec) ?? "unset") + " | " + spec.description + " |",
       ),
     ].join("\n"),
   };

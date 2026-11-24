@@ -5,11 +5,14 @@ import { startTelemetry } from "./telemetry.js";
 
 const config = loadConfig();
 const stopTelemetry = await startTelemetry(config);
-const { createApp } = await import("./app.js");
-const { handlers } = await import("./handlers/index.js");
+const [{ createApp }, { createHandlers }] = await Promise.all([
+  import("./app.js"),
+  import("./handlers/index.js"),
+]);
 const spec = JSON.parse(
   readFileSync(new URL("../contract.json", import.meta.url), "utf8"),
 ) as ToolSpec;
+const handlers = createHandlers({ lunaEnabled: config.ANSWER_ANALYSIS_LUNA_ENABLED });
 const app = createApp({ spec, config, handlers });
 try {
   await app.listen({ host: "0.0.0.0", port: config.PORT });

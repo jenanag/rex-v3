@@ -88,8 +88,8 @@ Per [ADR 0017](../adr/0017-deterministic-first-analysis.md):
 
 ## Luna opt-in
 
-Set `ANSWER_ANALYSIS_LUNA_ENABLED=true` and configure `OPENAI_API_KEY` for the live
-deployment. Callers opt in with `sentiment.analyzers` containing
+The tool validates `ANSWER_ANALYSIS_LUNA_ENABLED` at startup and defaults it to
+`false`. Set it to `true` and configure `OPENAI_API_KEY` for the live deployment. Callers opt in with `sentiment.analyzers` containing
 `llm:openai/gpt-6-luna`. The omitted default is still `det:lexicon`.
 An answer without mentions makes no provider call.
 
@@ -107,6 +107,8 @@ The tool records one `classify_sentiment` usage item for valid reported counts,
 even when the batch fails. [OpenAI Standard short-context prices](https://developers.openai.com/api/docs/models/gpt-6-luna#pricing)
 per million tokens are $0.10 uncached input, $0.01 cached input, $0.125 cache writes,
 and $0.50 output. The tool prices each token once and rounds the total once.
+An explicitly reported tier other than `default` fails the analyzer and emits
+an operational diagnostic without pricing or reporting that call's usage.
 For a failed secondary, HTTP 200 includes available usage and marks Luna as
 `failed`; agreement counts only successful analyzers. For a failed primary,
 HTTP 503 uses the shared `provider_unavailable` Problem and forwards a valid

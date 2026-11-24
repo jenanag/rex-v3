@@ -13,7 +13,8 @@
       "sha256": "52c48f1b13c9ec45b4b69897741b24ce5f88f07fa341d97bc6b8c7f862f261da"
     },
     ".env.example": {
-      "sha256": "c70e5b5b612b33b3df185e68ee1f49e4864a09e3ea48cf79fba06815923070a9"
+      "sha256": "c70e5b5b612b33b3df185e68ee1f49e4864a09e3ea48cf79fba06815923070a9",
+      "owned": true
     },
     ".prettierrc": {
       "sha256": "6b380994ae171521d31a3e92447de7e80a8cfdff7ced1e4787a26ce98dcfe6ae"
@@ -69,7 +70,8 @@
       "sha256": "17126c2c44df00b6d54d1f5fae4560df945ea16ff4e95a683726bc2533c1fff8"
     },
     "src/server.ts": {
-      "sha256": "8f7a9df23bf9cec7ae292fe3905e2b99272ade8211324ac9cf5a8413df43a0f0"
+      "sha256": "8f7a9df23bf9cec7ae292fe3905e2b99272ade8211324ac9cf5a8413df43a0f0",
+      "owned": true
     },
     "src/telemetry.ts": {
       "sha256": "5364e46b7dc42c8172ca35feb8d96b3669417b644b8863ba869223cd18cd370e"

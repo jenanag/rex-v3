@@ -3,8 +3,8 @@ import type { components } from "../../contract/types.js";
 import type { Handlers } from "../app.js";
 import { listAnalyzers, prepareAnalysis } from "../domain/analysis.js";
 import { ToolProblem } from "../errors.js";
-import { createLlm } from "../llm/adapter.js";
-import { buildLunaBatch, parseLunaBatch } from "../llm/luna.js";
+import { createLlm, UnexpectedServiceTier } from "../llm/adapter.js";
+import { buildLunaBatch, luna, parseLunaBatch } from "../llm/luna.js";
 
 type Schemas = components["schemas"];
 type ValidatedRequest = Schemas["AnswerAnalysisRequest"] & {
@@ -13,15 +13,15 @@ type ValidatedRequest = Schemas["AnswerAnalysisRequest"] & {
 };
 
 export function createHandlers({
-  lunaEnabled = process.env.ANSWER_ANALYSIS_LUNA_ENABLED === "true",
+  lunaEnabled,
   llm = createLlm(),
   reportFailedPrimaryUsage = (request, usage) =>
     request.log.warn({ usage }, "Usage from a failed primary sentiment analyzer"),
 }: {
-  lunaEnabled?: boolean;
+  lunaEnabled: boolean;
   llm?: ReturnType<typeof createLlm>;
   reportFailedPrimaryUsage?: (request: FastifyRequest, usage: Schemas["LlmUsage"]) => void;
-} = {}): Handlers {
+}): Handlers {
   const catalog = listAnalyzers(lunaEnabled);
   const byId = new Map(catalog.map((analyzer) => [analyzer.id, analyzer]));
   return {
@@ -97,6 +97,17 @@ export function createHandlers({
           );
         return outcome.finish({ usage, verdicts: parseLunaBatch(completion.text, batch.keys) });
       } catch (error) {
+        if (error instanceof UnexpectedServiceTier) {
+          request.log.warn(
+            {
+              code: "llm_unexpected_service_tier",
+              analyzer: luna.id,
+              requestedTier: "default",
+              reportedTier: error.reportedTier,
+            },
+            "Luna returned an unsupported pricing tier",
+          );
+        }
         if (!outcome.lunaIsPrimary) return outcome.finish({ usage });
         if (usage) reportFailedPrimaryUsage(request, usage);
         throw new ToolProblem(
@@ -109,5 +120,3 @@ export function createHandlers({
     },
   };
 }
-
-export const handlers = createHandlers();

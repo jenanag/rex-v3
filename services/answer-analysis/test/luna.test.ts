@@ -1,8 +1,10 @@
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { FastifyBaseLogger } from "fastify";
 import { expect, test, vi } from "vitest";
 import type { components } from "../contract/types.js";
+import { loadConfig } from "../src/config.js";
 import { findMentionOccurrences } from "../src/domain/mentions.js";
 import { createHandlers } from "../src/handlers/index.js";
 import { createLlm, fixtureKey } from "../src/llm/adapter.js";
@@ -39,11 +41,17 @@ const metered = {
 
 function completion(
   content = JSON.stringify({ results: rows }),
-  { usage = validUsage as unknown, finish = "stop", refusal = null as string | null } = {},
+  {
+    usage = validUsage as unknown,
+    finish = "stop",
+    refusal = null as string | null,
+    serviceTier = "default",
+  } = {},
 ) {
   return Response.json({
     choices: [{ finish_reason: finish, message: { content, refusal } }],
     usage,
+    service_tier: serviceTier,
   });
 }
 
@@ -55,8 +63,17 @@ function stub(reply: () => Response | Promise<Response>) {
   };
 }
 
-async function post(operations: ReturnType<typeof createHandlers>, body: unknown, status = 200) {
+async function post(
+  operations: ReturnType<typeof createHandlers>,
+  body: unknown,
+  status = 200,
+  warn?: FastifyBaseLogger["warn"],
+) {
   const app = tool({}, operations);
+  if (warn)
+    app.addHook("preHandler", async (request) => {
+      request.log = Object.create(request.log, { warn: { value: warn } });
+    });
   try {
     const reply = await app.inject({
       method: "POST",
@@ -79,42 +96,48 @@ async function post(operations: ReturnType<typeof createHandlers>, body: unknown
   }
 }
 
-test.each([false, true])(
-  "discovery and validation share the same catalog (enabled %s)",
-  async (lunaEnabled) => {
-    const provider = stub(() => completion());
-    const handlers = createHandlers({ lunaEnabled, llm: provider.llm });
-    const app = tool({}, handlers);
-    try {
-      const reply = await app.inject({ method: "GET", url: "/v1/analyzers" });
-      expect(reply.statusCode).toBe(200);
-      checkResponse("GET", "/v1/analyzers", 200, "application/json", reply.json());
-      expect(reply.json().data.map(({ id }: { id: string }) => id)).toEqual(
-        lunaEnabled ? [lexicon, rules, model] : [lexicon, rules],
-      );
-      if (lunaEnabled)
-        expect(reply.json().data.at(-1)).toMatchObject({
-          id: model,
-          kind: "llm",
-          languages: ["*"],
-        });
-    } finally {
-      await app.close();
-    }
-    const { data } = await post(handlers, { text, brands }, 200);
-    expect(data.analyzers).toMatchObject([{ analyzer: lexicon, primary: true }]);
-    expect(data.usage).toEqual([]);
-    const requested = await post(
-      handlers,
-      { text, brands, sentiment: { analyzers: [model] } },
-      lunaEnabled ? 200 : 422,
+test.each([
+  [undefined, false],
+  ["true", true],
+  ["false", false],
+])("startup flag %s drives discovery and request eligibility", async (value, lunaEnabled) => {
+  const config = loadConfig(value === undefined ? {} : { ANSWER_ANALYSIS_LUNA_ENABLED: value });
+  expect(config.ANSWER_ANALYSIS_LUNA_ENABLED).toBe(lunaEnabled);
+  const provider = stub(() => completion());
+  const handlers = createHandlers({
+    lunaEnabled: config.ANSWER_ANALYSIS_LUNA_ENABLED,
+    llm: provider.llm,
+  });
+  const app = tool({}, handlers);
+  try {
+    const reply = await app.inject({ method: "GET", url: "/v1/analyzers" });
+    expect(reply.statusCode).toBe(200);
+    checkResponse("GET", "/v1/analyzers", 200, "application/json", reply.json());
+    expect(reply.json().data.map(({ id }: { id: string }) => id)).toEqual(
+      lunaEnabled ? [lexicon, rules, model] : [lexicon, rules],
     );
-    expect(requested.data).toMatchObject(
-      lunaEnabled ? { usage: [metered] } : { code: "unsupported_analyzer" },
-    );
-    expect(provider.fetch).toHaveBeenCalledTimes(lunaEnabled ? 1 : 0);
-  },
-);
+    if (lunaEnabled)
+      expect(reply.json().data.at(-1)).toMatchObject({
+        id: model,
+        kind: "llm",
+        languages: ["*"],
+      });
+  } finally {
+    await app.close();
+  }
+  const { data } = await post(handlers, { text, brands }, 200);
+  expect(data.analyzers).toMatchObject([{ analyzer: lexicon, primary: true }]);
+  expect(data.usage).toEqual([]);
+  const requested = await post(
+    handlers,
+    { text, brands, sentiment: { analyzers: [model] } },
+    lunaEnabled ? 200 : 422,
+  );
+  expect(requested.data).toMatchObject(
+    lunaEnabled ? { usage: [metered] } : { code: "unsupported_analyzer" },
+  );
+  expect(provider.fetch).toHaveBeenCalledTimes(lunaEnabled ? 1 : 0);
+});
 
 test("record-shaped synthetic fixture replays offline and preserves mention and analyzer ordering", async () => {
   const replay = createLlm({ data: { LLM_MODE: "mock" } });
@@ -441,3 +464,84 @@ test("stub-only recording preserves completion metadata and replays with no cred
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+test.each(["enabled", "TRUE", "1", "0", ""])("rejects invalid Luna env value %j", (value) => {
+  expect(() => loadConfig({ ANSWER_ANALYSIS_LUNA_ENABLED: value })).toThrow(
+    /ANSWER_ANALYSIS_LUNA_ENABLED/,
+  );
+});
+
+test("an invalid Luna flag aborts the server entry point at startup", async () => {
+  vi.stubEnv("ANSWER_ANALYSIS_LUNA_ENABLED", "enabled");
+  try {
+    await expect(import("../src/server.js")).rejects.toThrow(/ANSWER_ANALYSIS_LUNA_ENABLED/);
+  } finally {
+    vi.unstubAllEnvs();
+  }
+});
+
+test.each(["priority", "flex"])(
+  "stub and replay refuse to price %s as Standard",
+  async (serviceTier) => {
+    const provider = stub(() => completion(undefined, { serviceTier }));
+    const directory = await mkdtemp(join(tmpdir(), "rex-luna-tier-"));
+    try {
+      const request = buildLunaBatch(text, "en", findMentionOccurrences(text, brands)).request;
+      await writeFile(
+        join(directory, fixtureKey(request) + ".json"),
+        JSON.stringify({
+          text: jsonRows(...rows),
+          inputTokens: 1000,
+          outputTokens: 200,
+          cachedInputTokens: 400,
+          cacheWriteTokens: 100,
+          finishReason: "stop",
+          refused: false,
+          serviceTier,
+        }),
+      );
+      const mock = createLlm({ data: { LLM_MODE: "mock" }, fixtureDir: directory });
+      for (const llm of [provider.llm, mock]) {
+        const report = vi.fn();
+        const warn = vi.fn();
+        const handlers = createHandlers({
+          lunaEnabled: true,
+          llm,
+          reportFailedPrimaryUsage: report,
+        });
+        const { data } = await post(handlers, input, 200, warn);
+        expect(data.analyzers[1]).toMatchObject({ analyzer: model, status: "failed" });
+        expect(data.usage).toEqual([]);
+        for (const mention of data.mentions) {
+          expect(mention.sentimentByAnalyzer[1]).toEqual({
+            analyzer: model,
+            status: "failed",
+            label: null,
+            score: null,
+          });
+        }
+        const primary = await post(
+          handlers,
+          { ...input, sentiment: { ...input.sentiment, primary: model } },
+          503,
+          warn,
+        );
+        expect(primary.data.code).toBe("provider_unavailable");
+        expect(primary.data).not.toHaveProperty("usage");
+        expect(report).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledTimes(2);
+        for (const [fields] of warn.mock.calls) {
+          expect(fields).toEqual({
+            code: "llm_unexpected_service_tier",
+            analyzer: model,
+            requestedTier: "default",
+            reportedTier: serviceTier,
+          });
+        }
+      }
+      expect(provider.fetch).toHaveBeenCalledTimes(2);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  },
+);

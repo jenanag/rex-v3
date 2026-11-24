@@ -45,8 +45,26 @@ type Completion = {
   cachedInputTokens?: number;
   cacheWriteTokens?: number;
   finishReason?: string;
+  serviceTier?: string | null;
   refused?: boolean;
 };
+
+export class UnexpectedServiceTier extends ToolProblem {
+  readonly reportedTier: string;
+
+  constructor(tier: string) {
+    super(503, "provider_unavailable", "LLM returned an unsupported pricing tier");
+    // Keep diagnostics low-cardinality and avoid logging arbitrary provider data.
+    this.reportedTier = ["auto", "flex", "scale", "priority", "fast"].includes(tier)
+      ? tier
+      : "unknown";
+  }
+}
+
+function requireStandardTier(request: LlmRequest, tier: string | null | undefined) {
+  if (request.openAiChat?.body.service_tier === "default" && tier != null && tier !== "default")
+    throw new UnexpectedServiceTier(tier);
+}
 
 export function fixtureKey(request: LlmRequest) {
   const { provider, model, operation, prompt, maxOutputTokens } = request;
@@ -144,6 +162,7 @@ async function generate(
     },
     { signal, timeout: timeoutMs },
   );
+  requireStandardTier(request, reply.service_tier);
   const choice = reply.choices?.[0];
   const tokens = reply.usage;
   if (
@@ -160,6 +179,7 @@ async function generate(
       cachedInputTokens: tokens?.prompt_tokens_details?.cached_tokens,
       cacheWriteTokens: tokens?.prompt_tokens_details?.cache_write_tokens,
       finishReason: choice?.finish_reason,
+      serviceTier: reply.service_tier,
       refused: choice?.message?.refusal != null,
     }),
   });
@@ -219,7 +239,9 @@ export function createLlm({
     const file = join(fixtureDir, fixtureKey(request) + ".json");
     let result: Completion;
     if (env.LLM_MODE === "mock") {
-      result = completion(JSON.parse(await readFile(file, "utf8")));
+      const replay: Completion = JSON.parse(await readFile(file, "utf8"));
+      requireStandardTier(request, replay.serviceTier);
+      result = completion(replay);
     } else {
       try {
         result = await generate(env, request, fetch);

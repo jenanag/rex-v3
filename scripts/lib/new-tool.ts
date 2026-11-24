@@ -8,6 +8,7 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { parseArgs } from "node:util";
@@ -30,6 +31,7 @@ import {
 import {
   hash,
   recipe,
+  renderEnv,
   renderFiles,
   templateDir,
   templateVersion,
@@ -276,6 +278,37 @@ function scaffold(name: string, llm: boolean) {
   console.log("Scaffolded " + name + " in " + dir);
 }
 
+function renderToolEnv(name: string, check: boolean) {
+  validateName(name);
+  const { llm } = recipe(name, tracking(name));
+  const dir = toolDir(name);
+  const load = createRequire(import.meta.url);
+  const properties = load(resolve(dir, "src/env.ts")).envProperties;
+  const providerProperties = llm ? load(resolve(dir, "src/llm/env.ts")).llmEnvProperties : {};
+  const overlay = resolve(dir, "src/tool-env.ts");
+  const toolProperties = existsSync(overlay) ? load(overlay).toolEnvProperties : undefined;
+  const { example, table } = renderEnv(name, llm, {
+    properties,
+    providerProperties,
+    toolProperties,
+  });
+  const envFile = join(dir, ".env.example");
+  const readmeFile = join(dir, "README.md");
+  const readme = read(readmeFile);
+  const block = /(<!-- GENERATED:env START -->\n)[\s\S]*?(<!-- GENERATED:env END -->)/;
+  if (!block.test(readme)) throw new Error(readmeFile + ": missing generated env block");
+  const expected = readme.replace(block, (_, start, end) => start + table + "\n" + end);
+  for (const [path, value] of [
+    [envFile, example],
+    [readmeFile, expected],
+  ]) {
+    if (existsSync(path) && read(path) === value) continue;
+    if (check) throw new Error(path + ": generated environment docs are out of date");
+    write(path, value);
+  }
+  console.log("Tool environment docs in sync (" + name + ")");
+}
+
 function drift(name: string) {
   const state = tracking(name);
   const dir = toolDir(name);
@@ -352,8 +385,21 @@ main(() => {
       check: { type: "boolean" },
       upgrade: { type: "string" },
       "render-template-docs": { type: "boolean" },
+      "render-tool-env": { type: "string" },
     },
   });
+  if (values["render-tool-env"] !== undefined) {
+    if (
+      values.lang ||
+      values.llm ||
+      values.upgrade ||
+      values["render-template-docs"] ||
+      positionals.length
+    )
+      throw new Error("Use --render-tool-env <tool> [--check]");
+    renderToolEnv(values["render-tool-env"], values.check === true);
+    return;
+  }
   if (values["render-template-docs"]) {
     const rendered = renderFiles({ name: "rex-tool-template", llm: true, example: true });
     for (const path of [".env.example", "README.md"])

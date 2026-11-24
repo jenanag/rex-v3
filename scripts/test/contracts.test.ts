@@ -708,3 +708,18 @@ test("answer analysis cache input preserves analyzer order and applies HTTP defa
   );
   assert.notDeepEqual(cacheInput(), cacheInput({ analyzers: [] }));
 });
+
+test("answer-analysis environment docs follow the service schema", async (t) => {
+  const repo = await fixture(t);
+  const render = (...args: string[]) =>
+    repo.run("new-tool", "--render-tool-env", "answer-analysis", ...args);
+  await render("--check");
+  await repo.change(
+    answerDir + "/.env.example",
+    "ANSWER_ANALYSIS_LUNA_ENABLED=false",
+    "ANSWER_ANALYSIS_LUNA_ENABLED=true",
+  );
+  await assert.rejects(render("--check"), /generated environment docs are out of date/);
+  await render();
+  await render("--check");
+});
