@@ -343,7 +343,9 @@ LLM-heavy, so the template is hardened on the simple tools first:
 The engine-query language and template decision is recorded in [ADR 0037](adr/0037-engine-query-language.md).
 ChatGPT shipped in [PR #32](https://github.com/jenanag/rex-v3/pull/32) as the first
 of the three engines required for Phase 2. The [direct smoke check](services/engine-query.md#direct-smoke-check)
-exercises discovery and the recorded ChatGPT answer over loopback HTTP.
+exercises discovery and the recorded ChatGPT answer over loopback HTTP. The
+[answer-capture smoke check](answer-capture-smoke.md) passes that recording through
+engine query, answer analysis, and citation extraction over loopback.
 
 Jay accepted [ADR 0038](adr/0038-engine-query-selectable-web-search.md) on 2026-11-25.
 Selectable web search and text-only Gemini support mention and sentiment analysis.
