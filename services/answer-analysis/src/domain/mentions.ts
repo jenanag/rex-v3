@@ -13,17 +13,30 @@ const graphemes = new Intl.Segmenter("en", { granularity: "grapheme" });
 const snippetLimit = 500;
 
 function* normalizedParts(value: string) {
-  // Keep a letter with its marks during decomposition, so marks can be
-  // canonically reordered before stripping the ones that are diacritics.
-  for (const part of value.matchAll(/\p{L}\p{M}*|\p{M}+|./gsu)) {
-    const normalized = part[0]
-      .normalize("NFD")
-      .replace(
-        /(\p{L})(\p{M}+)/gu,
-        (_, letter: string, marks: string) =>
-          letter + marks.replace(/[\p{M}&&\p{Diacritic}]/gv, ""),
-      );
-    yield { normalized, start: part.index, end: part.index + part[0].length };
+  // Keep base characters with their marks so NFD can reorder the marks.
+  for (const part of value.matchAll(/\P{M}\p{M}*|\p{M}+/gu)) {
+    const original = part[0];
+    const start = part.index;
+    const end = start + original.length;
+    const decomposed = original.normalize("NFD");
+    const split = /^[^\p{L}\p{M}](?=\p{M})/u.exec(original)?.[0];
+    if (split) {
+      const base = split.normalize("NFD");
+      const marks = original.slice(split.length).normalize("NFD");
+      // Preserve the source boundary after punctuation when the pieces
+      // stay in that order after decomposition.
+      if (base + marks === decomposed) {
+        const middle = start + split.length;
+        yield { normalized: base, start, end: middle };
+        yield { normalized: marks, start: middle, end };
+        continue;
+      }
+    }
+    const normalized = decomposed.replace(
+      /(\p{L})(\p{M}+)/gu,
+      (_, letter: string, marks: string) => letter + marks.replace(/[\p{M}&&\p{Diacritic}]/gv, ""),
+    );
+    yield { normalized, start, end };
   }
 }
 

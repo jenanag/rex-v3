@@ -75,6 +75,16 @@ test("uses source boundaries around decomposed symbols", () => {
   ]);
 });
 
+test("matches canonically reordered marks and preserves marks unattached to letters", () => {
+  const text = "\u0385\u0323 !\u0301";
+  expect(
+    detectMentions(text, [brand("symbol", "\u00a8\u0323\u0301"), brand("accent", "\u0301")]),
+  ).toEqual([
+    { brandKey: "symbol", position: 1, occurrences: 1, snippet: text },
+    { brandKey: "accent", position: 2, occurrences: 1, snippet: text },
+  ]);
+});
+
 test("splits a 500-code-point snippet around the first mention and shifts space at either end", () => {
   const tracked = [brand("cafe", "Café")];
   const left = "x".repeat(300);
