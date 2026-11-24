@@ -347,7 +347,7 @@ exercises discovery and the recorded ChatGPT answer over loopback HTTP.
 
 Jay accepted [ADR 0038](adr/0038-engine-query-selectable-web-search.md) on 2026-11-25.
 Selectable web search and text-only Gemini support mention and sentiment analysis.
-Gemini live fixture recording remains pending. The three-engine sources-and-usage
+The Gemini recording replays offline. The three-engine sources-and-usage
 requirement still applies.
 [Grok PR #34](https://github.com/jenanag/rex-v3/pull/34) remains deferred.
 

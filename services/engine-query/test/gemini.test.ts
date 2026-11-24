@@ -1,4 +1,4 @@
-import { mkdtemp, readdir, rm } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test, vi } from "vitest";
@@ -207,6 +207,49 @@ test("Gemini replays a synthetic recorded response without credentials or transp
     await record.close();
     await mock.close();
     await rm(fixtureDir, { recursive: true, force: true });
+  }
+});
+
+test("Gemini replays the recorded Canadian outdoor brands answer offline", async () => {
+  const recording = JSON.parse(
+    await readFile(
+      new URL(
+        "./fixtures/llm/ff3ab438ba1224b1ee173121d2809c55c14bda4ffbe1b0e3364b67d5f4440c5e.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  );
+  const transport = vi.fn(async () => {
+    throw new Error("Unexpected provider traffic");
+  });
+  const app = tool({}, createLlm({ data: { LLM_MODE: "mock" }, fetch: transport }));
+  try {
+    const { body } = await postAnswer(
+      app,
+      {
+        engine: "gemini",
+        webSearch: false,
+        locale: "en-CA",
+        country: "CA",
+        prompt:
+          "Name two Canadian outdoor brands and describe one product category each is known for.",
+      },
+      200,
+    );
+    expect(body).toEqual({
+      answer: {
+        engine: "gemini",
+        model,
+        text: recording.candidates[0].content.parts[0].text,
+        sources: [],
+        latencyMs: expect.any(Number),
+      },
+      usage: [{ ...expectedUsage, inputTokens: 35, outputTokens: 172, costMicrosUsd: 441 }],
+    });
+    expect(transport).not.toHaveBeenCalled();
+  } finally {
+    await app.close();
   }
 });
 
