@@ -341,6 +341,9 @@ LLM-heavy, so the template is hardened on the simple tools first:
    recorded fixtures for every engine.
 
 The engine-query language and template decision is recorded in [ADR 0037](adr/0037-engine-query-language.md).
+ChatGPT shipped in [PR #32](https://github.com/jenanag/rex-v3/pull/32) as the first
+of the three engines required for Phase 2. The [direct smoke check](services/engine-query.md#direct-smoke-check)
+exercises discovery and the recorded ChatGPT answer over loopback HTTP.
 
 **Languages and the Python bring-up** ([ADR 0024](adr/0024-per-tool-language.md)): every
 step, TypeScript ones included, opens with the tool's own language ADR, written at the

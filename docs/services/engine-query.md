@@ -71,6 +71,23 @@ At the limit, the Perplexity request reaches the handler and returns HTTP 422
 
 - Worker flow `answer-capture` (first step).
 
+## Direct smoke check
+
+From the tool folder, use the Node version in `.nvmrc` and build and start the
+standalone service:
+
+```sh
+npm ci
+npm run build
+env -i PATH="$PATH" LLM_MODE=mock PORT=8080 node dist/src/server.js
+```
+
+In another terminal in the same folder, run `node scripts/smoke-engine-query.mjs`.
+Set `PORT` for both commands if you use a port other than 8080. The service starts
+with provider credentials unset and replays the committed Parks Canada fixture
+without provider traffic. The script checks discovery and the recorded answer,
+source, and usage over loopback HTTP.
+
 ## Dependencies
 
 - Engine APIs through its LLM adapter over the official SDKs; tests use `LLM_MODE=mock`.
