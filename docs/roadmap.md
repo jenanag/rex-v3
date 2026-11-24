@@ -21,7 +21,7 @@ to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the super
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
 Phase 1 was completed on 2026-11-22. Phase 2 has started. Jay accepted ADRs 0025
 and 0026 on 2026-11-22, ADR 0027, ADR 0028, and ADR 0029 on 2026-11-23, and ADR 0030, ADR 0031, ADR 0032, and ADR 0033
-on 2026-11-24. ADR 0034 (Python validation spike) is Proposed. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
+on 2026-11-24. Jay accepted ADR 0034 on 2026-11-24, recording that both Python validators missed the large-workload budget. The Python bring-up remains paused. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
 
 - [README](../README.md), [architecture](architecture.md), [conventions](conventions.md),
   [DRY rule](dry-rule.md), [events](events.md), [glossary](glossary.md), this roadmap.
@@ -162,7 +162,7 @@ Deliverables:
   `jsonschema`'s `Draft202012Validator` reading the bundled spec is tried as the
   fallback. Same REx settings (unknown fields 400, no coercion of JSON bodies, defaults
   applied, formats checked), the same error mapping, and datamodel-code-generator models
-  checked to be types only. [ADR 0034](adr/0034-python-validation-spike.md) records the spike (Proposed).
+  checked to be types only. [ADR 0034](adr/0034-python-validation-spike.md) records the accepted spike result. Both candidates missed the large-workload gate, so the Python bring-up remains paused.
 - **Go (time-boxed: 2 days; runs in the Go bring-up, right before ai-traffic-analyzer in
   Phase 7).** Confirms Jay's choice, kin-openapi `openapi3filter` with JSON Schema
   2020-12 validation (3.1 support landed in 2026; ADR 0024); only if it fails,

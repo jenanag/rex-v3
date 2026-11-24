@@ -48,7 +48,8 @@ Jay accepted [ADR 0032](docs/adr/0032-citation-extractor-language.md) on 2026-11
 It selects TypeScript for `citation-extractor`. Jay also accepted
 [ADR 0033](docs/adr/0033-citation-extractor-body-limit.md) on 2026-11-24. It sets a
 4 MiB (4,194,304-byte) ceiling and retains the current request schema.
-[ADR 0034](docs/adr/0034-python-validation-spike.md) is Proposed for the Python validation spike.
+Jay accepted [ADR 0034](docs/adr/0034-python-validation-spike.md) on 2026-11-24.
+Both Python validators missed the large-workload budget. The Python bring-up remains paused.
 Phase 2 builds the tools one at a time, before the platform. Open choices are tracked as
 [deferred decisions](docs/roadmap.md#deferred-decisions).
 

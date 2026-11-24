@@ -1,6 +1,6 @@
 # 0034: Evaluate Python request validation against the vendored OpenAPI contract
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-24, accepted by Jay)
 - **Date:** 2026-11-24
 - **Deciders:** Jay Pascual
 
@@ -17,8 +17,8 @@ uses the same vendored answer-analysis bundle, request cases, and workloads as
 
 Record a failed Python validation gate. Both candidates passed correctness and the
 representative timing workload. Both exceeded 5 ms p99 on the large workload.
-Recommend leaving the Python bring-up paused and deciding whether to use TypeScript
-for answer-analysis in its separate language ADR, as described in ADR 0024.
+Keep the Python bring-up paused. Decide the implementation language for
+answer-analysis in a separate tool ADR, as described in ADR 0024.
 
 ## Consequences
 
@@ -66,7 +66,11 @@ characters and 50 brands, each with 20 aliases and 20 domains.
 The [initial openapi-core CI run](https://github.com/jenanag/rex-v3/actions/runs/45313516725)
 on the same image and runtime with an AMD EPYC 7763 measured 1.3416 ms p50 and
 2.1955 ms p99 for the representative body, and 55.6185 ms p50 and 83.3687 ms p99
-for the large body. The large body missed the budget on both runners.
+for the large body.
+
+The [verified spike run on the reviewed head](https://github.com/jenanag/rex-v3/actions/runs/45314276913)
+corroborated the large-workload result. It recorded 40.6082 ms p99 for
+openapi-core and 39.3610 ms p99 for the Draft 2020-12 route loader.
 
 The spike fits within its two-day time box. The Python template, generator
 integration and permanent tool CI lane remain deferred.
