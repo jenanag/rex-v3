@@ -94,6 +94,11 @@ Implementation is follow-up work. Provider identity checks use cache key version
 4. A later eligibility-only change keeps that version if canonical inputs and
 tool outputs stay the same.
 
+[Accepted ADR 0041](../adr/0041-standardize-tool-provider-model-selection.md)
+calls for adding provider and model objects to ordered analyzer request selectors
+alongside deterministic IDs, preserving analyzer result IDs. The cutover will
+bump the cache key version to 5. Implementation follows separately.
+
 The tool validates `ANSWER_ANALYSIS_LUNA_ENABLED` at startup and defaults it to
 `false`. Set it to `true` and configure `OPENAI_API_KEY` for the live deployment. Callers opt in with `sentiment.analyzers` containing
 `llm:openai/gpt-6-luna`. The omitted default is still `det:lexicon`.

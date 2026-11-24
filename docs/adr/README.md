@@ -85,6 +85,11 @@ Jay accepted [ADR 0040](0040-llm-model-and-analyzer-cache-eligibility.md) on 202
 It defines caller-side model resolution for page entries and analyzer eligibility
 before result lookup. Implementation follows separately.
 
+Jay accepted [ADR 0041](0041-standardize-tool-provider-model-selection.md) on 2026-11-25.
+It sets the coordinated pre-release cutover to explicit provider and model
+pairs for three tools and amends ADRs 0017, 0038, 0039, and 0040.
+Implementation follows separately.
+
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-monorepo-pnpm-turborepo.md) | Monorepo with pnpm workspaces and Turborepo | Accepted (amended) |
@@ -124,8 +129,9 @@ before result lookup. Implementation follows separately.
 | [0035](0035-answer-analysis-language.md) | Use TypeScript for answer-analysis | Accepted |
 | [0036](0036-answer-analysis-body-limit.md) | Set the answer-analysis request body limit to 3 MiB | Accepted |
 | [0037](0037-engine-query-language.md) | Use TypeScript for engine-query | Accepted |
-| [0038](0038-engine-query-selectable-web-search.md) | Make web search selectable in engine-query | Accepted |
-| [0039](0039-engine-query-per-request-model.md) | Allow per-request model selection in engine-query | Accepted |
-| [0040](0040-llm-model-and-analyzer-cache-eligibility.md) | Resolve LLM model selection and analyzer eligibility before cache lookup | Accepted |
+| [0038](0038-engine-query-selectable-web-search.md) | Make web search selectable in engine-query | Accepted (amended) |
+| [0039](0039-engine-query-per-request-model.md) | Allow per-request model selection in engine-query | Accepted (amended) |
+| [0040](0040-llm-model-and-analyzer-cache-eligibility.md) | Resolve LLM model selection and analyzer eligibility before cache lookup | Accepted (amended) |
+| [0041](0041-standardize-tool-provider-model-selection.md) | Standardize provider and model selection in tool requests | Accepted |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.

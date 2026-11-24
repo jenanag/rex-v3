@@ -3,6 +3,7 @@
 - **Status:** Accepted (2026-11-25, accepted by Jay)
 - **Date:** 2026-11-25
 - **Deciders:** Jay Pascual
+- **Amended by:** [0041](0041-standardize-tool-provider-model-selection.md), 2026-11-25 (accepted by Jay). Applies to the explicit search setting in engine-query requests and its cache input.
 
 ## Context
 
