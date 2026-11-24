@@ -77,9 +77,11 @@ export interface paths {
          * @description Synchronous. Results follow request order and use the same deterministic
          *     brand mentions. Omitted `sentiment` defaults to `det:lexicon`; an explicit
          *     empty `analyzers` list disables sentiment but still resolves the language.
-         *     In enabled deployments, select `llm:openai/gpt-6-luna` explicitly to run
-         *     one batched call for the mentioned brands. If none are mentioned the
-         *     tool makes no call and returns empty mentions and usage.
+         *     Select an advertised LLM analyzer to run one batched call for the
+         *     mentioned brands. Selecting both Luna and Gemini runs the batches
+         *     concurrently with independent deadlines. Usage items follow request
+         *     order. If no brands are mentioned the tool makes no provider call and
+         *     returns empty mentions and usage.
          *
          *     A failed secondary LLM analyzer is reported as `failed` with null per-brand
          *     scores and labels, excluded from agreement. HTTP 200 includes any valid
@@ -401,8 +403,9 @@ export interface operations {
         requestBody?: never;
         responses: {
             /**
-             * @description Available analyzers, deterministic ones first. Deployments with Luna
-             *     enabled advertise `llm:openai/gpt-6-luna` with kind `llm` and
+             * @description Available analyzers, deterministic ones first. Deployments advertise
+             *     enabled LLM analyzers in catalog order: `llm:openai/gpt-6-luna` and
+             *     `llm:google/gemini-2.5-flash-lite`. Both have kind `llm` and
              *     language support `["*"]`, including undetermined language.
              */
             200: {

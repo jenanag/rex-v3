@@ -29,6 +29,7 @@ the REx monorepo and re-vendor contract changes there.
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | OTLP collector. Export is off when unset. |
 | `BODY_LIMIT_BYTES` | 3145728 | Optional override of the Fastify request-body limit. |
 | `ANSWER_ANALYSIS_LUNA_ENABLED` | false | Advertise and accept the opt-in GPT-6 Luna analyzer. |
+| `ANSWER_ANALYSIS_GEMINI_ENABLED` | false | Advertise and accept the opt-in Gemini 2.5 Flash-Lite analyzer. |
 | `LLM_MODE` | unset | Mock by default in tests, live otherwise. |
 | `OPENAI_API_KEY` | unset | OpenAI credential for live or record mode. |
 | `ANTHROPIC_API_KEY` | unset | Anthropic credential for live or record mode. |

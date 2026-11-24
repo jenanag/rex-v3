@@ -109,7 +109,10 @@ function measure(validate, parsed, name) {
 
 const spec = JSON.parse(readFileSync(new URL("../dist/contract.json", import.meta.url), "utf8"));
 const config = loadConfig();
-const handlers = createHandlers({ lunaEnabled: config.ANSWER_ANALYSIS_LUNA_ENABLED });
+const handlers = createHandlers({
+  lunaEnabled: config.ANSWER_ANALYSIS_LUNA_ENABLED,
+  geminiEnabled: config.ANSWER_ANALYSIS_GEMINI_ENABLED,
+});
 const app = createApp({ spec, config, handlers, logs: false });
 let route;
 app.addHook("preHandler", async (request) => {

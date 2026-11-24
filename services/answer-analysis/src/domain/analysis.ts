@@ -1,5 +1,7 @@
 import type { components } from "../../contract/types.js";
-import { luna, type LunaVerdict } from "../llm/luna.js";
+import type { LlmVerdict } from "../llm/batch.js";
+import { gemini } from "../llm/gemini.js";
+import { luna } from "../llm/luna.js";
 import { packs } from "../lexicons/index.js";
 import { clauses, coveredBy, words } from "./context.js";
 import { findMentionOccurrences } from "./mentions.js";
@@ -17,7 +19,7 @@ const descriptions = {
 type DeterministicId = keyof typeof descriptions;
 const languages = [...packs.keys()];
 
-export function listAnalyzers(lunaEnabled = false): Schemas["Analyzer"][] {
+export function listAnalyzers(lunaEnabled = false, geminiEnabled = false): Schemas["Analyzer"][] {
   const catalog: Schemas["Analyzer"][] = Object.entries(descriptions).map(([id, description]) => ({
     id,
     kind: "deterministic",
@@ -25,6 +27,7 @@ export function listAnalyzers(lunaEnabled = false): Schemas["Analyzer"][] {
     description,
   }));
   if (lunaEnabled) catalog.push(luna);
+  if (geminiEnabled) catalog.push(gemini);
   return catalog;
 }
 
@@ -80,7 +83,10 @@ type Options = {
   onUnsupportedLanguage: "fallback" | "error";
 };
 
-type LunaOutcome = { verdicts?: ReadonlyMap<string, LunaVerdict>; usage?: Schemas["LlmUsage"] };
+export type LlmOutcome = {
+  verdicts?: ReadonlyMap<string, LlmVerdict>;
+  usage?: Schemas["LlmUsage"];
+};
 
 export function prepareAnalysis(
   { text, brands }: Pick<Schemas["AnswerAnalysisRequest"], "text" | "brands">,
@@ -111,7 +117,7 @@ export function prepareAnalysis(
   const deterministic = supported
     .filter(({ kind }) => kind === "deterministic")
     .map(({ id }) => id as DeterministicId);
-  const needsLuna = found.length > 0 && supported.some(({ id }) => id === luna.id);
+  const llmAnalyzers = found.length > 0 ? supported.filter(({ kind }) => kind === "llm") : [];
 
   const results = new Map<DeterministicId, Contributions>();
   for (const id of deterministic) results.set(id, new Map());
@@ -122,13 +128,15 @@ export function prepareAnalysis(
     }
   }
 
-  function finish(lunaOutcome: LunaOutcome = {}): Schemas["AnswerAnalysis"] {
+  function finish(
+    llmOutcomes: ReadonlyMap<string, LlmOutcome> = new Map(),
+  ): Schemas["AnswerAnalysis"] {
     const analyzers: AnalyzerRun[] = options.analyzers.map((analyzer) => ({
       analyzer: analyzer.id,
       kind: analyzer.kind,
       status: !supported.includes(analyzer)
         ? "unsupported"
-        : analyzer.id === luna.id && needsLuna && !lunaOutcome.verdicts
+        : llmAnalyzers.includes(analyzer) && !llmOutcomes.get(analyzer.id)?.verdicts
           ? "failed"
           : "ok",
       primary: analyzer === primary,
@@ -137,7 +145,11 @@ export function prepareAnalysis(
       const sentimentByAnalyzer = analyzers.map(({ analyzer, kind, status }): AnalyzerSentiment => {
         if (status !== "ok") return { analyzer, status, score: null, label: null };
         if (kind === "llm")
-          return { analyzer, status, ...lunaOutcome.verdicts!.get(mention.brandKey)! };
+          return {
+            analyzer,
+            status,
+            ...llmOutcomes.get(analyzer)!.verdicts!.get(mention.brandKey)!,
+          };
         return {
           analyzer,
           status,
@@ -161,15 +173,18 @@ export function prepareAnalysis(
       primaryFallback: requested !== undefined && primary !== undefined && primary.id !== requested,
       analyzers,
       mentions,
-      usage: lunaOutcome.usage ? [lunaOutcome.usage] : [],
+      usage: analyzers.flatMap(({ analyzer }) => {
+        const usage = llmOutcomes.get(analyzer)?.usage;
+        return usage ? [usage] : [];
+      }),
     };
   }
 
   return {
     found,
     language: language.language,
-    needsLuna,
-    lunaIsPrimary: primary?.id === luna.id,
+    llmAnalyzers,
+    primaryId: primary?.id,
     finish,
   } as const;
 }

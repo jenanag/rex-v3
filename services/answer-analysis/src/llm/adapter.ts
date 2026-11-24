@@ -10,6 +10,7 @@ import { retryAfter } from "./retry-after.js";
 import type { components } from "../../contract/types.js";
 import { ToolProblem } from "../errors.js";
 import { llmEnvProperties } from "./env.js";
+import { generateGemini, type GeminiGenerate } from "./gemini.js";
 
 type Provider = "openai" | "anthropic" | "google" | "perplexity" | "xai";
 type LlmEnv = {
@@ -33,12 +34,13 @@ export type LlmRequest = {
     cacheWriteMicrosPerMillion?: number;
     outputMicrosPerMillion: number;
   };
+  geminiGenerate?: GeminiGenerate;
   openAiChat?: {
     promptVersion: string;
     body: ChatCompletionCreateParamsNonStreaming;
   };
 };
-type Completion = {
+export type Completion = {
   text: string;
   inputTokens: number;
   outputTokens: number;
@@ -52,17 +54,20 @@ type Completion = {
 export class UnexpectedServiceTier extends ToolProblem {
   readonly reportedTier: string;
 
-  constructor(tier: string) {
+  constructor(tier: unknown) {
     super(503, "provider_unavailable", "LLM returned an unsupported pricing tier");
     // Keep diagnostics low-cardinality and avoid logging arbitrary provider data.
-    this.reportedTier = ["auto", "flex", "scale", "priority", "fast"].includes(tier)
-      ? tier
-      : "unknown";
+    this.reportedTier =
+      typeof tier === "string" && ["auto", "flex", "scale", "priority", "fast"].includes(tier)
+        ? tier
+        : "unknown";
   }
 }
 
 function requireStandardTier(request: LlmRequest, tier: string | null | undefined) {
   if (request.openAiChat?.body.service_tier === "default" && tier != null && tier !== "default")
+    throw new UnexpectedServiceTier(tier);
+  if (request.geminiGenerate && tier !== undefined && tier !== "unspecified" && tier !== "standard")
     throw new UnexpectedServiceTier(tier);
 }
 
@@ -70,7 +75,9 @@ export function fixtureKey(request: LlmRequest) {
   const { provider, model, operation, prompt, maxOutputTokens } = request;
   const identity = request.openAiChat
     ? { provider, operation, timeoutMs: request.timeoutMs, ...request.openAiChat }
-    : { provider, model, operation, prompt, maxOutputTokens };
+    : request.geminiGenerate
+      ? { provider, model, operation, timeoutMs: request.timeoutMs, ...request.geminiGenerate }
+      : { provider, model, operation, prompt, maxOutputTokens };
   return createHash("sha256").update(JSON.stringify(identity)).digest("hex");
 }
 
@@ -118,6 +125,17 @@ async function generate(
     });
   }
   if (provider === "google") {
+    if (request.geminiGenerate) {
+      const result = await generateGemini(
+        request.geminiGenerate,
+        key(env.GEMINI_API_KEY, provider),
+        timeoutMs,
+        signal,
+        fetch,
+      );
+      requireStandardTier(request, result.serviceTier);
+      return completion(result);
+    }
     const client = new GoogleGenAI({ apiKey: key(env.GEMINI_API_KEY, provider) });
     const reply = await client.models.generateContent({
       model,
@@ -254,7 +272,10 @@ export function createLlm({
     if (env.LLM_MODE === "record") await recordCompletion(fixtureDir, file, result);
     return {
       text: result.text,
-      ...(request.openAiChat && { finishReason: result.finishReason, refused: result.refused }),
+      ...((request.openAiChat || request.geminiGenerate) && {
+        finishReason: result.finishReason,
+        refused: result.refused,
+      }),
       usage: {
         provider: request.provider,
         model: request.model,

@@ -1,10 +1,17 @@
 import type { FastifyRequest } from "fastify";
 import type { components } from "../../contract/types.js";
 import type { Handlers } from "../app.js";
-import { listAnalyzers, prepareAnalysis } from "../domain/analysis.js";
+import { listAnalyzers, prepareAnalysis, type LlmOutcome } from "../domain/analysis.js";
 import { ToolProblem } from "../errors.js";
 import { createLlm, UnexpectedServiceTier } from "../llm/adapter.js";
-import { buildLunaBatch, luna, parseLunaBatch } from "../llm/luna.js";
+import { parseVerdicts } from "../llm/batch.js";
+import { buildGeminiBatch, gemini } from "../llm/gemini.js";
+import { buildLunaBatch, luna } from "../llm/luna.js";
+
+const providers = {
+  [luna.id]: { build: buildLunaBatch, name: "Luna", tier: "default", finish: "stop" },
+  [gemini.id]: { build: buildGeminiBatch, name: "Gemini", tier: "standard", finish: "STOP" },
+};
 
 type Schemas = components["schemas"];
 type ValidatedRequest = Schemas["AnswerAnalysisRequest"] & {
@@ -14,15 +21,17 @@ type ValidatedRequest = Schemas["AnswerAnalysisRequest"] & {
 
 export function createHandlers({
   lunaEnabled,
+  geminiEnabled = false,
   llm = createLlm(),
   reportFailedPrimaryUsage = (request, usage) =>
     request.log.warn({ usage }, "Usage from a failed primary sentiment analyzer"),
 }: {
   lunaEnabled: boolean;
+  geminiEnabled?: boolean;
   llm?: ReturnType<typeof createLlm>;
   reportFailedPrimaryUsage?: (request: FastifyRequest, usage: Schemas["LlmUsage"]) => void;
 }): Handlers {
-  const catalog = listAnalyzers(lunaEnabled);
+  const catalog = listAnalyzers(lunaEnabled, geminiEnabled);
   const byId = new Map(catalog.map((analyzer) => [analyzer.id, analyzer]));
   return {
     listAnalyzers: async () => ({ data: catalog }),
@@ -83,40 +92,56 @@ export function createHandlers({
             analyzer.languages.join(", "),
         );
       }
-      if (!outcome.needsLuna) return outcome.finish();
-      let usage: Schemas["LlmUsage"] | undefined;
-      try {
-        const batch = buildLunaBatch(body.text, outcome.language, outcome.found);
-        const completion = await llm(batch.request);
-        usage = completion.usage;
-        if (completion.refused || completion.finishReason !== "stop")
-          throw new ToolProblem(
-            503,
-            "provider_unavailable",
-            "Luna did not complete the sentiment batch",
-          );
-        return outcome.finish({ usage, verdicts: parseLunaBatch(completion.text, batch.keys) });
-      } catch (error) {
-        if (error instanceof UnexpectedServiceTier) {
-          request.log.warn(
-            {
-              code: "llm_unexpected_service_tier",
-              analyzer: luna.id,
-              requestedTier: "default",
-              reportedTier: error.reportedTier,
-            },
-            "Luna returned an unsupported pricing tier",
-          );
+      if (!outcome.llmAnalyzers.length) return outcome.finish();
+
+      const completed = await Promise.all(
+        outcome.llmAnalyzers.map(async ({ id }) => {
+          const provider = providers[id];
+          let usage: Schemas["LlmUsage"] | undefined;
+          try {
+            const batch = provider.build(body.text, outcome.language, outcome.found);
+            const completion = await llm(batch.request);
+            usage = completion.usage;
+            if (completion.refused || completion.finishReason !== provider.finish)
+              throw new ToolProblem(
+                503,
+                "provider_unavailable",
+                provider.name + " did not complete the sentiment batch",
+              );
+            const verdicts = parseVerdicts(completion.text, batch.keys, provider.name);
+            return { id, result: { usage, verdicts } satisfies LlmOutcome };
+          } catch (error) {
+            if (error instanceof UnexpectedServiceTier) {
+              request.log.warn(
+                {
+                  code: "llm_unexpected_service_tier",
+                  analyzer: id,
+                  requestedTier: provider.tier,
+                  reportedTier: error.reportedTier,
+                },
+                provider.name + " returned an unsupported pricing tier",
+              );
+            }
+            return { id, result: { usage } satisfies LlmOutcome, error };
+          }
+        }),
+      );
+
+      const failedPrimary = completed.find(
+        (entry) => entry.id === outcome.primaryId && "error" in entry,
+      );
+      if (failedPrimary) {
+        for (const { result } of completed) {
+          if (result.usage) reportFailedPrimaryUsage(request, result.usage);
         }
-        if (!outcome.lunaIsPrimary) return outcome.finish({ usage });
-        if (usage) reportFailedPrimaryUsage(request, usage);
         throw new ToolProblem(
           503,
           "provider_unavailable",
           "Primary sentiment analyzer failed",
-          error instanceof ToolProblem ? error.retryAfter : undefined,
+          failedPrimary.error instanceof ToolProblem ? failedPrimary.error.retryAfter : undefined,
         );
       }
+      return outcome.finish(new Map(completed.map(({ id, result }) => [id, result])));
     },
   };
 }

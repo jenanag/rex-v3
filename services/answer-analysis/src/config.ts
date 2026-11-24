@@ -12,6 +12,7 @@ export interface Config {
   OTEL_EXPORTER_OTLP_ENDPOINT?: string;
   BODY_LIMIT_BYTES: number;
   ANSWER_ANALYSIS_LUNA_ENABLED: boolean;
+  ANSWER_ANALYSIS_GEMINI_ENABLED: boolean;
 }
 
 export function loadConfig(data: Record<string, unknown> = process.env) {
