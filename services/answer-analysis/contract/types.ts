@@ -162,7 +162,7 @@ export interface components {
             text: string;
         });
         /**
-         * @description `ok`; `unsupported` (the analyzer does not support the language); `failed` (provider error or timeout, LLM only).
+         * @description `ok`; `unsupported` (the analyzer does not support the language); `failed` (provider error, unusable completion, or invalid usage, LLM only).
          * @enum {string}
          */
         AnalyzerStatus: "ok" | "unsupported" | "failed";

@@ -1,10 +1,12 @@
-import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenAI } from "@google/genai";
 import { envSchema } from "env-schema";
 import OpenAI from "openai";
+import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
+import { retryAfter } from "./retry-after.js";
 import type { components } from "../../contract/types.js";
 import { ToolProblem } from "../errors.js";
 import { llmEnvProperties } from "./env.js";
@@ -25,25 +27,47 @@ export type LlmRequest = {
   prompt: string;
   maxOutputTokens: number;
   timeoutMs: number;
-  price: { inputMicrosPerMillion: number; outputMicrosPerMillion: number };
+  price: {
+    inputMicrosPerMillion: number;
+    cachedInputMicrosPerMillion?: number;
+    cacheWriteMicrosPerMillion?: number;
+    outputMicrosPerMillion: number;
+  };
+  openAiChat?: {
+    promptVersion: string;
+    body: ChatCompletionCreateParamsNonStreaming;
+  };
 };
-type Completion = { text: string; inputTokens: number; outputTokens: number };
+type Completion = {
+  text: string;
+  inputTokens: number;
+  outputTokens: number;
+  cachedInputTokens?: number;
+  cacheWriteTokens?: number;
+  finishReason?: string;
+  refused?: boolean;
+};
 
 export function fixtureKey(request: LlmRequest) {
   const { provider, model, operation, prompt, maxOutputTokens } = request;
-  return createHash("sha256")
-    .update(JSON.stringify({ provider, model, operation, prompt, maxOutputTokens }))
-    .digest("hex");
+  const identity = request.openAiChat
+    ? { provider, operation, timeoutMs: request.timeoutMs, ...request.openAiChat }
+    : { provider, model, operation, prompt, maxOutputTokens };
+  return createHash("sha256").update(JSON.stringify(identity)).digest("hex");
 }
 
 function completion(value: Completion): Completion {
+  const { inputTokens, outputTokens, cachedInputTokens = 0, cacheWriteTokens = 0 } = value;
   if (
     typeof value.text !== "string" ||
-    ![value.inputTokens, value.outputTokens].every((n) => Number.isSafeInteger(n) && n >= 0)
+    ![inputTokens, outputTokens, cachedInputTokens, cacheWriteTokens].every(
+      (n) => Number.isSafeInteger(n) && n >= 0,
+    ) ||
+    cachedInputTokens > inputTokens - cacheWriteTokens
   ) {
-    throw new Error("Invalid completion or token counts");
+    throw new ToolProblem(503, "provider_unavailable", "LLM returned invalid completion or usage");
   }
-  return { text: value.text, inputTokens: value.inputTokens, outputTokens: value.outputTokens };
+  return value;
 }
 
 function key(value: string | undefined, provider: Provider) {
@@ -52,7 +76,11 @@ function key(value: string | undefined, provider: Provider) {
   return value;
 }
 
-async function generate(env: LlmEnv, request: LlmRequest): Promise<Completion> {
+async function generate(
+  env: LlmEnv,
+  request: LlmRequest,
+  fetch?: typeof globalThis.fetch,
+): Promise<Completion> {
   const { provider, model, prompt, maxOutputTokens, timeoutMs } = request;
   const signal = AbortSignal.timeout(timeoutMs);
   if (provider === "anthropic") {
@@ -105,9 +133,9 @@ async function generate(env: LlmEnv, request: LlmRequest): Promise<Completion> {
       : provider === "xai"
         ? env.XAI_API_KEY
         : env.OPENAI_API_KEY;
-  const client = new OpenAI({ apiKey: key(credential, provider), baseURL, maxRetries: 0 });
+  const client = new OpenAI({ apiKey: key(credential, provider), baseURL, maxRetries: 0, fetch });
   const reply = await client.chat.completions.create(
-    {
+    request.openAiChat?.body ?? {
       model,
       ...(provider === "openai"
         ? { max_completion_tokens: maxOutputTokens }
@@ -116,25 +144,57 @@ async function generate(env: LlmEnv, request: LlmRequest): Promise<Completion> {
     },
     { signal, timeout: timeoutMs },
   );
+  const choice = reply.choices?.[0];
+  const tokens = reply.usage;
+  if (
+    request.openAiChat &&
+    tokens?.total_tokens !== (tokens?.prompt_tokens ?? NaN) + (tokens?.completion_tokens ?? NaN)
+  ) {
+    throw new ToolProblem(503, "provider_unavailable", "LLM returned inconsistent usage totals");
+  }
   return completion({
-    text: reply.choices[0]?.message.content ?? "",
-    inputTokens: reply.usage?.prompt_tokens ?? NaN,
-    outputTokens: reply.usage?.completion_tokens ?? NaN,
+    text: typeof choice?.message?.content === "string" ? choice.message.content : "",
+    inputTokens: tokens?.prompt_tokens ?? NaN,
+    outputTokens: tokens?.completion_tokens ?? NaN,
+    ...(request.openAiChat && {
+      cachedInputTokens: tokens?.prompt_tokens_details?.cached_tokens,
+      cacheWriteTokens: tokens?.prompt_tokens_details?.cache_write_tokens,
+      finishReason: choice?.finish_reason,
+      refused: choice?.message?.refusal != null,
+    }),
   });
 }
 
-function retryAfter(error: unknown) {
-  if (!error || typeof error !== "object" || !("headers" in error)) return undefined;
-  const headers = error.headers;
-  if (!(headers instanceof Headers)) return undefined;
-  const value = headers.get("retry-after");
-  return value && (/^\d+$/.test(value) || Number.isFinite(Date.parse(value))) ? value : undefined;
+function priceCompletion(result: Completion, price: LlmRequest["price"]) {
+  const { cachedInputTokens = 0, cacheWriteTokens = 0 } = result;
+  const rate = price.inputMicrosPerMillion;
+  const uncached = result.inputTokens - cachedInputTokens - cacheWriteTokens;
+  const total =
+    BigInt(uncached) * BigInt(rate) +
+    BigInt(cachedInputTokens) * BigInt(price.cachedInputMicrosPerMillion ?? rate) +
+    BigInt(cacheWriteTokens) * BigInt(price.cacheWriteMicrosPerMillion ?? rate) +
+    BigInt(result.outputTokens) * BigInt(price.outputMicrosPerMillion);
+  const rounded = Number((total + 500_000n) / 1_000_000n);
+  if (!Number.isSafeInteger(rounded) || total < 0n) throw new Error("Invalid LLM usage cost");
+  return rounded;
+}
+
+async function recordCompletion(directory: string, file: string, result: Completion) {
+  await mkdir(directory, { recursive: true });
+  const temporary = join(directory, ".record-" + randomUUID());
+  try {
+    await writeFile(temporary, JSON.stringify(result, null, 2) + "\n", { flag: "wx" });
+    await rename(temporary, file);
+  } finally {
+    await rm(temporary, { force: true });
+  }
 }
 
 export function createLlm({
   data = process.env,
   fixtureDir = "test/fixtures/llm",
-}: { data?: Record<string, unknown>; fixtureDir?: string } = {}) {
+  fetch,
+}: { data?: Record<string, unknown>; fixtureDir?: string; fetch?: typeof globalThis.fetch } = {}) {
   const env = envSchema<LlmEnv>({
     env: false,
     data,
@@ -151,39 +211,28 @@ export function createLlm({
   });
   return async (
     request: LlmRequest,
-  ): Promise<{ text: string; usage: components["schemas"]["LlmUsage"] }> => {
+  ): Promise<
+    Pick<Completion, "text" | "finishReason" | "refused"> & {
+      usage: components["schemas"]["LlmUsage"];
+    }
+  > => {
     const file = join(fixtureDir, fixtureKey(request) + ".json");
     let result: Completion;
     if (env.LLM_MODE === "mock") {
       result = completion(JSON.parse(await readFile(file, "utf8")));
     } else {
       try {
-        result = await generate(env, request);
+        result = await generate(env, request, fetch);
       } catch (error) {
         if (error instanceof ToolProblem) throw error;
         throw new ToolProblem(503, "provider_unavailable", "LLM request failed", retryAfter(error));
       }
     }
-    const costMicrosUsd = Math.round(
-      (result.inputTokens * request.price.inputMicrosPerMillion +
-        result.outputTokens * request.price.outputMicrosPerMillion) /
-        1_000_000,
-    );
-    if (!Number.isSafeInteger(costMicrosUsd) || costMicrosUsd < 0)
-      throw new Error("Invalid LLM usage cost");
-    if (env.LLM_MODE === "record") {
-      await mkdir(fixtureDir, { recursive: true });
-      const directory = await mkdtemp(join(fixtureDir, ".record-"));
-      try {
-        const temporary = join(directory, "fixture.json");
-        await writeFile(temporary, JSON.stringify(result, null, 2) + "\n");
-        await rename(temporary, file);
-      } finally {
-        await rm(directory, { recursive: true, force: true });
-      }
-    }
+    const costMicrosUsd = priceCompletion(result, request.price);
+    if (env.LLM_MODE === "record") await recordCompletion(fixtureDir, file, result);
     return {
       text: result.text,
+      ...(request.openAiChat && { finishReason: result.finishReason, refused: result.refused }),
       usage: {
         provider: request.provider,
         model: request.model,

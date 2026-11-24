@@ -1,0 +1,9 @@
+{
+  "text": "{\"results\":[{\"brandKey\":\"b02\",\"label\":\"negative\",\"score\":-0.5001,\"rationale\":null},{\"brandKey\":\"b01\",\"label\":\"positive\",\"score\":0.6001,\"rationale\":\"Acme is favored.\"}]}",
+  "inputTokens": 1000,
+  "outputTokens": 200,
+  "cachedInputTokens": 400,
+  "cacheWriteTokens": 100,
+  "finishReason": "stop",
+  "refused": false
+}

@@ -62,7 +62,8 @@
       "owned": true
     },
     "src/llm/adapter.ts": {
-      "sha256": "5c500a5fc433b9745adbc6122b62e34f0787d3151e2185c3f59fd136e6a7a513"
+      "sha256": "5c500a5fc433b9745adbc6122b62e34f0787d3151e2185c3f59fd136e6a7a513",
+      "owned": true
     },
     "src/llm/env.ts": {
       "sha256": "17126c2c44df00b6d54d1f5fae4560df945ea16ff4e95a683726bc2533c1fff8"
@@ -83,7 +84,8 @@
       "sha256": "b4714782756c1ac09528a2c7c53611c5a7f28f5b7cd264d6830a48fb2522e9c8"
     },
     "test/support.ts": {
-      "sha256": "2541354cf437d7f2b88579ea50ab0bccf8e09aca04bbb97afa27ad0fad584f0e"
+      "sha256": "2541354cf437d7f2b88579ea50ab0bccf8e09aca04bbb97afa27ad0fad584f0e",
+      "owned": true
     },
     "tsconfig.build.json": {
       "sha256": "1ee531ddfe863deb84b64239434eb8f0e2b7bc4a279c2a6882d0d8fc0ddf461f"
