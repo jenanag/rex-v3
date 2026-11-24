@@ -61,6 +61,9 @@ TypeScript for `citation-extractor` and records its Phase 2 build order.
 Jay accepted [ADR 0033](0033-citation-extractor-body-limit.md) on 2026-11-24. It sets
 the 4 MiB request body ceiling for `citation-extractor` and retains its request schema.
 
+Jay accepted [ADR 0034](0034-python-validation-spike.md) on 2026-11-24. It records
+that both Python validators missed the large-workload gate and keeps the Python bring-up paused.
+
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-monorepo-pnpm-turborepo.md) | Monorepo with pnpm workspaces and Turborepo | Accepted (amended) |
@@ -96,5 +99,6 @@ the 4 MiB request body ceiling for `citation-extractor` and retains its request 
 | [0031](0031-content-auditor-body-limits.md) | Set request body limits for content-auditor | Accepted |
 | [0032](0032-citation-extractor-language.md) | Use TypeScript for citation-extractor | Accepted |
 | [0033](0033-citation-extractor-body-limit.md) | Set the citation-extractor request body limit to 4 MiB | Accepted |
+| [0034](0034-python-validation-spike.md) | Evaluate Python request validation against the vendored OpenAPI contract | Accepted |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.
