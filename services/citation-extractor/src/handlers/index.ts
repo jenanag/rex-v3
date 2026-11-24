@@ -1,6 +1,9 @@
-import type { Handlers } from "../app.js";
-import { ToolProblem } from "../errors.js";
+import { readFileSync } from "node:fs";
+import type { ToolSpec } from "../contract.js";
+import { createHandlers } from "./create-handlers.js";
 
-export const handlers: Handlers = {
-  extractCitations: async () => { throw new ToolProblem(501, "not_implemented", "Operation is not implemented"); },
-};
+const spec = JSON.parse(
+  readFileSync(new URL("../../contract.json", import.meta.url), "utf8"),
+) as ToolSpec;
+
+export const handlers = createHandlers(spec);

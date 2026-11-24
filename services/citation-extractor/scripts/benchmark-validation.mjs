@@ -111,11 +111,16 @@ async function post(payload, status, code) {
     payload,
   });
   assert.equal(response.statusCode, status, "POST " + path + " with " + payload.length + " bytes");
-  assert.equal(response.json().code, code);
+  if (code) assert.equal(response.json().code, code);
+  else
+    assert.ok(
+      response.json().citations.length > 0,
+      "Expected the extraction handler to return citations",
+    );
 }
 
 try {
-  await post(Buffer.from(JSON.stringify(representative)), 501, "not_implemented");
+  await post(Buffer.from(JSON.stringify(representative)), 200);
   assert.ok(route, "The representative request must reach the registered route");
   const { bodyLimit, validate } = route;
   assert.equal(bodyLimit, expectedLimit, "Expected the ADR 0033 route limit");
@@ -183,13 +188,13 @@ try {
 
   for (const { name, wire } of boundaries) {
     const oversized = Buffer.concat([wire, Buffer.from(" ")]);
-    await post(wire, 501, "not_implemented");
+    await post(wire, 200);
     await post(oversized, 413, "payload_too_large");
     console.log(
       name +
         " | " +
         wire.length +
-        " bytes reached stub (501), " +
+        " bytes reached handler (200), " +
         oversized.length +
         " bytes rejected (413)",
     );

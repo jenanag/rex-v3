@@ -26,10 +26,12 @@
       "sha256": "db0e57daccaec7e833782e4da306ef00a22f8df8bbd23e35dde1984e2877109e"
     },
     "package-lock.json": {
-      "sha256": "ed7a15469e63d3de20edb943e2a4fdaee591bbf55105fa4071c0d73d5019caf8"
+      "sha256": "ed7a15469e63d3de20edb943e2a4fdaee591bbf55105fa4071c0d73d5019caf8",
+      "owned": true
     },
     "package.json": {
-      "sha256": "941ffad5b3215e5639b61e5c93c83b8c1e66de91a1752b96acc6d2b4ce8851b6"
+      "sha256": "941ffad5b3215e5639b61e5c93c83b8c1e66de91a1752b96acc6d2b4ce8851b6",
+      "owned": true
     },
     "README.md": {
       "sha256": "ffb9b9b9226c57943bf5a812ab168e3f3e7836f8ba57f46ef5f29f41329dc044",
@@ -73,7 +75,8 @@
       "sha256": "cf5aa07c81b62c2716646f0d6f2c4ae902c6f4e0a11275a1f3420b54bb8c2910"
     },
     "test/support.ts": {
-      "sha256": "2541354cf437d7f2b88579ea50ab0bccf8e09aca04bbb97afa27ad0fad584f0e"
+      "sha256": "2541354cf437d7f2b88579ea50ab0bccf8e09aca04bbb97afa27ad0fad584f0e",
+      "owned": true
     },
     "tsconfig.build.json": {
       "sha256": "1ee531ddfe863deb84b64239434eb8f0e2b7bc4a279c2a6882d0d8fc0ddf461f"

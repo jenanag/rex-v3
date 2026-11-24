@@ -118,7 +118,7 @@ tools:
         scope: shared
         skipWhen: {pointer: /analyzers/*/status, equals: failed}
   citation-extractor:
-    keyVersion: 1
+    keyVersion: 2
     operations:
       extractCitations: {ttl: P30D, scope: shared}              # DEFAULT
   content-auditor:
