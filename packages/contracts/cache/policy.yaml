@@ -110,7 +110,7 @@ tools:
         extraKeyInputs: [engineModel]   # model listEngines reports for the engine
         normalize: {prompt: collapse-whitespace}
   answer-analysis:
-    keyVersion: 2
+    keyVersion: 3
     operations:
       listAnalyzers: {ttl: PT5M, scope: shared}                 # DEFAULT
       analyzeAnswer:

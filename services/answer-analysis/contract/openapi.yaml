@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: REx answer-analysis tool
-  version: 2.0.0
+  version: 2.1.0
   description: |
     Stateless tool: finds tracked brands in one answer text and returns, per
     mentioned brand, its position, occurrences, a snippet and sentiment. Brands are
@@ -69,7 +69,10 @@ paths:
         - Analysis
       responses:
         '200':
-          description: Available analyzers, deterministic ones first.
+          description: |
+            Available analyzers, deterministic ones first. Deployments with Luna
+            enabled advertise `llm:openai/gpt-6-luna` with kind `llm` and
+            language support `["*"]`, including undetermined language.
           content:
             application/json:
               schema:
@@ -93,17 +96,25 @@ paths:
         notes: 'LLM only for llm: analyzers; each adds one batched call'
       summary: Detect brand mentions and position, and classify sentiment with one or more analyzers
       description: |
-        Synchronous. The initial deployment offers the offline English analyzers
-        `det:lexicon` and `det:rules`. Their results follow request order, use the
-        same accepted brand occurrences, and return empty `usage`. Omitted
-        `sentiment` uses the same defaults as an empty object. An explicit empty
-        `analyzers` list disables sentiment but still resolves the language.
+        Synchronous. Results follow request order and use the same deterministic
+        brand mentions. Omitted `sentiment` defaults to `det:lexicon`; an explicit
+        empty `analyzers` list disables sentiment but still resolves the language.
+        In enabled deployments, select `llm:openai/gpt-6-luna` explicitly to run
+        one batched call for the mentioned brands. If none are mentioned the
+        tool makes no call and returns empty mentions and usage.
+
+        A failed secondary LLM analyzer is reported as `failed` with null per-brand
+        scores and labels, excluded from agreement. HTTP 200 includes any valid
+        usage reported by the provider, including for unusable completions. A failed
+        effective primary returns the shared 503 `provider_unavailable` Problem
+        with a valid upstream Retry-After when available. Failure includes
+        a timeout, refusal, incomplete or invalid output, or invalid usage.
 
         After transport and schema validation, semantic errors are checked in
         this order: `duplicate_brand_key` (exact duplicate key),
         `invalid_primary` (primary is not in the effective list),
-        `unsupported_analyzer` (ID is not advertised by `listAnalyzers`,
-        including LLM IDs in the initial deployment), and `unsupported_language`
+        `unsupported_analyzer` (ID is not advertised by `listAnalyzers`),
+        and `unsupported_language`
         (policy is `error` and an analyzer does not support the given or detected
         language). The 422 detail identifies the first offending field in
         request order and names supported languages for language errors.
