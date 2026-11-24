@@ -784,7 +784,7 @@ test("engine query cache keys resolve model and search before hashing", async ()
     const keyInput = { ...input, ["$" + extraKeyInputs[0]]: effectiveModel };
     const canonical = JSON.stringify(keyInput, Object.keys(keyInput).sort());
     const hash = createHash("sha256").update(canonical, "utf8").digest("hex");
-    const key = `rex:c:engine-query:queryEngine:v${info.version.split(".")[0]}.${keyVersion}:shared:2026-11-24:0:${hash}`;
+    const key = `rex:c:engine-query:queryengine:v${info.version.split(".")[0]}.${keyVersion}:shared:2026-11-24:0:${hash}`;
     return { resolved, canonical, key };
   }
   const prompt = "Print 'A  B' verbatim.";
@@ -830,7 +830,7 @@ test("engine query cache keys resolve model and search before hashing", async ()
         webSearch,
       }),
     );
-    assert.equal(vector.key, `rex:c:engine-query:queryEngine:v2.4:shared:2026-11-24:0:${hash}`);
+    assert.equal(vector.key, `rex:c:engine-query:queryengine:v2.4:shared:2026-11-24:0:${hash}`);
   }
   assert.deepEqual(chatgpt, cacheVector(prompt, { locale: "en-US", country: "US" }));
   assert.notEqual(chatgpt.key, cacheVector("Print 'A B' verbatim.").key);
