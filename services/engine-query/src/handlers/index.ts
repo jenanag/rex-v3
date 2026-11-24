@@ -1,7 +1,39 @@
+import { performance } from "node:perf_hooks";
+import type { components } from "../../contract/types.js";
 import type { Handlers } from "../app.js";
+import { validators, type ToolSpec } from "../contract.js";
+import { renderAnswer } from "../domain/citations.js";
 import { ToolProblem } from "../errors.js";
+import { createLlm } from "../llm/adapter.js";
+import { deployment } from "../llm/catalog.js";
 
-export const handlers: Handlers = {
-  listEngines: async () => { throw new ToolProblem(501, "not_implemented", "Operation is not implemented"); },
-  queryEngine: async () => { throw new ToolProblem(501, "not_implemented", "Operation is not implemented"); },
-};
+type Query = Required<components["schemas"]["EngineQuery"]>;
+
+export function createHandlers(spec: ToolSpec, call = createLlm()): Handlers {
+  const urlSchema = spec.components?.schemas?.Url;
+  if (!urlSchema) throw new Error("Missing bundled Url schema");
+  const validUrl = validators(spec, false)(urlSchema);
+  return {
+    listEngines: async () => ({ data: deployment.map(({ engine }) => engine) }),
+    queryEngine: async (request) => {
+      const { engine, prompt, locale, country } = request.body as Query;
+      const entry = deployment.find(
+        ({ engine: configured }) => configured.id === engine && configured.enabled,
+      );
+      if (!entry)
+        throw new ToolProblem(422, "unsupported_engine", "/engine: Engine is not configured");
+
+      const start = performance.now();
+      const { parts, usage } = await call(entry, prompt, locale, country);
+      return {
+        answer: {
+          engine: entry.engine.id,
+          model: entry.engine.model,
+          ...renderAnswer(parts, validUrl),
+          latencyMs: Math.round(performance.now() - start),
+        },
+        usage: [usage],
+      };
+    },
+  };
+}

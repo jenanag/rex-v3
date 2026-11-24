@@ -28,12 +28,12 @@ orchestrator's `tracking` module.
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `1`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `2`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
 | `listEngines` | `PT5M` | shared |  |
-| `queryEngine` | `P1D` | shared | window, extra key inputs `engineModel`, normalization in [policy.yaml](../../packages/contracts/cache/policy.yaml) |
+| `queryEngine` | `P1D` | shared | window, extra key inputs `engineModel` |
 <!-- GENERATED:cache END -->
 
 ## Limits
@@ -42,11 +42,11 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 See [the tool's operation limits](../../services/engine-query/AGENTS.md#limits).
 <!-- GENERATED:limits END -->
 
-The scaffold uses Fastify's default **1,048,576-byte** request body limit when
-`BODY_LIMIT_BYTES` is unset. Both operations return HTTP 501 `not_implemented`
-for valid requests. The validator benchmark runs a representative, a full
+The tool uses Fastify's default **1,048,576-byte** request body limit when
+`BODY_LIMIT_BYTES` is unset. The validator benchmark runs a representative, a full
 prompt, and an exact-limit request against the strict **p99 < 5 ms** gate.
-At the limit, the POST reaches its stub. One extra byte returns HTTP 413
+At the limit, the Perplexity request reaches the handler and returns HTTP 422
+`unsupported_engine`. One extra byte returns HTTP 413
 `payload_too_large`. To run the benchmark from the tool folder, run
 `npm run build` and then `node scripts/benchmark-validation.mjs` with
 `BODY_LIMIT_BYTES` unset.
@@ -91,9 +91,15 @@ At the limit, the POST reaches its stub. One extra byte returns HTTP 413
 
 ## Notes
 
-- A provider 429 or outage returns 503 with `Retry-After`; the worker retries later.
-- Callers cache answers per UTC day and per sample (policy above), so the same prompt on
-  the same engine, model and locale is asked once a day across all projects. Changing
-  the engine-to-model mapping changes the key automatically (`engineModel`).
+- The first integration uses OpenAI GPT-6 Luna through Responses. Discovery lists
+  ChatGPT. Each query uses one required provider-hosted search and reports one
+  usage item at Standard rates, including the reported billable search fee.
+  [OpenAI pricing](https://developers.openai.com/api/docs/pricing#tools).
+- Provider failures return 503. The tool converts a valid upstream `Retry-After`
+  to seconds. The worker owns retries.
+- The caller key includes the original prompt, effective locale and country, and
+  the configured model from discovery (`engineModel`), per UTC day and sample.
+  Refresh discovery on rollout and verify the returned model before storage. A
+  search configuration change under the same model requires a key version bump.
 - API answers can differ from the consumer apps; AI Overviews needs a SERP provider
   ([deferred decision](../roadmap.md#deferred-decisions)).

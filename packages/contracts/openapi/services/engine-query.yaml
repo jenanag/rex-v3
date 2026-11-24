@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: REx engine-query tool
-  version: 1.0.0
+  version: 2.0.0
   description: |
     Stateless tool: asks one AI answer engine one prompt and returns the normalized
     answer (Markdown text + engine-reported sources) and the LLM usage. No database,
@@ -29,7 +29,7 @@ paths:
       tags: [Engines]
       responses:
         '200':
-          description: All engines (small, fixed list; not paginated).
+          description: Configured engines (small list; not paginated). This deployment lists only ChatGPT (OpenAI GPT-6 Luna with web search enabled).
           content:
             application/json:
               schema:
@@ -45,9 +45,21 @@ paths:
   /v1/engine-answers:
     post:
       operationId: queryEngine
-      x-rex-limits: {maxDuration: PT120S, llm: required, outboundFetch: none}
+      x-rex-limits: {maxDuration: PT120S, llm: required, llmCallTimeout: PT110S, outboundFetch: none}
       summary: Ask one engine one prompt (one sample) and return its answer
-      description: 'Synchronous; may take up to 120 s. A provider rate limit or outage returns 503 with Retry-After so the caller can retry.'
+      description: |
+        Accepts the configured ChatGPT engine. A declared engine that is unavailable
+        in this deployment returns 422 unsupported_engine before any provider call.
+        The tool submits the original prompt to OpenAI Responses with required web
+        search, uses locale as an answer-language hint, and uses country for approximate
+        search location. The answer preserves Markdown and clickable citation locations.
+        Sources are unique, usable HTTP(S) citation annotations in first-citation order.
+        An answer with completed search and valid usage can have an empty source list.
+        Usage reports one answer_prompt item, including the reported billable search fee.
+        Provider failures, refusals, incomplete or unusable answers, missing search
+        evidence, unexpected model or pricing tier, and missing or inconsistent metering
+        return 503 provider_unavailable. A valid upstream Retry-After is returned as
+        non-negative integer seconds.
       tags: [Engines]
       requestBody:
         required: true
@@ -105,8 +117,10 @@ components:
           maxLength: 2000
         locale:
           $ref: '../common.yaml#/components/schemas/Locale'
+          default: en-US
         country:
           $ref: '../common.yaml#/components/schemas/CountryCode'
+          default: US
     EngineAnswer:
       type: object
       description: A normalized engine answer. The orchestrator stores it as part of its Answer resource.

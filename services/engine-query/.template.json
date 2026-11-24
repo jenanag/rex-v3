@@ -61,28 +61,33 @@
       "owned": true
     },
     "src/llm/adapter.ts": {
-      "sha256": "5c500a5fc433b9745adbc6122b62e34f0787d3151e2185c3f59fd136e6a7a513"
+      "sha256": "5c500a5fc433b9745adbc6122b62e34f0787d3151e2185c3f59fd136e6a7a513",
+      "owned": true
     },
     "src/llm/env.ts": {
       "sha256": "17126c2c44df00b6d54d1f5fae4560df945ea16ff4e95a683726bc2533c1fff8"
     },
     "src/server.ts": {
-      "sha256": "8f7a9df23bf9cec7ae292fe3905e2b99272ade8211324ac9cf5a8413df43a0f0"
+      "sha256": "8f7a9df23bf9cec7ae292fe3905e2b99272ade8211324ac9cf5a8413df43a0f0",
+      "owned": true
     },
     "src/telemetry.ts": {
       "sha256": "5364e46b7dc42c8172ca35feb8d96b3669417b644b8863ba869223cd18cd370e"
     },
     "test/fixtures/llm/a62159e7b5146b9059634582fd74b7a06642b2499974f86c49ab3ecde5140eac.json": {
-      "sha256": "b4d1a14ea117e02991ab8456a28952c9412477f4c85d5da93e69fd4e06aee3b0"
+      "sha256": "b4d1a14ea117e02991ab8456a28952c9412477f4c85d5da93e69fd4e06aee3b0",
+      "owned": true
     },
     "test/health.test.ts": {
       "sha256": "cf5aa07c81b62c2716646f0d6f2c4ae902c6f4e0a11275a1f3420b54bb8c2910"
     },
     "test/llm.test.ts": {
-      "sha256": "b4714782756c1ac09528a2c7c53611c5a7f28f5b7cd264d6830a48fb2522e9c8"
+      "sha256": "b4714782756c1ac09528a2c7c53611c5a7f28f5b7cd264d6830a48fb2522e9c8",
+      "owned": true
     },
     "test/support.ts": {
-      "sha256": "2541354cf437d7f2b88579ea50ab0bccf8e09aca04bbb97afa27ad0fad584f0e"
+      "sha256": "2541354cf437d7f2b88579ea50ab0bccf8e09aca04bbb97afa27ad0fad584f0e",
+      "owned": true
     },
     "tsconfig.build.json": {
       "sha256": "1ee531ddfe863deb84b64239434eb8f0e2b7bc4a279c2a6882d0d8fc0ddf461f"

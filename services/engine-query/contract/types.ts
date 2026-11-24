@@ -74,7 +74,18 @@ export interface paths {
         put?: never;
         /**
          * Ask one engine one prompt (one sample) and return its answer
-         * @description Synchronous; may take up to 120 s. A provider rate limit or outage returns 503 with Retry-After so the caller can retry.
+         * @description Accepts the configured ChatGPT engine. A declared engine that is unavailable
+         *     in this deployment returns 422 unsupported_engine before any provider call.
+         *     The tool submits the original prompt to OpenAI Responses with required web
+         *     search, uses locale as an answer-language hint, and uses country for approximate
+         *     search location. The answer preserves Markdown and clickable citation locations.
+         *     Sources are unique, usable HTTP(S) citation annotations in first-citation order.
+         *     An answer with completed search and valid usage can have an empty source list.
+         *     Usage reports one answer_prompt item, including the reported billable search fee.
+         *     Provider failures, refusals, incomplete or unusable answers, missing search
+         *     evidence, unexpected model or pricing tier, and missing or inconsistent metering
+         *     return 503 provider_unavailable. A valid upstream Retry-After is returned as
+         *     non-negative integer seconds.
          */
         post: operations["queryEngine"];
         delete?: never;
@@ -102,8 +113,10 @@ export interface components {
         EngineQuery: {
             engine: components["schemas"]["EngineId"];
             prompt: string;
-            locale?: components["schemas"]["Locale"];
-            country?: components["schemas"]["CountryCode"];
+            /** @default en-US */
+            locale: components["schemas"]["Locale"];
+            /** @default US */
+            country: components["schemas"]["CountryCode"];
         };
         /** @description A normalized engine answer. The orchestrator stores it as part of its Answer resource. */
         EngineAnswer: {
@@ -291,7 +304,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description All engines (small, fixed list; not paginated). */
+            /** @description Configured engines (small list; not paginated). This deployment lists only ChatGPT (OpenAI GPT-6 Luna with web search enabled). */
             200: {
                 headers: {
                     [name: string]: unknown;

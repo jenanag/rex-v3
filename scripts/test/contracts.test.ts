@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { execFile, execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { cp, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -710,6 +711,34 @@ test("answer analysis cache input preserves analyzer order and applies HTTP defa
     cacheInput({ analyzers: ["det:lexicon"], onUnsupportedLanguage: "fallback" }),
   );
   assert.notDeepEqual(cacheInput(), cacheInput({ analyzers: [] }));
+});
+
+test("engine query cache keys preserve prompt whitespace and apply HTTP defaults", async () => {
+  const { tools } = parse(await readFile(join(root, policy), "utf8"));
+  const { info, components } = parse(
+    await readFile(join(root, "packages/contracts/openapi/services/engine-query.yaml"), "utf8"),
+  );
+  const { locale, country } = components.schemas.EngineQuery.properties;
+  const { keyVersion, operations } = tools["engine-query"];
+  const { normalize, extraKeyInputs } = operations.queryEngine;
+  assert.equal(keyVersion, 2);
+  assert.equal(info.version, "2.0.0");
+  assert.deepEqual(extraKeyInputs, ["engineModel"]);
+  assert.equal(normalize?.prompt, undefined);
+
+  // Fixture for the caller policy, with a fixed scope, window and sample.
+  function cacheKey(prompt: string, hints = {}, model = "gpt-6-luna") {
+    const input = { engine: "chatgpt", prompt, locale: locale.default, country: country.default, ...hints };
+    const keyInput = { ...input, ["$" + extraKeyInputs[0]]: model };
+    const canonical = JSON.stringify(keyInput, Object.keys(keyInput).sort());
+    return `rex:c:engine-query:queryEngine:v${info.version.split(".")[0]}.${keyVersion}:shared:2026-11-24:0:` +
+      createHash("sha256").update(canonical, "utf8").digest("hex");
+  }
+  const prompt = "Print 'A  B' verbatim.";
+  assert.equal(cacheKey(prompt), cacheKey(prompt, { locale: "en-US", country: "US" }));
+  assert.notEqual(cacheKey(prompt), cacheKey("Print 'A B' verbatim."));
+  assert.notEqual(cacheKey(prompt), cacheKey(prompt, { country: "CA" }));
+  assert.notEqual(cacheKey(prompt), cacheKey(prompt, {}, "another-model"));
 });
 
 test("answer-analysis environment docs follow the service schema", async (t) => {

@@ -70,8 +70,8 @@ From `x-rex-limits` in the spec (single source); stay within them.
 
 - `listEngines`: internal (workers only); no max duration stated yet; no LLM; no
   outbound fetch.
-- `queryEngine`: internal (workers only); max duration PT120S; one LLM call; no outbound
-  fetch.
+- `queryEngine`: internal (workers only); max duration PT120S; one LLM call; each LLM
+  call up to PT110S; no outbound fetch.
 
 ## Packages
 

@@ -1,0 +1,51 @@
+{
+  "model": "gpt-6-luna",
+  "status": "completed",
+  "service_tier": "default",
+  "output": [
+    {
+      "type": "web_search_call",
+      "status": "completed",
+      "action": {
+        "type": "search"
+      }
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "The pass covers admission to participating sites.",
+          "annotations": [
+            {
+              "type": "url_citation",
+              "url": "https://example.test/discovery",
+              "title": "Discovery Pass",
+              "start_index": 0,
+              "end_index": 47
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 2000,
+    "input_tokens_details": {
+      "cached_tokens": 1024,
+      "cache_write_tokens": 128
+    },
+    "output_tokens": 200,
+    "output_tokens_details": {
+      "reasoning_tokens": 50
+    },
+    "total_tokens": 2200
+  },
+  "tool_usage": {
+    "web_search": {
+      "num_requests": 1
+    }
+  }
+}

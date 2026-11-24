@@ -36,5 +36,7 @@ the REx monorepo and re-vendor contract changes there.
 | `XAI_API_KEY` | unset | xAI credential for live or record mode. |
 <!-- GENERATED:env END -->
 
-Mock mode reads the matching JSON completion in `test/fixtures/llm/`.
-The included fixture exercises the adapter without provider traffic.
+Mock mode reads the matching Responses fixture in `test/fixtures/llm/`. Its
+identity includes the endpoint and full serialized provider request, including
+instructions and search settings. The included response is synthetic and covers
+annotations and metering without provider traffic.
