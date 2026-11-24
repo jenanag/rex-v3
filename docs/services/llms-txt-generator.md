@@ -25,11 +25,11 @@ files using content supplied by the caller ([ADR 0023](../adr/0023-llms-txt-pipe
   [ADR 0017](../adr/0017-deterministic-first-analysis.md).
 - [Accepted ADR 0040](../adr/0040-llm-model-and-analyzer-cache-eligibility.md)
   defines the caller model pin and page-entry key rules for follow-up work.
-  Provider identity checks use cache key version 6. The later ADR 0040
-  page-entry key changes will bump it from 6 to 7.
-- [Proposed ADR 0041](../adr/0041-standardize-tool-provider-model-selection.md)
-  would require the explicit provider and model pair for LLM page entries and
-  retain original URL keying, pending Jay’s acceptance.
+  Provider identity checks use cache key version 6.
+- [Accepted ADR 0041](../adr/0041-standardize-tool-provider-model-selection.md)
+  calls for an explicit provider and model pair for LLM page entries, with
+  original URL keying from ADR 0040 and a bump to cache key version 7 at the
+  cutover. Implementation follows separately.
 - `generateLlmsTxt` assembles `llms.txt` (and optionally `llms-full.txt`) from the
   entries in input order. The full file quotes supplied page Markdown and truncates
   at a page boundary with a closing notice. See the source contract for formatting

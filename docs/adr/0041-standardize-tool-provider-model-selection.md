@@ -1,12 +1,14 @@
 # 0041: Standardize provider and model selection in tool requests
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-25, accepted by Jay)
 - **Date:** 2026-11-25
 - **Deciders:** Jay Pascual
-- **Amends on acceptance:** [ADR 0038](0038-engine-query-selectable-web-search.md),
-  [ADR 0039](0039-engine-query-per-request-model.md), and
-  [ADR 0040](0040-llm-model-and-analyzer-cache-eligibility.md) for the three tool
-  request shapes, their cache inputs, and the implementation order below.
+- **Amends:** [ADR 0017](0017-deterministic-first-analysis.md) for
+  answer-analysis request selectors only, [ADR 0038](0038-engine-query-selectable-web-search.md)
+  for the explicit search setting in engine-query requests, [ADR 0039](0039-engine-query-per-request-model.md)
+  for provider and model selection in engine-query, and
+  [ADR 0040](0040-llm-model-and-analyzer-cache-eligibility.md) for caller cache
+  inputs and implementation order.
 
 ## Context
 

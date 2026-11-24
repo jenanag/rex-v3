@@ -5,6 +5,7 @@
 - **Deciders:** Jay Pascual
 - **Amended:** 2026-11-22: languages (English only now, designed for more) and the
   lexicon registry.
+- **Amended by:** [0041](0041-standardize-tool-provider-model-selection.md), 2026-11-25 (accepted by Jay). Applies only to answer-analysis request selectors. Analyzer result IDs are unchanged.
 
 ## Context
 

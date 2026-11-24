@@ -66,8 +66,9 @@ Jay accepted [ADR 0039](docs/adr/0039-engine-query-per-request-model.md) on
 2026-11-25 for per-request model selection. Implementation follows separately.
 Jay accepted [ADR 0040](docs/adr/0040-llm-model-and-analyzer-cache-eligibility.md)
 on 2026-11-25 for caller model resolution and analyzer eligibility. Implementation follows separately.
-[Proposed ADR 0041](docs/adr/0041-standardize-tool-provider-model-selection.md) covers a coordinated cutover to
-provider and model pairs across three tools, pending Jay’s acceptance.
+Jay accepted [ADR 0041](docs/adr/0041-standardize-tool-provider-model-selection.md) on
+2026-11-25 for a coordinated cutover to provider and model pairs across three
+tools. Implementation follows separately.
 Open choices are tracked as [deferred decisions](docs/roadmap.md#deferred-decisions).
 
 **Coding agents** (Cursor, Claude Code, Codex, Copilot): start at [AGENTS.md](AGENTS.md).

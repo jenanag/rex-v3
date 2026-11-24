@@ -109,9 +109,10 @@ source, and usage over loopback HTTP.
 
 ## Notes
 
-- [Proposed ADR 0041](../adr/0041-standardize-tool-provider-model-selection.md)
-  would replace tool-request engine labels with explicit provider and model
-  pairs and keep tracking labels at platform boundaries, pending Jay’s acceptance.
+- [Accepted ADR 0041](../adr/0041-standardize-tool-provider-model-selection.md)
+  calls for replacing tool-request engine labels with explicit provider and
+  model pairs at the cutover. Tracking labels stay at platform boundaries.
+  Implementation follows separately.
 
 - [ADR 0039](../adr/0039-engine-query-per-request-model.md) adds optional
   per-request model selection. Discovery reports the default as `model` and the
