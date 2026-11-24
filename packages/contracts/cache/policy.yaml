@@ -39,7 +39,7 @@ key:
     - Add `extraKeyInputs` of the operation as top-level members prefixed with `$`.
     - Normalize every value whose schema is common.yaml Url or Domain (lowercase scheme and host, drop default port, fragment and trailing dot; keep path and query).
     - Apply the operation's `normalize` rules (`collapse-whitespace` trims and collapses runs of whitespace).
-    - Sort arrays whose schema has `uniqueItems: true`; keep every other array in order.
+    - "Sort arrays whose schema has `uniqueItems: true`, except the request pointers listed in the operation's `preserveArrayOrder`. Keep those arrays and all other arrays in their original order."
     - Serialize with RFC 8785 JSON Canonicalization Scheme (JCS), UTF-8.
 
 scopes:
@@ -56,7 +56,7 @@ resolution:
     environment: 'CACHE_POLICY_OVERRIDES (YAML or JSON) of the calling service: a partial `tools` and `external` tree of the same shape as below, merged over it.'
     default: 'This file.'
   rules:
-    - 'Only scope, ttl and window can be overridden. keyVersion, extraKeyInputs, rawUrlKeyInputs, normalize, skipWhen, cacheable and archiveTo come only from this file.'
+    - 'Only scope, ttl and window can be overridden. keyVersion, extraKeyInputs, rawUrlKeyInputs, preserveArrayOrder, normalize, skipWhen, cacheable and archiveTo come only from this file.'
     - 'A customer override may set scope to `tenant`, never to `shared` (an organization can opt out of sharing, not force sharing of an operation that is tenant-scoped by default or by environment).'
     - 'An override sets the same kind of freshness the entry has: `ttl` for ttl entries, `window` for window entries.'
     - 'Durations are clamped to `limits`. The orchestrator validates customer overrides against this file when they are saved; callers clamp and log anything out of range.'
@@ -110,12 +110,13 @@ tools:
         extraKeyInputs: [engineModel]   # model listEngines reports for the engine
         normalize: {prompt: collapse-whitespace}
   answer-analysis:
-    keyVersion: 1
+    keyVersion: 2
     operations:
       listAnalyzers: {ttl: PT5M, scope: shared}                 # DEFAULT
       analyzeAnswer:
         ttl: P30D                                                # DEFAULT
         scope: shared
+        preserveArrayOrder: [/sentiment/analyzers]
         skipWhen: {pointer: /analyzers/*/status, equals: failed}
   citation-extractor:
     keyVersion: 2

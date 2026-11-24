@@ -52,17 +52,23 @@ function schemaPointers(
   start: { file: string; value: Document } | undefined,
   path: string[],
   lookup: ReturnType<typeof resolver>,
+  accepts = (_schema: Document) => true,
 ): boolean {
   if (!start?.value) return false;
-  if (!path.length) return true;
+  if (!path.length && accepts(start.value)) return true;
   const { file, value } = start;
   const [head, ...tail] = path;
-  const child = value.properties?.[head] ?? (/^(?:\*|\d+)$/.test(head) ? value.items : undefined);
+  const child =
+    head === undefined
+      ? undefined
+      : (value.properties?.[head] ?? (/^(?:\*|\d+)$/.test(head) ? value.items : undefined));
   return (
-    (child && schemaPointers({ file, value: child }, tail, lookup)) ||
-    (value.$ref && schemaPointers(lookup(file, value.$ref), path, lookup)) ||
+    (child && schemaPointers({ file, value: child }, tail, lookup, accepts)) ||
+    (value.$ref && schemaPointers(lookup(file, value.$ref), path, lookup, accepts)) ||
     ["allOf", "oneOf", "anyOf"].some((key) =>
-      value[key]?.some((option: Document) => schemaPointers({ file, value: option }, path, lookup)),
+      value[key]?.some((option: Document) =>
+        schemaPointers({ file, value: option }, path, lookup, accepts),
+      ),
     )
   );
 }
@@ -215,6 +221,47 @@ function checkPolicy(all: Spec[], common: Document, policy: Document, report: Re
         const request = op.requestBody?.content?.["application/json"]?.schema;
         const response = op.responses?.["200"]?.content?.["application/json"]?.schema;
         checkRawUrlKeyInputs(name, id, entry, request, owner.file, lookup, report);
+        const preserve = entry.preserveArrayOrder;
+        const analyzeAnswer = name === "answer-analysis" && id === "analyzeAnswer";
+        if (analyzeAnswer || Object.hasOwn(entry, "preserveArrayOrder")) {
+          if (
+            !Array.isArray(preserve) ||
+            !preserve.length ||
+            new Set(preserve).size !== preserve.length ||
+            (analyzeAnswer && !preserve.includes("/sentiment/analyzers"))
+          ) {
+            report(
+              "cache-policy",
+              file,
+              location +
+                "preserveArrayOrder must list distinct request pointers" +
+                (analyzeAnswer ? " including /sentiment/analyzers" : ""),
+            );
+          }
+          for (const pointer of Array.isArray(preserve) ? preserve : []) {
+            if (
+              typeof pointer !== "string" ||
+              !/^(?:\/(?:[^/~]|~[01])+)+$/.test(pointer) ||
+              !schemaPointers(
+                { file: owner.file, value: request },
+                pointer
+                  .slice(1)
+                  .split("/")
+                  .map((key) => key.replaceAll("~1", "/").replaceAll("~0", "~")),
+                lookup,
+                (schema) => schema.type === "array" && schema.uniqueItems === true,
+              )
+            ) {
+              report(
+                "cache-policy",
+                file,
+                location +
+                  "preserveArrayOrder must target a request array with uniqueItems: true at " +
+                  pointer,
+              );
+            }
+          }
+        }
         const paths = Object.keys(entry.normalize ?? {}).map((key) =>
           key.startsWith("/") ? key : "/" + key,
         );

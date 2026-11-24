@@ -44,6 +44,7 @@ export function loadSpec(supplement = false): Spec {
     );
     const { schemas } = spec.components;
     schemas.AnswerAnalysisRequest.properties = {
+      ...schemas.AnswerAnalysisRequest.properties,
       spike: {
         type: "object",
         unevaluatedProperties: false,

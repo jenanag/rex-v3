@@ -74,15 +74,20 @@ export interface paths {
         put?: never;
         /**
          * Detect brand mentions and position, and classify sentiment with one or more analyzers
-         * @description Synchronous. Deterministic analyzers answer in milliseconds; each LLM
-         *     analyzer adds one batched call (up to 60 s). An LLM analyzer that fails is
-         *     reported with `status: failed` while the others are still returned. If the
-         *     primary analyzer fails, the call answers 503 so the caller retries.
+         * @description Synchronous. The initial deployment offers the offline English analyzers
+         *     `det:lexicon` and `det:rules`. Their results follow request order, use the
+         *     same accepted brand occurrences, and return empty `usage`. Omitted
+         *     `sentiment` uses the same defaults as an empty object. An explicit empty
+         *     `analyzers` list disables sentiment but still resolves the language.
          *
-         *     422 codes: `invalid_primary` (`primary` is not in `analyzers`) and
-         *     `unsupported_language` (with `onUnsupportedLanguage: error`, a requested
-         *     analyzer does not support the language; `detail` names the analyzer and its
-         *     supported languages).
+         *     After transport and schema validation, semantic errors are checked in
+         *     this order: `duplicate_brand_key` (exact duplicate key),
+         *     `invalid_primary` (primary is not in the effective list),
+         *     `unsupported_analyzer` (ID is not advertised by `listAnalyzers`,
+         *     including LLM IDs in the initial deployment), and `unsupported_language`
+         *     (policy is `error` and an analyzer does not support the given or detected
+         *     language). The 422 detail identifies the first offending field in
+         *     request order and names supported languages for language errors.
          */
         post: operations["analyzeAnswer"];
         delete?: never;
@@ -140,9 +145,14 @@ export interface components {
             brands: components["schemas"]["TrackedBrand"][];
             sentiment?: components["schemas"]["SentimentOptions"];
         };
-        AnswerAnalysisRequest: components["schemas"]["AnswerAnalysisOptions"] & {
+        AnswerAnalysisRequest: {
+            /** @default {} */
+            sentiment: components["schemas"]["SentimentOptions"];
+        } & ({
+            brands: components["schemas"]["AnswerAnalysisOptions"]["brands"];
+        } & {
             text: string;
-        };
+        });
         /**
          * @description `ok`; `unsupported` (the analyzer does not support the language); `failed` (provider error or timeout, LLM only).
          * @enum {string}
