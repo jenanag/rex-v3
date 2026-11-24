@@ -145,7 +145,12 @@ const cases: [string, string, (repo: Fixture) => Promise<void>, string?][] = [
   [
     "bad cache pointer",
     "cache-policy",
-    (repo) => repo.change(policy, "prompt: collapse-whitespace", "absent: collapse-whitespace"),
+    (repo) =>
+      repo.change(
+        policy,
+        "        extraKeyInputs: [engineModel]",
+        "        normalize: {absent: collapse-whitespace}\n        extraKeyInputs: [engineModel]",
+      ),
   ],
   [
     "missing analyzer order exception",
