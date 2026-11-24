@@ -307,6 +307,9 @@ respectively, in CI. `auditPage` scores all seven categories offline.
 `checkCrawlerAccess` evaluates supplied robots.txt offline. See the [standalone smoke
 and latency check](services/content-auditor.md#crawler-access-smoke-and-latency-check).
 
+[ADR 0032](adr/0032-citation-extractor-language.md) proposes TypeScript for
+`citation-extractor`. Scaffolding is pending Jay's acceptance.
+
 Built in this order, each started with its language ADR and `scripts/new-tool --lang
 <language>` and finished (definition of done below) before the next one starts. The order goes from no LLM to
 LLM-heavy, so the template is hardened on the simple tools first:

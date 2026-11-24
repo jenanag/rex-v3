@@ -3,7 +3,7 @@
 - **Kind:** tool ([what that means](../architecture.md#service-map))
 - **Phase:** 2
 - **Contract:** source [packages/contracts/openapi/services/citation-extractor.yaml](../../packages/contracts/openapi/services/citation-extractor.yaml); vendored, self-contained copy in [services/citation-extractor/contract/](../../services/citation-extractor/contract/openapi.yaml) ([ADR 0018](../adr/0018-tool-portability.md))
-- **Language:** TypeScript (`language: ts` in vendoring.yaml), as [ADR 0024](../adr/0024-per-tool-language.md) proposes: Markdown lexer for inline links; small, no library need outside npm. Its own language ADR, accepted by Jay, confirms it at the start of its Phase 2 step.
+- **Language:** TypeScript (`language: ts` in vendoring.yaml), proposed in [ADR 0032](../adr/0032-citation-extractor-language.md). Scaffolding is pending Jay's acceptance.
 - **Portability:** a self-contained project in its language: copy `services/citation-extractor/` anywhere, then its install, build, test and `docker build` work with nothing else present; no auth, no cache, no bus inside ([ADR 0018](../adr/0018-tool-portability.md))
 - **State:** none (callers cache its results, see below)
 - **Bus:** none
