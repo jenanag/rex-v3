@@ -113,9 +113,9 @@ export function analyze(
   }));
   const results = new Map(options.analyzers.map((id) => [id, new Map() as Contributions] as const));
   if (pack && options.analyzers.length && occurrences.length) {
-    const score = createScorers(pack);
+    const score = createScorers(text, pack);
     for (const clause of clauses(text, pack, occurrences, covered)) {
-      for (const id of options.analyzers) score[id](text, clause, results.get(id)!);
+      for (const id of options.analyzers) score[id](clause, results.get(id)!);
     }
   }
   const mentions = found.map(({ mention }) => {

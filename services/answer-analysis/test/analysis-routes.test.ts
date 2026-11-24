@@ -279,6 +279,9 @@ test.each([
   ["Acme is better than Beta’s alternative.", [brand, beta]],
   ["Acme's alternative is better than Beta.", [brand, beta]],
   ["Avoid Acmes’ competitor.", [{ ...brand, name: "Acmes" }]],
+  ["Avoid Acmes' competitor.", [{ ...brand, name: "Acmes" }]],
+  ["‘Avoid Acmes’ competitor.’", [{ ...brand, name: "Acmes" }]],
+  ["'Avoid Acmes' competitor.'", [{ ...brand, name: "Acmes" }]],
 ])("rules leave possessive references neutral in %s", async (text, brands) => {
   const result = await post({ text, brands, sentiment: { language: "en", analyzers: [rules] } });
   expect(result.mentions).toMatchObject(
@@ -320,6 +323,36 @@ test.each(["Acme", "Acme's", "O’Reilly"])(
             label: "negative",
             score: -0.75,
             rationale: "Avoid " + name + " (-0.75)",
+          },
+        ],
+      },
+    ]);
+  },
+);
+
+test.each(["‘Avoid Acmes’.", "'Avoid Acmes'."])(
+  "rules attribute avoidance inside single quotes in %s",
+  async (text) => {
+    const result = await post({
+      text,
+      brands: [{ ...brand, name: "Acmes" }],
+      sentiment: { language: "en", analyzers: [rules] },
+    });
+    expect(result.mentions).toMatchObject([
+      {
+        brandKey: "acme",
+        position: 1,
+        occurrences: 1,
+        snippet: text,
+        sentiment: "negative",
+        sentimentScore: -0.75,
+        sentimentByAnalyzer: [
+          {
+            analyzer: rules,
+            status: "ok",
+            label: "negative",
+            score: -0.75,
+            rationale: "Avoid Acmes (-0.75)",
           },
         ],
       },

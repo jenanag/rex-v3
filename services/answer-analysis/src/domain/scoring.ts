@@ -107,7 +107,39 @@ function lexicon(text: string, clause: Clause, pack: Pack, contributions: Contri
   }
 }
 
-function unambiguousSlots(text: string, occurrences: Occurrence[]) {
+function closingSingleQuotes(text: string) {
+  const closing = new Set<number>();
+  const open = new Map<string, number | undefined>();
+  const marks =
+    /(?<close>(?<=\S)['’](?![\p{L}\p{N}\p{M}\p{Pc}]))|(?<open>(?<![\p{L}\p{N}\p{M}\p{Pc}])['‘](?=\S))/gu;
+  const pluralBeforeWord = /(?<=s)['’]\s+(?=[\p{L}\p{N}\p{M}\p{Pc}])/iuy;
+
+  for (const match of text.matchAll(marks)) {
+    const mark = match[0];
+    if (match.groups!.open) {
+      const closer = mark === "‘" ? "’" : "'";
+      const tentative = open.get(closer);
+      if (tentative !== undefined) closing.add(tentative);
+      open.set(closer, undefined);
+    } else if (open.has(mark)) {
+      // A plural possessive can appear inside a quotation. Prefer a later
+      // unambiguous closing mark over a mark after s before another word.
+      pluralBeforeWord.lastIndex = match.index;
+      if (pluralBeforeWord.test(text)) {
+        open.set(mark, match.index);
+      } else {
+        closing.add(match.index);
+        open.delete(mark);
+      }
+    }
+  }
+  for (const tentative of open.values()) {
+    if (tentative !== undefined) closing.add(tentative);
+  }
+  return closing;
+}
+
+function unambiguousSlots(text: string, occurrences: Occurrence[], closingQuotes: Set<number>) {
   const slots = new Map<number, Occurrence>();
   const possessive = /(?:['’]s|(?<=s)['’])(?![\p{L}\p{N}\p{M}\p{Pc}])/iuy;
   for (let i = 0; i < occurrences.length;) {
@@ -121,7 +153,8 @@ function unambiguousSlots(text: string, occurrences: Occurrence[]) {
     // Match only a suffix outside the accepted span, so a full name such as
     // Acme's can fill a slot while Acme in "Acme's competitor" cannot.
     possessive.lastIndex = first.end;
-    if (!ambiguous && !possessive.test(text)) slots.set(first.start, first);
+    if (!ambiguous && (closingQuotes.has(first.end) || !possessive.test(text)))
+      slots.set(first.start, first);
   }
   return slots;
 }
@@ -143,11 +176,12 @@ function rules(
   clause: Clause,
   pack: Pack,
   patterns: ReturnType<typeof rulePatterns>,
+  closingQuotes: Set<number>,
   contributions: Contributions,
 ) {
   const { words, occurrences, end } = clause;
   const occupied = occupiedWords(clause);
-  const slots = unambiguousSlots(text, occurrences);
+  const slots = unambiguousSlots(text, occurrences, closingQuotes);
   const whitespace = /\s+/uy;
   const candidates = new Set([
     ...words.filter((_, index) => !occupied[index]).map((word) => word.start),
@@ -224,13 +258,13 @@ function rules(
   }
 }
 
-export function createScorers(pack: Pack) {
+export function createScorers(text: string, pack: Pack) {
   const patterns = rulePatterns(pack);
+  let closingQuotes: Set<number> | undefined;
   return {
-    "det:lexicon": (text: string, clause: Clause, result: Contributions) =>
-      lexicon(text, clause, pack, result),
-    "det:rules": (text: string, clause: Clause, result: Contributions) =>
-      rules(text, clause, pack, patterns, result),
+    "det:lexicon": (clause: Clause, result: Contributions) => lexicon(text, clause, pack, result),
+    "det:rules": (clause: Clause, result: Contributions) =>
+      rules(text, clause, pack, patterns, (closingQuotes ??= closingSingleQuotes(text)), result),
   };
 }
 
