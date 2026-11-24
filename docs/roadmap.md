@@ -20,8 +20,8 @@ after and only wires the finished tools together.
 to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the superseded
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
 Phase 1 was completed on 2026-11-22. Phase 2 has started. Jay accepted ADRs 0025
-and 0026 on 2026-11-22, ADR 0027, ADR 0028, and ADR 0029 on 2026-11-23, and ADR 0030 and ADR 0031 on 2026-11-24.
-ADR 0032 is Proposed. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
+and 0026 on 2026-11-22, ADR 0027, ADR 0028, and ADR 0029 on 2026-11-23, and ADR 0030, ADR 0031, and ADR 0032
+on 2026-11-24. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
 
 - [README](../README.md), [architecture](architecture.md), [conventions](conventions.md),
   [DRY rule](dry-rule.md), [events](events.md), [glossary](glossary.md), this roadmap.
@@ -307,8 +307,8 @@ respectively, in CI. `auditPage` scores all seven categories offline.
 `checkCrawlerAccess` evaluates supplied robots.txt offline. See the [standalone smoke
 and latency check](services/content-auditor.md#crawler-access-smoke-and-latency-check).
 
-[ADR 0032](adr/0032-citation-extractor-language.md) proposes TypeScript for
-`citation-extractor`. Scaffolding is pending Jay's acceptance.
+[ADR 0032](adr/0032-citation-extractor-language.md), accepted by Jay on 2026-11-24,
+selects TypeScript for `citation-extractor`. Scaffolding is the next step for the tool.
 
 Built in this order, each started with its language ADR and `scripts/new-tool --lang
 <language>` and finished (definition of done below) before the next one starts. The order goes from no LLM to

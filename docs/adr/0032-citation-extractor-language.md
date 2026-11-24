@@ -1,6 +1,6 @@
 # 0032: Use TypeScript for citation-extractor
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-24, accepted by Jay)
 - **Date:** 2026-11-24
 - **Deciders:** Jay Pascual
 - **Tool:** `citation-extractor`
