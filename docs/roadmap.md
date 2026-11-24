@@ -345,6 +345,11 @@ ChatGPT shipped in [PR #32](https://github.com/jenanag/rex-v3/pull/32) as the fi
 of the three engines required for Phase 2. The [direct smoke check](services/engine-query.md#direct-smoke-check)
 exercises discovery and the recorded ChatGPT answer over loopback HTTP.
 
+[ADR 0038](adr/0038-engine-query-selectable-web-search.md) proposes selectable web
+search and text-only Gemini for mention and sentiment analysis, pending Jay's
+acceptance. The three-engine sources-and-usage requirement still applies.
+[Grok PR #34](https://github.com/jenanag/rex-v3/pull/34) remains deferred.
+
 **Languages and the Python bring-up** ([ADR 0024](adr/0024-per-tool-language.md)): every
 step, TypeScript ones included, opens with the tool's own language ADR, written at the
 start of the step and accepted by Jay before `scripts/new-tool` (Phase 1) runs.
@@ -444,6 +449,9 @@ a refresh, and can schedule audits.
 
 - Orchestrator `billing` (plans, Stripe, entitlements incl. number of LLM analyzers,
   usage metering of non-hit calls) and `alerts`.
+- Engine web-search subscription eligibility and public controls are Phase 6
+  work under [ADR 0038](adr/0038-engine-query-selectable-web-search.md), pending
+  acceptance. The orchestrator owns plan rules.
 - Tools `notifier` and `report-renderer` (built and tested in isolation first, like
   Phase 2); messages `notification.*` and `report-render.*`; reports (PDF and
   white-label) uploaded to pre-signed URLs.
