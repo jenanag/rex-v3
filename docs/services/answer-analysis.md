@@ -86,6 +86,11 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 See [the tool's operation limits](../../services/answer-analysis/AGENTS.md#limits).
 <!-- GENERATED:limits END -->
 
+Jay accepted [ADR 0036](../adr/0036-answer-analysis-body-limit.md) on 2026-11-24.
+It sets a 3 MiB (3,145,728-byte) request body limit and a strict validator-only
+p99 gate below 15 ms per workload. Configuration, HTTP boundary checks, and
+benchmark verification are scheduled for scaffolding.
+
 ## Shared schemas
 
 <!-- GENERATED:shared START (source: packages/contracts/openapi/services/answer-analysis.yaml + common.yaml) -->
