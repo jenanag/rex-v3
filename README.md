@@ -31,10 +31,11 @@ It is a monorepo with contract-first OpenAPI 3.1 and AsyncAPI specs:
 - **Deterministic first**: non-LLM methods wherever feasible (mentions, sentiment
   lexicons, audits); LLM methods are optional and comparable side by side.
 
-**Status: Phase 0 accepted by Jay on 2026-11-22.** The [ADR index](docs/adr/README.md)
-records the decisions, including ADR 0024 for TypeScript, Python and Go tools. Phase 1
-was completed on 2026-11-22. The [roadmap](docs/roadmap.md) tracks the tool factory, including
-contract vendoring, the tool template and portability CI. Phase 2 has started.
+**Current phase: 3.** Jay approved the start of Phase 3 platform-core work on
+2026-11-25. Phase 2 acceptance remains pending. The [roadmap](docs/roadmap.md)
+tracks the remaining Phase 2 work and the proposed first Phase 3 step. Jay accepted
+Phase 0 on 2026-11-22, the same day Phase 1 was completed. The [ADR index](docs/adr/README.md)
+records the decisions, including ADR 0024 for TypeScript, Python and Go tools.
 Jay accepted ADRs 0025 and 0026 on 2026-11-22. On 2026-11-23, Jay accepted ADR 0027
 and [ADR 0028](docs/adr/0028-llms-txt-generator-language.md), which selects TypeScript
 for `llms-txt-generator`.
@@ -58,8 +59,7 @@ Jay accepted [ADR 0037](docs/adr/0037-engine-query-language.md) on 2026-11-24,
 confirming TypeScript and the existing LLM template for engine-query.
 Jay accepted [ADR 0038](docs/adr/0038-engine-query-selectable-web-search.md) on
 2026-11-25. Engine-query supports selectable search and text-only Gemini.
-Phase 2 builds the tools one at a time, before the platform. Open choices are tracked as
-[deferred decisions](docs/roadmap.md#deferred-decisions).
+Open choices are tracked as [deferred decisions](docs/roadmap.md#deferred-decisions).
 
 **Coding agents** (Cursor, Claude Code, Codex, Copilot): start at [AGENTS.md](AGENTS.md).
 

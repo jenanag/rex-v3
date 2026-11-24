@@ -1,8 +1,10 @@
 # Roadmap
 
 Build in phases. A phase is done only when every line of its **Done when** is true.
-Do not start a phase before the previous one is done; inside a phase, independent
-services can be built in parallel. Each service must also meet the
+Start each phase after the prior one is complete unless Jay explicitly approves
+an overlap. Jay approved starting Phase 3 platform-core work on 2026-11-25 while
+Phase 2 acceptance remains pending. Inside a phase, independent services can be
+built in parallel. Each service must also meet the
 [service definition of done](#service-definition-of-done).
 
 **Tools first, platform after.** Tool development is the top priority. Tool services
@@ -11,15 +13,16 @@ are request-in, response-out functions, and each one is a **self-contained proje
 in Docker on its own, with public packages of its language (TypeScript, Python or Go,
 [ADR 0024](adr/0024-per-tool-language.md)) and a vendored contract. So development
 starts with the machinery that makes that true (Phase 1), then the tools one by one
-(Phase 2). The platform (orchestrator, gateway, cache integration, bus, workers) comes
-after and only wires the finished tools together.
+(Phase 2). The platform (orchestrator, gateway, cache integration, bus, workers)
+wires the finished tools together. Phase 3 can proceed while the remaining
+Phase 2 acceptance work is deferred.
 
 ## Phase 0: Foundation docs and contracts (accepted 2026-11-22)
 
 **Status:** Phase 0 (docs and contracts) was accepted by Jay on 2026-11-22. ADRs 0001
 to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the superseded
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
-Phase 1 was completed on 2026-11-22. Phase 2 has started. Jay accepted ADRs 0025
+Phase 1 was completed on 2026-11-22. Jay approved the start of Phase 3 on 2026-11-25. Phase 2 acceptance remains pending. Jay accepted ADRs 0025
 and 0026 on 2026-11-22, ADR 0027, ADR 0028, and ADR 0029 on 2026-11-23, and ADR 0030, ADR 0031, ADR 0032, and ADR 0033
 on 2026-11-24. Jay accepted ADR 0034 on 2026-11-24, recording that both Python validators missed the large-workload budget. The Python bring-up remains paused. Jay accepted ADR 0035 on 2026-11-24, selecting TypeScript for answer-analysis. Jay accepted ADR 0036 on 2026-11-24, setting its request body limit for scaffolding. Jay accepted ADR 0037 on 2026-11-24, confirming TypeScript for engine-query. Jay accepted ADR 0038 on 2026-11-25 for selectable engine-query web search. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
 
@@ -282,7 +285,7 @@ template, 1.5 lane) with their done criteria above.
 
 ## Phase 2: Tool services, one at a time, each built and tested in isolation
 
-**Current phase:** 2
+**Status:** Acceptance pending. See [deferred Phase 2 acceptance work](#deferred-phase-2-acceptance-work).
 
 [ADR 0025](adr/0025-schema-generator-language.md) selects TypeScript for
 `schema-generator`. Its JSON-LD generation and validation routes shipped in
@@ -344,8 +347,10 @@ The engine-query language and template decision is recorded in [ADR 0037](adr/00
 ChatGPT shipped in [PR #32](https://github.com/jenanag/rex-v3/pull/32) as the first
 of the three engines required for Phase 2. The [direct smoke check](services/engine-query.md#direct-smoke-check)
 exercises discovery and the recorded ChatGPT answer over loopback HTTP. The
-[answer-capture smoke check](answer-capture-smoke.md) passes that recording through
-engine query, answer analysis, and citation extraction over loopback.
+[answer-capture smoke check](answer-capture-smoke.md) verified the offline
+query → analyze → extract chain over loopback with provider credentials unset
+and outbound networking blocked, producing mentions and citations from the
+recorded ChatGPT answer.
 
 Jay accepted [ADR 0038](adr/0038-engine-query-selectable-web-search.md) on 2026-11-25.
 Selectable web search and text-only Gemini support mention and sentiment analysis.
@@ -363,8 +368,8 @@ remains paused. Jay accepted [ADR 0035](adr/0035-answer-analysis-language.md) on
 Jay accepted [ADR 0036](adr/0036-answer-analysis-body-limit.md) on 2026-11-24.
 The TypeScript tool defaults to the 3 MiB limit. CI checks both exact-limit
 requests and the validator-only p99 gate. The deterministic routes implement
-mention detection and the two English analyzers. Provider analyzers and the
-comparison report remain Phase 2 work.
+mention detection and the two English analyzers. The Luna analyzer and its
+offline comparison shipped. Gemini sentiment remains in review.
 The Go bring-up waits for Phase 7.
 
 - Each tool: contract tests against its vendored spec, unit tests for its domain,
@@ -382,7 +387,25 @@ fallback and by 422; `engine-query` answers on at least 3 engines with sources a
 `usage`; a scripted chain (query, analyze, extract) produces mentions and citations for
 a real prompt.
 
+### Deferred Phase 2 acceptance work
+
+- Collect timing evidence for schema markup, llms.txt, and audit operations across
+  10 saved sample sites against their documented limits.
+- Add two more engines that return sources and usage. ChatGPT is the only
+  engine that currently meets this criterion.
+- Complete the live Gemini sentiment recording and merge review for
+  [PR #39](https://github.com/jenanag/rex-v3/pull/39). The PR is open and unmerged.
+  The recording attempt returned HTTP 404 for `gemini-2.5-flash-lite` and
+  produced no replay fixture.
+
 ## Phase 3: Platform core: orchestrator, gateway and cache
+
+**Current phase:** 3
+
+**Status:** Started with Jay's approval on 2026-11-25. The next proposed
+implementation step is `@rex/cache` key derivation and golden tests based on
+[cache policy](../packages/contracts/cache/policy.yaml). Platform vendoring
+activation, registry setup, and publishing remain later work.
 
 - Private npm registry (GitHub Packages, scope `@rex`) and Changesets releases.
 - `@rex/cache` (`packages/cache`, published, [ADR 0019](adr/0019-internal-packages.md)) implementing [policy.yaml](../packages/contracts/cache/policy.yaml)
