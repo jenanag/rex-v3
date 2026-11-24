@@ -77,6 +77,9 @@ Jay accepted [ADR 0038](0038-engine-query-selectable-web-search.md) on 2026-11-2
 It makes web search selectable for engine-query and assigns future subscription
 eligibility to the orchestrator. Implementation follows separately.
 
+[ADR 0039](0039-engine-query-per-request-model.md) is Proposed on 2026-11-25.
+It records per-request model selection and caller cache identity for review.
+
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-monorepo-pnpm-turborepo.md) | Monorepo with pnpm workspaces and Turborepo | Accepted (amended) |
@@ -117,5 +120,6 @@ eligibility to the orchestrator. Implementation follows separately.
 | [0036](0036-answer-analysis-body-limit.md) | Set the answer-analysis request body limit to 3 MiB | Accepted |
 | [0037](0037-engine-query-language.md) | Use TypeScript for engine-query | Accepted |
 | [0038](0038-engine-query-selectable-web-search.md) | Make web search selectable in engine-query | Accepted |
+| [0039](0039-engine-query-per-request-model.md) | Allow per-request model selection in engine-query | Proposed |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.
