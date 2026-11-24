@@ -88,6 +88,10 @@ Per [ADR 0017](../adr/0017-deterministic-first-analysis.md):
 
 ## Luna opt-in
 
+[Accepted ADR 0040](../adr/0040-llm-model-and-analyzer-cache-eligibility.md)
+defines the caller's analyzer eligibility check before cached result lookup.
+Implementation is follow-up work.
+
 The tool validates `ANSWER_ANALYSIS_LUNA_ENABLED` at startup and defaults it to
 `false`. Set it to `true` and configure `OPENAI_API_KEY` for the live deployment. Callers opt in with `sentiment.analyzers` containing
 `llm:openai/gpt-6-luna`. The omitted default is still `det:lexicon`.

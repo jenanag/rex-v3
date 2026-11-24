@@ -24,7 +24,7 @@ to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the super
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
 Phase 1 was completed on 2026-11-22. Jay approved the start of Phase 3 on 2026-11-25. Phase 2 acceptance remains pending. Jay accepted ADRs 0025
 and 0026 on 2026-11-22, ADR 0027, ADR 0028, and ADR 0029 on 2026-11-23, and ADR 0030, ADR 0031, ADR 0032, and ADR 0033
-on 2026-11-24. Jay accepted ADR 0034 on 2026-11-24, recording that both Python validators missed the large-workload budget. The Python bring-up remains paused. Jay accepted ADR 0035 on 2026-11-24, selecting TypeScript for answer-analysis. Jay accepted ADR 0036 on 2026-11-24, setting its request body limit for scaffolding. Jay accepted ADR 0037 on 2026-11-24, confirming TypeScript for engine-query. Jay accepted ADR 0038 on 2026-11-25 for selectable engine-query web search. Jay accepted ADR 0039 on 2026-11-25 for per-request engine-query model selection. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
+on 2026-11-24. Jay accepted ADR 0034 on 2026-11-24, recording that both Python validators missed the large-workload budget. The Python bring-up remains paused. Jay accepted ADR 0035 on 2026-11-24, selecting TypeScript for answer-analysis. Jay accepted ADR 0036 on 2026-11-24, setting its request body limit for scaffolding. Jay accepted ADR 0037 on 2026-11-24, confirming TypeScript for engine-query. Jay accepted ADR 0038 on 2026-11-25 for selectable engine-query web search. Jay accepted ADR 0039 on 2026-11-25 for per-request engine-query model selection. Jay accepted ADR 0040 on 2026-11-25 for caller model resolution and analyzer eligibility. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
 
 - [README](../README.md), [architecture](architecture.md), [conventions](conventions.md),
   [DRY rule](dry-rule.md), [events](events.md), [glossary](glossary.md), this roadmap.
@@ -411,8 +411,11 @@ a real prompt.
 
 **Status:** Started with Jay's approval on 2026-11-25. The next proposed
 implementation step is `@rex/cache` key derivation and golden tests based on
-[cache policy](../packages/contracts/cache/policy.yaml). Platform vendoring
-activation, registry setup, and publishing remain later work.
+[cache policy](../packages/contracts/cache/policy.yaml).
+Jay accepted [ADR 0040](adr/0040-llm-model-and-analyzer-cache-eligibility.md)
+on 2026-11-25. It defines model selection and analyzer eligibility rules for
+follow-up work, with offline acceptance cases. Platform vendoring activation, registry setup, and
+publishing remain later work.
 
 - Private npm registry (GitHub Packages, scope `@rex`) and Changesets releases.
 - `@rex/cache` (`packages/cache`, published, [ADR 0019](adr/0019-internal-packages.md)) implementing [policy.yaml](../packages/contracts/cache/policy.yaml)

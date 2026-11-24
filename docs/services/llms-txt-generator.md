@@ -21,6 +21,8 @@ files using content supplied by the caller ([ADR 0023](../adr/0023-llms-txt-pipe
   preserving the call's usage. The sole initial allowed model and the default for
   `LLMS_TXT_GENERATOR_DEFAULT_MODEL` are `openai/gpt-6-luna`.
   [ADR 0017](../adr/0017-deterministic-first-analysis.md).
+- [Accepted ADR 0040](../adr/0040-llm-model-and-analyzer-cache-eligibility.md)
+  defines the caller model pin and page-entry key rules for follow-up work.
 - `generateLlmsTxt` assembles `llms.txt` (and optionally `llms-full.txt`) from the
   entries in input order. The full file quotes supplied page Markdown and truncates
   at a page boundary with a closing notice. See the source contract for formatting
