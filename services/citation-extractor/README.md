@@ -24,8 +24,8 @@ the REx monorepo and re-vendor contract changes there.
 | `NODE_ENV` | development | Runtime environment. |
 | `SERVICE_NAME` | citation-extractor | Service name in logs and probes. |
 | `PORT` | 8080 | HTTP listen port. |
+| `BODY_LIMIT_BYTES` | 4194304 | Tool-wide Fastify request body limit in bytes (ADR 0033). |
 | `LOG_LEVEL` | info | Structured log level. |
 | `PROBLEM_BASE_URI` | https://problems.rex.invalid | Base URI for problem types. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | OTLP collector. Export is off when unset. |
-| `BODY_LIMIT_BYTES` | 4194304 | Tool-wide Fastify request body limit in bytes (ADR 0033). |
 <!-- GENERATED:env END -->

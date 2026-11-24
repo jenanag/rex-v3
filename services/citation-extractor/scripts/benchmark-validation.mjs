@@ -1,13 +1,11 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { arch, cpus, platform } from "node:os";
+import { cpus } from "node:os";
 import { performance } from "node:perf_hooks";
 import { createApp } from "../dist/src/app.js";
 import { loadConfig } from "../dist/src/config.js";
 import { handlers } from "../dist/src/handlers/index.js";
 
-const spec = JSON.parse(readFileSync(new URL("../dist/contract.json", import.meta.url), "utf8"));
-const app = createApp({ spec, config: loadConfig(), handlers, logs: false });
 const path = "/v1/citation-extractions";
 const expectedLimit = 4_194_304;
 const warmups = 200;
@@ -48,6 +46,7 @@ const brandDomain = (brand, domain) =>
     "g".repeat(56),
     "test",
   ].join(".");
+const spec = JSON.parse(readFileSync(new URL("../dist/contract.json", import.meta.url), "utf8"));
 const { CitationExtractionRequest, TrackedBrand, Url } = spec.components.schemas;
 
 function syntheticRequest(character, sourceCount, longSources) {
@@ -95,6 +94,7 @@ function p99(validate, request) {
   return timings[Math.ceil(samples * 0.99) - 1];
 }
 
+const app = createApp({ spec, config: loadConfig(), handlers, logs: false });
 let route;
 app.addHook("preHandler", async (request) => {
   route = {
@@ -123,7 +123,9 @@ try {
   assert.equal(typeof validate, "function");
   const budget = (5 * bodyLimit) / 1_048_576;
 
-  console.log(process.version + ", " + platform() + "/" + arch() + ", " + cpus()[0].model);
+  console.log(
+    [process.version, process.platform + "/" + process.arch, cpus()[0]?.model].join(", "),
+  );
   console.log(
     "Request validation p99 (" + samples + " samples per workload after " + warmups + " warmups)",
   );

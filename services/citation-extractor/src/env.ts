@@ -18,6 +18,12 @@ export const envProperties = {
     default: 8080,
     description: "HTTP listen port.",
   },
+  BODY_LIMIT_BYTES: {
+    type: "integer",
+    minimum: 1,
+    default: 4_194_304,
+    description: "Tool-wide Fastify request body limit in bytes (ADR 0033).",
+  },
   LOG_LEVEL: {
     type: "string",
     enum: ["trace", "debug", "info", "warn", "error", "fatal", "silent"],
@@ -36,11 +42,5 @@ export const envProperties = {
     format: "uri",
     pattern: "^https?://",
     description: "OTLP collector. Export is off when unset.",
-  },
-  BODY_LIMIT_BYTES: {
-    type: "integer",
-    minimum: 1,
-    default: 4_194_304,
-    description: "Tool-wide Fastify request body limit in bytes (ADR 0033).",
   },
 } as const;
