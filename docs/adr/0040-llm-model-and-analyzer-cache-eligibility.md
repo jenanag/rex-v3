@@ -1,6 +1,6 @@
 # 0040: Resolve LLM model selection and analyzer eligibility before cache lookup
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-25, accepted by Jay)
 - **Date:** 2026-11-25
 - **Deciders:** Jay Pascual
 

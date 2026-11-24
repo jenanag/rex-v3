@@ -81,9 +81,9 @@ Jay accepted [ADR 0039](0039-engine-query-per-request-model.md) on 2026-11-25.
 It defines per-request model selection, discovery, and caller cache identity.
 Implementation follows separately.
 
-[ADR 0040](0040-llm-model-and-analyzer-cache-eligibility.md) is Proposed on 2026-11-25.
-It records caller-side model resolution for page entries and analyzer eligibility
-before result lookup.
+Jay accepted [ADR 0040](0040-llm-model-and-analyzer-cache-eligibility.md) on 2026-11-25.
+It defines caller-side model resolution for page entries and analyzer eligibility
+before result lookup. Implementation follows separately.
 
 | ADR | Title | Status |
 |---|---|---|
@@ -126,6 +126,6 @@ before result lookup.
 | [0037](0037-engine-query-language.md) | Use TypeScript for engine-query | Accepted |
 | [0038](0038-engine-query-selectable-web-search.md) | Make web search selectable in engine-query | Accepted |
 | [0039](0039-engine-query-per-request-model.md) | Allow per-request model selection in engine-query | Accepted |
-| [0040](0040-llm-model-and-analyzer-cache-eligibility.md) | Resolve LLM model selection and analyzer eligibility before cache lookup | Proposed |
+| [0040](0040-llm-model-and-analyzer-cache-eligibility.md) | Resolve LLM model selection and analyzer eligibility before cache lookup | Accepted |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.

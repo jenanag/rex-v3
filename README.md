@@ -64,8 +64,8 @@ Jay accepted [ADR 0038](docs/adr/0038-engine-query-selectable-web-search.md) on
 2026-11-25. Engine-query supports selectable search and text-only Gemini.
 Jay accepted [ADR 0039](docs/adr/0039-engine-query-per-request-model.md) on
 2026-11-25 for per-request model selection. Implementation follows separately.
-[ADR 0040](docs/adr/0040-llm-model-and-analyzer-cache-eligibility.md) is Proposed
-for caller model resolution and analyzer eligibility.
+Jay accepted [ADR 0040](docs/adr/0040-llm-model-and-analyzer-cache-eligibility.md)
+on 2026-11-25 for caller model resolution and analyzer eligibility. Implementation follows separately.
 Open choices are tracked as [deferred decisions](docs/roadmap.md#deferred-decisions).
 
 **Coding agents** (Cursor, Claude Code, Codex, Copilot): start at [AGENTS.md](AGENTS.md).
