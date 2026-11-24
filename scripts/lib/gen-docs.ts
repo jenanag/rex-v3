@@ -182,6 +182,11 @@ function cache(name: string, doc: string) {
         "skip when " + tick(entry.skipWhen.pointer) + " = " + tick(entry.skipWhen.equals),
       policy.byReference?.includes(name + "." + operation) && "read back by reference",
       entry.extraKeyInputs && "extra key inputs " + entry.extraKeyInputs.map(tick).join(", "),
+      entry.rawUrlKeyInputs &&
+        "raw URL key inputs " +
+          Object.entries(entry.rawUrlKeyInputs)
+            .map(([alias, pointer]) => tick(alias) + " from " + tick(pointer))
+            .join(", "),
       entry.normalize && "normalization in " + source,
     ]
       .filter(Boolean)

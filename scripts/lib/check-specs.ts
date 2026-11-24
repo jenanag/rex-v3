@@ -67,6 +67,80 @@ function schemaPointers(
   );
 }
 
+function requiredUrl(
+  file: string,
+  schema: Document | undefined,
+  pointer: string,
+  lookup: ReturnType<typeof resolver>,
+): boolean {
+  for (const part of pointer.slice(1).split("/")) {
+    // These pointers select required object properties. No array wildcards or
+    // optional branches can supply a cache key input.
+    const seen = new Set<string>();
+    while (schema?.$ref) {
+      const identity = file + ":" + schema.$ref;
+      if (seen.has(identity)) return false;
+      seen.add(identity);
+      ({ file, value: schema } = lookup(file, schema.$ref));
+    }
+    const key = part.replaceAll("~1", "/").replaceAll("~0", "~");
+    if (!schema?.required?.includes(key) || !Object.hasOwn(schema.properties ?? {}, key))
+      return false;
+    schema = schema.properties[key];
+  }
+  return Boolean(
+    schema?.$ref &&
+    lookup(file, schema.$ref).file === commonFile &&
+    schema.$ref.endsWith("#/components/schemas/Url"),
+  );
+}
+
+function checkRawUrlKeyInputs(
+  service: string,
+  id: string,
+  entry: Document,
+  request: Document | undefined,
+  file: string,
+  lookup: ReturnType<typeof resolver>,
+  report: Report,
+) {
+  const mapping = entry.rawUrlKeyInputs;
+  const crawler = service === "content-auditor" && id === "checkCrawlerAccess";
+  const problem = (message: string) =>
+    report("cache-policy", policyFile, service + "." + id + ": rawUrlKeyInputs " + message);
+  if (!Object.hasOwn(entry, "rawUrlKeyInputs") && !crawler) return;
+  if (
+    !mapping ||
+    typeof mapping !== "object" ||
+    Array.isArray(mapping) ||
+    !Object.keys(mapping).length
+  ) {
+    problem("must be a nonempty mapping");
+    return;
+  }
+  if (
+    crawler &&
+    (mapping.siteUrl !== "/siteUrl" ||
+      mapping.robotsTxtUrl !== "/robotsTxt/url" ||
+      Object.keys(mapping).length !== 2)
+  )
+    problem("must map siteUrl to /siteUrl and robotsTxtUrl to /robotsTxt/url");
+  const targets = new Set<string>();
+  for (const [alias, pointer] of Object.entries(mapping)) {
+    if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(alias) || entry.extraKeyInputs?.includes(alias))
+      problem("has an invalid or conflicting alias " + alias);
+    if (
+      typeof pointer !== "string" ||
+      !/^(?:\/(?:[^/~]|~[01])+)+$/.test(pointer) ||
+      !requiredUrl(file, request, pointer, lookup)
+    ) {
+      problem("must target a required shared Url at " + String(pointer));
+    } else if (targets.has(pointer)) {
+      problem("repeats target " + pointer);
+    } else targets.add(pointer);
+  }
+}
+
 function checkPolicy(all: Spec[], common: Document, policy: Document, report: Report) {
   const file = policyFile;
   const lookup = resolver();
@@ -140,6 +214,7 @@ function checkPolicy(all: Spec[], common: Document, policy: Document, report: Re
         }
         const request = op.requestBody?.content?.["application/json"]?.schema;
         const response = op.responses?.["200"]?.content?.["application/json"]?.schema;
+        checkRawUrlKeyInputs(name, id, entry, request, owner.file, lookup, report);
         const paths = Object.keys(entry.normalize ?? {}).map((key) =>
           key.startsWith("/") ? key : "/" + key,
         );

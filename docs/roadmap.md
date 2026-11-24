@@ -304,7 +304,8 @@ sets a 24 MiB audit ceiling and a 3 MiB public crawler-check ceiling. The
 [validation benchmark](services/content-auditor.md#request-validation-benchmark)
 verifies both boundaries and enforces validator-only p99 below 120 ms and 15 ms,
 respectively, in CI. `auditPage` scores all seven categories offline.
-`checkCrawlerAccess` remains an HTTP 501 stub pending implementation.
+`checkCrawlerAccess` evaluates supplied robots.txt offline. See the [standalone smoke
+and latency check](services/content-auditor.md#crawler-access-smoke-and-latency-check).
 
 Built in this order, each started with its language ADR and `scripts/new-tool --lang
 <language>` and finished (definition of done below) before the next one starts. The order goes from no LLM to

@@ -283,6 +283,9 @@ for t in TOOLS:
             if o['skipWhen']['pointer'].split('/')[1] not in collect_props(sp,rs): errs.append(f'policy {t}.{oid}: skipWhen pointer not in response')
         for f in o.get('normalize',{}):
             if f not in props: errs.append(f'policy {t}.{oid}: normalize field {f} not in request')
+        raw_url_inputs=o.get('rawUrlKeyInputs')
+        if (t,oid)==('content-auditor','checkCrawlerAccess') and raw_url_inputs!={'siteUrl':'/siteUrl','robotsTxtUrl':'/robotsTxt/url'}:
+            errs.append(f'policy {t}.{oid}: invalid rawUrlKeyInputs mapping')
         for x in o.get('extraKeyInputs',[]):
             if x not in EXTRA_OK: errs.append(f'policy {t}.{oid}: unknown extraKeyInput {x}')
 repo_files = scan_files('.')
@@ -422,6 +425,7 @@ for n,v in common['components']['schemas'].items():
 # 13 operationIds named in docs exist
 IGN={'byReference','readPageResult','robotsTxt','pagesMissing','entryKey','extractionKey','includeFull','baseURL','keyVersion','languageSource','onUnsupportedLanguage','primaryFallback','cacheMode','sentimentScore','engineModel','sameAs','unevaluatedProperties','projectId','orgId','createdAt','occurredAt','idempotencyKey','causationId','fullContent','llmsTxt','brandKey','scheduledFor','nextRunAt','traceparent','maxDuration','llmsTxtFile','maxUrls','traceId','maxPages','siteUrl','respectRobotsTxt','archiveTo'}
 IGN|={o for e in (yaml.safe_load(open('packages/contracts/cache/policy.yaml')).get('external') or {}).values() for o in e.get('operations',{})}
+IGN|={alias for tool in pol['tools'].values() for op in tool.get('operations',{}).values() if isinstance(op.get('rawUrlKeyInputs'),dict) for alias in op['rawUrlKeyInputs']}
 for f in glob.glob('docs/services/*.md')+['docs/architecture.md','docs/events.md']:
     for o in re.findall(r'`([a-z]+[A-Z][A-Za-z]+)`',open(f).read()):
         if o not in opids and o not in IGN: warn.append(f'{f}: `{o}` not an operationId')

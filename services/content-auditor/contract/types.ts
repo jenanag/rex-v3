@@ -113,10 +113,29 @@ export interface paths {
         put?: never;
         /**
          * Check which AI crawlers a site's robots.txt allows
-         * @description Evaluates the robots.txt content passed in. The tool fetches nothing; to check
-         *     a site by URL, use the orchestrator's async, anonymous `createAudit`
-         *     (category `crawler_access`); there the content-extractor service reads the
-         *     site (ADR 0021).
+         * @description Evaluate the supplied robots.txt offline and return one result per vendored
+         *     crawler in list order. Check the origin root / without a query. Use the
+         *     exact case-insensitive named robots token when the pinned parser registers
+         *     that group, otherwise the registered wildcard group, otherwise no group.
+         *     Combine repeated groups. A bare user-agent header does not register a group.
+         *     An empty Allow or Disallow, or a Crawl-delay directive, registers a group.
+         *
+         *     Require both URLs to parse as HTTP(S) and have the same origin (scheme,
+         *     hostname and effective port). A parse failure returns 422 invalid_crawler_url
+         *     with the offending field in the detail. A mismatch returns 422
+         *     robots_origin_mismatch identifying /robotsTxt/url. Echo both supplied URLs
+         *     and the fetch status verbatim on 200.
+         *
+         *     Evaluate 2xx string content, including empty files. All 4xx statuses,
+         *     including 429, allow all crawlers. A 2xx with null content, a 1xx, 3xx, 5xx,
+         *     null status, or integer outside 100–599 gives unknown for every crawler.
+         *     Ignore non-2xx bodies. Receipt time belongs to callers.
+         *
+         *     After the initial file scan, use at most 50,000 work units per selected
+         *     group and 250,000 per request to resolve root and effective restrictions.
+         *     A work limit or unresolved path analysis yields unknown and preserves the
+         *     matched group if known. To fetch by URL, use the orchestrator's async
+         *     anonymous `createAudit` (ADR 0021).
          */
         post: operations["checkCrawlerAccess"];
         delete?: never;
@@ -190,8 +209,10 @@ export interface components {
             robotsTxt: components["schemas"]["FetchedFile"];
         };
         /**
-         * @description allowed: no rule blocks `/`. disallowed: `/` is blocked.
-         *     partial: some paths are blocked. unknown: robots.txt could not be read (5xx status, or null status = network error or timeout).
+         * @description disallowed: the origin root / (without a query) is blocked.
+         *     partial: the root is allowed and an effective rule blocks a path or query.
+         *     allowed: no effective rule blocks a path or query, or the supplied fetch status is 4xx.
+         *     unknown: access could not be determined from the fetch result or within bounded analysis.
          * @enum {string}
          */
         CrawlerAccess: "allowed" | "disallowed" | "partial" | "unknown";
@@ -202,10 +223,9 @@ export interface components {
             robotsTxtStatus: number | null;
             crawlers: (components["schemas"]["AiCrawler"] & {
                 access: components["schemas"]["CrawlerAccess"];
-                /** @description The robots.txt user-agent group that applied (`*` if none named the token). */
-                matchedGroup?: string | null;
+                /** @description The vendored robots token for a named match, '*' for a wildcard match, or null if no group applies. */
+                matchedGroup: string | null;
             })[];
-            checkedAt: components["schemas"]["Timestamp"];
         };
         Health: {
             /** @enum {string} */
@@ -324,11 +344,6 @@ export interface components {
              */
             purpose: "training" | "search" | "user_fetch";
         };
-        /**
-         * Format: date-time
-         * @description RFC 3339 timestamp in UTC with millisecond precision, e.g. `2026-11-22T01:02:03.456Z`.
-         */
-        Timestamp: string;
     };
     responses: {
         /** @description Health status. */

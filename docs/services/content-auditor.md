@@ -3,7 +3,7 @@
 - **Kind:** tool ([what that means](../architecture.md#service-map))
 - **Phase:** 2
 - **Contract:** source [packages/contracts/openapi/services/content-auditor.yaml](../../packages/contracts/openapi/services/content-auditor.yaml); vendored, self-contained copy in [services/content-auditor/contract/](../../services/content-auditor/contract/openapi.yaml) ([ADR 0018](../adr/0018-tool-portability.md))
-- **Language:** TypeScript (`language: ts` in vendoring.yaml), per [ADR 0030](../adr/0030-content-auditor-language.md), accepted by Jay on 2026-11-24. Scaffolding is the next step.
+- **Language:** TypeScript (`language: ts` in vendoring.yaml), per [ADR 0030](../adr/0030-content-auditor-language.md), accepted by Jay on 2026-11-24. Both operations are implemented.
 - **Portability:** a self-contained project in its language: copy `services/content-auditor/` anywhere, then its install, build, test and `docker build` work with nothing else present; no auth, no cache, no bus inside ([ADR 0018](../adr/0018-tool-portability.md))
 - **State:** none (callers cache its results, see below)
 - **Bus:** none
@@ -33,12 +33,12 @@ content-extractor service produced them (`content-extraction` job), and the
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `2`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `3`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
 | `auditPage` | `P30D` | shared |  |
-| `checkCrawlerAccess` | `P30D` | shared |  |
+| `checkCrawlerAccess` | `P30D` | shared | raw URL key inputs `siteUrl` from `/siteUrl`, `robotsTxtUrl` from `/robotsTxt/url` |
 <!-- GENERATED:cache END -->
 
 ## Limits
@@ -46,18 +46,28 @@ keyVersion `2`. The values below are defaults; scope and freshness can be overri
 Jay accepted [ADR 0031](../adr/0031-content-auditor-body-limits.md) on 2026-11-24.
 The scaffold sets `BODY_LIMIT_BYTES=25165824` (24 MiB) for `auditPage` and a
 3,145,728-byte (3 MiB) Fastify route limit for public `checkCrawlerAccess`.
-`auditPage` returns an audit. `checkCrawlerAccess` is an HTTP 501 stub.
+`auditPage` returns an audit and `checkCrawlerAccess` evaluates supplied robots.txt offline.
 
 ### Request validation benchmark
 
 From `services/content-auditor/`, run `npm ci`, `npm run build`, and
 `node scripts/benchmark-validation.mjs` with the Node version in the root
 `.nvmrc`. The shared tool workflow runs the same benchmark offline. It checks
-that exact-limit requests reach their handlers (HTTP 200 for audits and 501
-for crawler checks) and that adding one byte returns HTTP 413.
+that exact-limit requests reach their handlers and return HTTP 200, and that
+adding one byte returns HTTP 413.
 The validator-only p99 gates require less than 120 ms for
 audits and less than 15 ms for crawler checks. The public route's end-to-end
 target remains p99 under 2 seconds.
+
+### Crawler access smoke and latency check
+
+With the repo-pinned Node version, run `npm ci` and `npm run build` from the tool
+folder. Start it with `LOG_LEVEL=silent npm start`. In a second terminal run
+`node scripts/smoke-crawler-access.mjs`. For a different port, set `PORT` for both
+commands. The script sends synthetic requests over loopback, checks the results,
+and reports per-workload end-to-end p99 and counts of requests with
+budget-limited results. This measures the standalone tool on the request path.
+The public gateway should repeat the measurement when available.
 
 <!-- GENERATED:limits START (source: x-rex-limits in packages/contracts/openapi/services/content-auditor.yaml) -->
 See [the tool's operation limits](../../services/content-auditor/AGENTS.md#limits).
@@ -77,7 +87,6 @@ See [the tool's operation limits](../../services/content-auditor/AGENTS.md#limit
 - [`FetchedFile`](../../packages/contracts/openapi/common.yaml) (schemas); also used by content-extractor, llms-txt-generator, sitemap-extractor.
 - [`FetchedPage`](../../packages/contracts/openapi/common.yaml) (schemas); also used by content-extractor.
 - [`LlmsTxtValidation`](../../packages/contracts/openapi/common.yaml) (schemas); also used by llms-txt-generator.
-- [`Timestamp`](../../packages/contracts/openapi/common.yaml) (schemas); also used by orchestrator.
 - [`Url`](../../packages/contracts/openapi/common.yaml) (schemas); also used by citation-extractor, content-extractor, llms-txt-generator, orchestrator, schema-generator, sitemap-extractor.
 <!-- GENERATED:shared END -->
 
@@ -126,3 +135,19 @@ See [the tool's operation limits](../../services/content-auditor/AGENTS.md#limit
 - JSON-LD checks cover local syntax and shape. Custom, aliased, and remote
   contexts are outside the offline check. Freshness reports date evidence and
   chronology from the request, independent of the current time.
+
+## Crawler access results
+
+The check uses the site origin's root and the supplied robots.txt. Results are in
+vendored crawler order. A blocked root is `disallowed`. An allowed root with a
+confirmed blocked path or query is `partial`. Effective allow overrides count
+before classifying a path. A bounded search returns `unknown` if it cannot resolve
+the rules within 50,000 work units per selected group and 250,000 per request.
+The response preserves the selected group when known. A bare named header falls
+back to a registered wildcard; a named `Crawl-delay` directive can shadow it.
+
+Same-origin fetch results give HTTP 200. All 4xx allow crawling; unavailable or
+indeterminate fetch evidence yields `unknown`. Unparseable URLs and origin
+mismatches yield HTTP 422. The response echoes the supplied URLs and status.
+Callers own receipt time. See the [source contract](../../packages/contracts/openapi/services/content-auditor.yaml)
+for the status and access definitions.

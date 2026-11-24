@@ -65,7 +65,7 @@ async function fixture(t: { after: (fn: () => Promise<void>) => void }, ownBasel
 }
 
 type Fixture = Awaited<ReturnType<typeof fixture>>;
-const cases: [string, string, (repo: Fixture) => Promise<void>][] = [
+const cases: [string, string, (repo: Fixture) => Promise<void>, string?][] = [
   [
     "copied component",
     "copied-components",
@@ -145,6 +145,45 @@ const cases: [string, string, (repo: Fixture) => Promise<void>][] = [
     "bad cache pointer",
     "cache-policy",
     (repo) => repo.change(policy, "prompt: collapse-whitespace", "absent: collapse-whitespace"),
+  ],
+  [
+    "missing raw URL mapping",
+    "cache-policy",
+    (repo) => repo.change(policy, "          robotsTxtUrl: /robotsTxt/url\n", ""),
+  ],
+  [
+    "swapped raw URL mappings",
+    "cache-policy",
+    (repo) =>
+      repo.change(
+        policy,
+        "          siteUrl: /siteUrl\n          robotsTxtUrl: /robotsTxt/url",
+        "          siteUrl: /robotsTxt/url\n          robotsTxtUrl: /siteUrl",
+      ),
+  ],
+  [
+    "raw URL mapped to a non-URL property",
+    "cache-policy",
+    (repo) =>
+      repo.change(policy, "robotsTxtUrl: /robotsTxt/url", "robotsTxtUrl: /robotsTxt/status"),
+    "must target a required shared Url at /robotsTxt/status",
+  ],
+  [
+    "malformed raw URL pointer",
+    "cache-policy",
+    (repo) => repo.change(policy, "robotsTxtUrl: /robotsTxt/url", "robotsTxtUrl: /robotsTxt/~2url"),
+    "must target a required shared Url at /robotsTxt/~2url",
+  ],
+  [
+    "conflicting raw URL alias",
+    "cache-policy",
+    (repo) =>
+      repo.change(
+        policy,
+        "        rawUrlKeyInputs:",
+        "        extraKeyInputs: [siteUrl]\n        rawUrlKeyInputs:",
+      ),
+    "has an invalid or conflicting alias siteUrl",
   ],
   [
     "bad cache scope",
@@ -363,7 +402,7 @@ test("cross-file rule fixtures", { concurrency: 4 }, async (t) => {
   const clean = await fixture(t);
   await clean.run("check-contracts", "--source-only");
   await Promise.all(
-    cases.map(([name, rule, mutate]) =>
+    cases.map(([name, rule, mutate, detail]) =>
       t.test(name, async (subtest) => {
         const repo = await fixture(subtest);
         await mutate(repo);
@@ -372,7 +411,8 @@ test("cross-file rule fixtures", { concurrency: 4 }, async (t) => {
           (error: unknown) =>
             error instanceof Error &&
             "stderr" in error &&
-            String(error.stderr).includes("[" + rule + "]"),
+            String(error.stderr).includes("[" + rule + "]") &&
+            (!detail || String(error.stderr).includes(detail)),
         );
       }),
     ),
@@ -534,4 +574,41 @@ test("each tool's OpenAPI bundle validates in an empty directory", async (t) => 
       );
     }),
   );
+});
+
+test("crawler cache policy preserves the trailing-dot origin distinction", async () => {
+  const { tools } = parse(await readFile(join(root, policy), "utf8"));
+  const mapping = tools["content-auditor"].operations.checkCrawlerAccess.rawUrlKeyInputs;
+  const requests = ["https://example.test/", "https://example.test./"].map((siteUrl) => ({
+    siteUrl,
+    robotsTxt: { url: "https://example.test/robots.txt", status: 404, content: null },
+  }));
+  assert.equal(new URL(requests[0].siteUrl).origin, new URL(requests[0].robotsTxt.url).origin);
+  assert.notEqual(new URL(requests[1].siteUrl).origin, new URL(requests[1].robotsTxt.url).origin);
+  // Model just the policy steps needed for this collision. Runtime cache derivation
+  // is owned by the future caller and is outside this fixture.
+  function normalized(request: (typeof requests)[number]) {
+    return { ...request, siteUrl: request.siteUrl.replace(/\.\/$/, "/") };
+  }
+  function withRawInputs(request: (typeof requests)[number]) {
+    return {
+      ...normalized(request),
+      ...Object.fromEntries(
+        Object.entries(mapping).map(([alias, pointer]) => [
+          "$" + alias,
+          (pointer as string)
+            .slice(1)
+            .split("/")
+            .reduce<unknown>((value, key) => (value as Record<string, unknown>)[key], request),
+        ]),
+      ),
+    };
+  }
+  assert.deepEqual(normalized(requests[0]), normalized(requests[1]));
+  assert.deepEqual(withRawInputs(requests[1]), {
+    ...normalized(requests[1]),
+    $siteUrl: requests[1].siteUrl,
+    $robotsTxtUrl: requests[1].robotsTxt.url,
+  });
+  assert.notDeepEqual(withRawInputs(requests[0]), withRawInputs(requests[1]));
 });

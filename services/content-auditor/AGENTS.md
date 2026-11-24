@@ -56,7 +56,6 @@ folder").
   sitemap-extractor.
 - `FetchedPage` (schema, request); also used by content-extractor.
 - `LlmsTxtValidation` (schema, request); also used by llms-txt-generator.
-- `Timestamp` (schema, response); also used by orchestrator, bus messages.
 - `Url` (schema, request and response); also used by citation-extractor,
   content-extractor, engine-query, llms-txt-generator, orchestrator, schema-generator,
   sitemap-extractor, bus messages.
