@@ -36,9 +36,10 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 
 ## Limits
 
-[ADR 0033](../adr/0033-citation-extractor-body-limit.md) proposes a 4 MiB request
-body ceiling and a 20 ms validator-only p99 gate. It is pending Jay's acceptance
-before scaffolding.
+Jay accepted [ADR 0033](../adr/0033-citation-extractor-body-limit.md) on 2026-11-24.
+Scaffolding will configure the 4 MiB (4,194,304-byte) request ceiling with the
+current request schema and verify the validator-only p99 gate below 20 ms
+and the exact-limit and one-byte-over behavior in CI.
 
 <!-- GENERATED:limits START (source: x-rex-limits in packages/contracts/openapi/services/citation-extractor.yaml) -->
 See [the tool's operation limits](../../services/citation-extractor/AGENTS.md#limits).

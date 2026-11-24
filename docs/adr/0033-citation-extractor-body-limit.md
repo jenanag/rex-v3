@@ -1,6 +1,6 @@
 # 0033: Set the citation-extractor request body limit to 4 MiB
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-24, accepted by Jay)
 - **Date:** 2026-11-24
 - **Deciders:** Jay Pascual
 

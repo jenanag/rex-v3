@@ -45,8 +45,9 @@ It selects TypeScript for `content-auditor`.
 Jay accepted [ADR 0031](docs/adr/0031-content-auditor-body-limits.md) on 2026-11-24.
 It sets the 24 MiB audit and 3 MiB public crawler-check ceilings and retains both request schemas.
 Jay accepted [ADR 0032](docs/adr/0032-citation-extractor-language.md) on 2026-11-24.
-It selects TypeScript for `citation-extractor`. [ADR 0033](docs/adr/0033-citation-extractor-body-limit.md)
-is Proposed for Jay's review.
+It selects TypeScript for `citation-extractor`. Jay also accepted
+[ADR 0033](docs/adr/0033-citation-extractor-body-limit.md) on 2026-11-24. It sets a
+4 MiB (4,194,304-byte) ceiling and retains the current request schema.
 Phase 2 builds the tools one at a time, before the platform. Open choices are tracked as
 [deferred decisions](docs/roadmap.md#deferred-decisions).
 
