@@ -139,8 +139,11 @@ test.each([
   expect(provider.fetch).toHaveBeenCalledTimes(lunaEnabled ? 1 : 0);
 });
 
-test("record-shaped synthetic fixture replays offline and preserves mention and analyzer ordering", async () => {
-  const replay = createLlm({ data: { LLM_MODE: "mock" } });
+test("authorized Luna recording replays offline and preserves mention and analyzer ordering", async () => {
+  const fetch = vi.fn<typeof globalThis.fetch>(() => {
+    throw new Error("Recorded fixture replay must stay offline");
+  });
+  const replay = createLlm({ data: { LLM_MODE: "mock" }, fetch });
   const llm = vi.fn(replay);
   const handlers = createHandlers({ lunaEnabled: true, llm });
   const { data } = await post(handlers, {
@@ -149,6 +152,7 @@ test("record-shaped synthetic fixture replays offline and preserves mention and 
     sentiment: { language: "en", analyzers: [model, lexicon, rules] },
   });
   expect(llm).toHaveBeenCalledTimes(1);
+  expect(fetch).not.toHaveBeenCalled();
   expect(data.analyzers).toMatchObject([
     { analyzer: model, kind: "llm", status: "ok", primary: false },
     { analyzer: lexicon, status: "ok", primary: true },
@@ -163,7 +167,7 @@ test("record-shaped synthetic fixture replays offline and preserves mention and 
       sentiment: "neutral",
       sentimentScore: 0,
       sentimentByAnalyzer: [
-        { analyzer: model, label: "positive", score: 0.6 },
+        { analyzer: model, label: "positive", score: 0.7 },
         { analyzer: lexicon, score: 0 },
         { analyzer: rules, score: 0.75 },
       ],
@@ -183,7 +187,7 @@ test("record-shaped synthetic fixture replays offline and preserves mention and 
       sentiment: "neutral",
       sentimentScore: 0,
       sentimentByAnalyzer: [
-        { analyzer: model, label: "negative", score: -0.5 },
+        { analyzer: model, label: "negative", score: -0.7 },
         { analyzer: lexicon, score: 0 },
         { analyzer: rules, score: -0.75 },
       ],
@@ -196,7 +200,9 @@ test("record-shaped synthetic fixture replays offline and preserves mention and 
       },
     },
   ]);
-  expect(data.usage).toEqual([metered]);
+  expect(data.usage).toEqual([
+    { ...metered, inputTokens: 261, outputTokens: 74, costMicrosUsd: 63 },
+  ]);
   const request = llm.mock.calls[0][0];
   expect(request.timeoutMs).toBe(60_000);
   const chat = request.openAiChat!;

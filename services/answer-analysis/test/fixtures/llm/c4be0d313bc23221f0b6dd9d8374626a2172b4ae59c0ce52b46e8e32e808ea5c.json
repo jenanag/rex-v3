@@ -1,10 +1,10 @@
 {
-  "text": "{\"results\":[{\"brandKey\":\"b02\",\"label\":\"negative\",\"score\":-0.5001,\"rationale\":null},{\"brandKey\":\"b01\",\"label\":\"positive\",\"score\":0.6001,\"rationale\":\"Acme is favored.\"}]}",
-  "inputTokens": 1000,
-  "outputTokens": 200,
-  "cachedInputTokens": 400,
-  "cacheWriteTokens": 100,
+  "text": "{\"results\":[{\"brandKey\":\"b01\",\"label\":\"positive\",\"score\":0.7,\"rationale\":\"Acme is explicitly described as better than Beta.\"},{\"brandKey\":\"b02\",\"label\":\"negative\",\"score\":-0.7,\"rationale\":\"Beta is explicitly described as worse than Acme.\"}]}",
+  "inputTokens": 261,
+  "outputTokens": 74,
+  "cachedInputTokens": 0,
+  "cacheWriteTokens": 0,
   "finishReason": "stop",
-  "refused": false,
-  "serviceTier": "default"
+  "serviceTier": "default",
+  "refused": false
 }

@@ -115,22 +115,24 @@ HTTP 503 uses the shared `provider_unavailable` Problem and forwards a valid
 upstream `Retry-After` when present. The service logs available usage to its
 restricted operational telemetry without prompt or completion text.
 
-### Synthetic replay comparison
+### Recorded replay comparison
 
 Run `LLM_MODE=mock npm test -- test/luna.test.ts` from the tool folder.
-The fixture for `Acme is better than Beta.` is synthetic pending authorized
-recording. It exercises the same adapter replay path as a recorded fixture.
-It gives Acme and Beta one mention each, in that order, with the full sentence
-as both snippets.
+The replay fixture for the synthetic answer `Acme is better than Beta.` came
+from one authorized GPT-6 Luna call. The response gives Acme and Beta one
+mention each, in that order, with the full sentence as both snippets.
 
-| Brand | `det:lexicon` | `det:rules` | Luna (synthetic) | Agreement |
+| Brand | `det:lexicon` | `det:rules` | Luna (recorded) | Agreement |
 | --- | --- | --- | --- | --- |
-| Acme | neutral 0 | positive +0.75 | positive +0.60 | positive, 2 of 3, spread 0.75 |
-| Beta | neutral 0 | negative −0.75 | negative −0.50 | negative, 2 of 3, spread 0.75 |
+| Acme | neutral 0 | positive +0.75 | positive +0.70 | positive, 2 of 3, spread 0.75 |
+| Beta | neutral 0 | negative −0.75 | negative −0.70 | negative, 2 of 3, spread 0.75 |
 
-The default primary in this comparison is `det:lexicon`. The synthetic Luna
-batch reports 1,000 input tokens (400 cached reads, 100 cache writes) and 200
-output tokens, yielding 167 microdollars. The usage applies to the whole batch.
+The effective primary is `det:lexicon`. The batch used the reported
+`default` (Standard) tier with 261 input tokens, zero cache reads and writes,
+and 74 output tokens. The recomputed batch cost is 63 microdollars. In this
+recording, the provider response took 3.84 seconds and the local HTTP route
+took 3.89 seconds. The separate synthetic pricing test covers cache reads
+and writes and yields 167 microdollars.
 
 ## Endpoints
 
