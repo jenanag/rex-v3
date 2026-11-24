@@ -21,7 +21,7 @@ to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the super
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
 Phase 1 was completed on 2026-11-22. Phase 2 has started. Jay accepted ADRs 0025
 and 0026 on 2026-11-22, ADR 0027, ADR 0028, and ADR 0029 on 2026-11-23, and ADR 0030, ADR 0031, ADR 0032, and ADR 0033
-on 2026-11-24. Jay accepted ADR 0034 on 2026-11-24, recording that both Python validators missed the large-workload budget. The Python bring-up remains paused. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
+on 2026-11-24. Jay accepted ADR 0034 on 2026-11-24, recording that both Python validators missed the large-workload budget. The Python bring-up remains paused. Jay accepted ADR 0035 on 2026-11-24, selecting TypeScript for answer-analysis. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
 
 - [README](../README.md), [architecture](architecture.md), [conventions](conventions.md),
   [DRY rule](dry-rule.md), [events](events.md), [glossary](glossary.md), this roadmap.
@@ -66,10 +66,10 @@ The TypeScript spike is recorded in [Accepted ADR 0020](adr/0020-fastify-openapi
 Only what tools need, nothing for the platform. Tools may be TypeScript, Python or Go
 ([ADR 0024](adr/0024-per-tool-language.md)): every item is designed for the three
 languages, but only TypeScript is built in Phase 1. The Python and Go parts of 1.2 to
-1.5 form that language's **bring-up**, run right before the first tool in the language:
-Python before answer-analysis
-([Phase 2](#phase-2-tool-services-one-at-a-time-each-built-and-tested-in-isolation)
-step 5), Go before ai-traffic-analyzer ([Phase 7](#phase-7-advanced-optimization)).
+1.5 form that language's **bring-up**, run right before the first tool in the
+language. The Python spike ran before answer-analysis and the bring-up is paused
+([ADR 0034](adr/0034-python-validation-spike.md)). Go runs before ai-traffic-analyzer
+([Phase 7](#phase-7-advanced-optimization)).
 Items are listed in build order; 1.3 and 1.2 can run in parallel, 1.4 needs 1.2 and
 1.3, 1.5 needs 1.4.
 
@@ -329,8 +329,9 @@ LLM-heavy, so the template is hardened on the simple tools first:
    `ai-crawlers.yaml` (no LLM).
 4. `citation-extractor`: language ADR (TypeScript), then sources and inline links from answer text (no LLM, no
    network).
-5. `answer-analysis`: language ADR (Python, after the Python spike passes), then
-   rule-based first: mention detection, `det:lexicon` and `det:rules`
+5. `answer-analysis`: language ADR (TypeScript, ADR 0035 accepted by Jay), then
+   scaffold with the TypeScript template. Start with deterministic mention detection,
+   `det:lexicon` and `det:rules`
    with the lexicon registry and the English pack, language detection and
    `onUnsupportedLanguage`; then LLM analyzers per provider and a side-by-side comparison
    report on a fixture set.
@@ -339,14 +340,12 @@ LLM-heavy, so the template is hardened on the simple tools first:
 
 **Languages and the Python bring-up** ([ADR 0024](adr/0024-per-tool-language.md)): every
 step, TypeScript ones included, opens with the tool's own language ADR, written at the
-start of the step and accepted by Jay before `scripts/new-tool` (Phase 1) runs (ADR 0024 holds the
-proposals: TypeScript for steps 1 to 4 and 6, where engine-query is Jay's decision;
-Python for step 5). The order does not change: the TypeScript tools harden `_template`
-first. Phase 2 needs only the Python bring-up (1.2 generator, 1.3 spike, 1.4
-`_template-python`, 1.5 lane); it starts when step 4 starts, touches no tool folder, and
-its spike runs right before step 5 and gates it. If the spike and its fallback fail, or
-Jay's language ADR keeps TypeScript, answer-analysis is built from `_template` and the
-bring-up stops. The Go bring-up waits for Phase 7.
+start of the step and accepted by Jay before `scripts/new-tool` (Phase 1) runs.
+The Python spike ran right before step 5. Both validators missed the large-workload
+budget ([ADR 0034](adr/0034-python-validation-spike.md)), so the Python bring-up
+remains paused. Jay accepted [ADR 0035](adr/0035-answer-analysis-language.md) on
+2026-11-24, selecting TypeScript and the existing template for answer-analysis.
+The tool is still unscaffolded. The Go bring-up waits for Phase 7.
 
 - Each tool: contract tests against its vendored spec, unit tests for its domain,
   recorded provider fixtures (no live LLM or web calls in CI), a smoke script that calls
@@ -475,7 +474,7 @@ in Phases 1 and 2 depends on them.
 
 | Decision | Placeholder now | Needed by |
 |---|---|---|
-| Language of each tool (ADR 0024: TypeScript for schema-generator, llms-txt-generator, content-auditor, citation-extractor, engine-query (Jay's decision), notifier, report-renderer and content-rewriter; Python for answer-analysis, query-discovery and entity-optimizer; Go for ai-traffic-analyzer) | `language: ts` for the six Phase 2 tools in [vendoring.yaml](../packages/contracts/vendoring.yaml); a language ADR per tool, accepted by Jay, decides | the start of each tool's Phase 2 step (later tools: their phase) |
+| Language of each tool (ADR 0024: TypeScript for schema-generator, llms-txt-generator, content-auditor, citation-extractor, engine-query (Jay's decision), notifier, report-renderer and content-rewriter; Python for query-discovery and entity-optimizer; Go for ai-traffic-analyzer). [Accepted ADR 0035](adr/0035-answer-analysis-language.md) selects TypeScript for answer-analysis. | `language: ts` for the six Phase 2 tools in [vendoring.yaml](../packages/contracts/vendoring.yaml); a language ADR per tool, accepted by Jay, decides | the start of each tool's Phase 2 step (later tools: their phase) |
 | Product domain and `PROBLEM_BASE_URI` | config setting, `https://problems.rex.invalid` | Phase 3 (public API) |
 | Retry policy: delays, retry counts, per-queue overrides, delivery limit, reconciler deadlines | configurable; placeholder values in topology.yaml (`retry`, `x-delivery-limit`) and [architecture.md](architecture.md#job-lifecycle) | Phase 4 |
 | SSO (Google, SAML) and per-project roles | email + password, org-wide roles ([ADR 0014](adr/0014-auth.md)) | after Phase 6 |

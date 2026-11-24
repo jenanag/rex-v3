@@ -428,6 +428,23 @@ function languageLine(name: string, language: string, languageName: string) {
   if (!decision) throw new Error(name + ": missing language rationale in ADR 0024");
   const [, , phase, proposed, status, rationale] = decision;
   const current = "(" + tick("language: " + language) + " in vendoring.yaml)";
+  // Keep ADR 0024's guidance unless an accepted tool ADR resolves a different proposal.
+  if (languageName !== proposed) {
+    const accepted = files("docs/adr", "-" + name + "-language.md")
+      .reverse()
+      .find((path) => {
+        const header = read(path).split(/^## /m)[0];
+        return (
+          /^- \*\*Status:\*\* Accepted\b/m.test(header) &&
+          header.split("\n").includes("- **Tool:** " + tick(name)) &&
+          header.split("\n").includes("- **Language:** " + tick(language))
+        );
+      });
+    if (accepted) {
+      const number = basename(accepted).split("-")[0];
+      return wrap(languageName + " " + current + ", accepted by Jay in ADR " + number + ".");
+    }
+  }
   const when =
     phase === "2"
       ? "at the start of its Phase 2 step"

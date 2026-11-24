@@ -15,10 +15,7 @@ still makes sense when the folder is copied elsewhere.
 
 ## Language
 
-TypeScript for now (`language: ts` in vendoring.yaml). ADR 0024 proposes Python:
-deterministic sentiment, NLP, multilingual lexicons and embeddings have their mature
-libraries in Python. Its own language ADR, accepted by Jay, decides at the start of its
-Phase 2 step.
+TypeScript (`language: ts` in vendoring.yaml), accepted by Jay in ADR 0035.
 
 ## Contract
 
@@ -130,10 +127,11 @@ The policy's `resolution` defines caller overrides per environment and per custo
 
 ## Scope and build order
 
-Phase 2, step 5 of 6: language ADR (Python, after the Python spike passes), then
-rule-based first: mention detection, `det:lexicon` and `det:rules` with the lexicon
-registry and the English pack, language detection and `onUnsupportedLanguage`; then LLM
-analyzers per provider and a side-by-side comparison report on a fixture set.
+Phase 2, step 5 of 6: language ADR (TypeScript, ADR 0035 accepted by Jay), then scaffold
+with the TypeScript template. Start with deterministic mention detection, `det:lexicon`
+and `det:rules` with the lexicon registry and the English pack, language detection and
+`onUnsupportedLanguage`; then LLM analyzers per provider and a side-by-side comparison
+report on a fixture set.
 
 ## Build and test standalone
 
