@@ -8,6 +8,7 @@ const expectedEngine = {
   displayName: "ChatGPT",
   provider: "openai",
   model: "gpt-6-luna",
+  allowedModels: ["gpt-6-luna"],
   webSearch: true,
   enabled: true,
 };
@@ -63,6 +64,7 @@ test("discovery and ineligible requests make no provider request", async () => {
           displayName: "Gemini",
           provider: "google",
           model: "gemini-3.5-flash-lite",
+          allowedModels: ["gemini-3.5-flash-lite"],
           webSearch: false,
           enabled: true,
         },
@@ -96,6 +98,64 @@ test("discovery and ineligible requests make no provider request", async () => {
       errors: [{ pointer: "/webSearch" }],
     });
     expect(transport).not.toHaveBeenCalled();
+  } finally {
+    await app.close();
+  }
+});
+
+test("unlisted, cross-engine and schema-invalid models fail before provider transport", async () => {
+  const transport = vi.fn(async () => {
+    throw new Error("Unexpected provider traffic");
+  });
+  const app = tool(
+    {},
+    createLlm({
+      data: { LLM_MODE: "live", OPENAI_API_KEY: "test-only", GEMINI_API_KEY: "test-only" },
+      fetch: transport,
+    }),
+  );
+  try {
+    for (const [engine, model] of [
+      ["chatgpt", "not-listed"],
+      ["chatgpt", "GPT-6-LUNA"],
+      ["chatgpt", "gpt-6-luna "],
+      ["chatgpt", "gemini-3.5-flash-lite"],
+      ["gemini", "gpt-6-luna"],
+    ]) {
+      const { body } = await post(app, { ...query, engine, model }, 422);
+      expect(body).toMatchObject({
+        code: "unsupported_model",
+        detail: expect.stringContaining("/model"),
+      });
+    }
+    for (const model of ["", 2, null]) {
+      const { body } = await post(app, { ...query, model }, 400);
+      expect(body).toMatchObject({
+        code: "validation_failed",
+        errors: [{ pointer: "/model" }],
+      });
+    }
+    expect(transport).not.toHaveBeenCalled();
+  } finally {
+    await app.close();
+  }
+});
+
+test("ChatGPT omitted and explicit default models send identical requests", async () => {
+  const transport = vi.fn<typeof globalThis.fetch>(async () => Response.json(completion));
+  const app = tool({}, provider(transport));
+  try {
+    const { body: omitted } = await post(app, query, 200);
+    const { body: explicit } = await post(app, { ...query, model: expectedEngine.model }, 200);
+    expect(explicit).toEqual({
+      answer: { ...omitted.answer, model: expectedEngine.model, latencyMs: expect.any(Number) },
+      usage: [expectedUsage],
+    });
+    expect(omitted.usage).toEqual(explicit.usage);
+    expect(transport).toHaveBeenCalledTimes(2);
+    const wire = transport.mock.calls.map(([, init]) => JSON.parse(String(init?.body)));
+    expect(wire[0].model).toBe(expectedEngine.model);
+    expect(wire[1]).toEqual(wire[0]);
   } finally {
     await app.close();
   }

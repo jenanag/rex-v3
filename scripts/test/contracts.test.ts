@@ -718,37 +718,60 @@ test("answer analysis cache input preserves analyzer order and applies HTTP defa
   assert.notDeepEqual(cacheInput(), cacheInput({ analyzers: [] }));
 });
 
-test("engine query cache keys preserve prompt whitespace and apply HTTP defaults", async () => {
-  const { tools } = parse(await readFile(join(root, policy), "utf8"));
+test("engine query cache keys resolve model and search before hashing", async () => {
+  const { key, tools } = parse(await readFile(join(root, policy), "utf8"));
   const { info, components } = parse(
     await readFile(join(root, "packages/contracts/openapi/services/engine-query.yaml"), "utf8"),
   );
-  const { locale, country, webSearch } = components.schemas.EngineQuery.properties;
+  const { locale, country, webSearch, model } = components.schemas.EngineQuery.properties;
   const { keyVersion, operations } = tools["engine-query"];
   const { normalize, extraKeyInputs, webSearchDefaults } = operations.queryEngine;
-  assert.equal(keyVersion, 3);
-  assert.equal(info.version, "2.1.0");
+  assert.equal(keyVersion, 4);
+  assert.equal(info.version, "2.2.0");
   assert.equal(webSearch.type, "boolean");
   assert.equal(webSearch.default, undefined);
+  assert.equal(model.type, "string");
+  assert.equal(model.minLength, 1);
+  assert.equal(model.default, undefined);
   assert.deepEqual(webSearchDefaults, { chatgpt: true, gemini: false });
   assert.ok(!components.schemas.EngineQuery.required.includes("webSearch"));
+  assert.ok(!components.schemas.EngineQuery.required.includes("model"));
   assert.deepEqual(extraKeyInputs, ["engineModel"]);
+  assert.ok(
+    key.canonicalInput.some((step: string) => step.includes("Exclude the request model field")),
+  );
   assert.equal(normalize?.prompt, undefined);
 
-  // Fixture for the caller policy, with a fixed scope, window and sample.
-  function cacheKey(
+  const catalog = {
+    chatgpt: {
+      model: "gpt-6-luna",
+      allowedModels: ["gpt-6-luna", "test-only-alt"],
+      webSearch: true,
+    },
+    gemini: {
+      model: "gemini-3.5-flash-lite",
+      allowedModels: ["gemini-3.5-flash-lite"],
+      webSearch: false,
+    },
+  };
+
+  // Test-only caller fixture with a fixed scope, UTC window and sample.
+  function cacheVector(
     prompt: string,
     hints: {
-      engine?: "chatgpt" | "gemini";
+      engine?: keyof typeof catalog;
       locale?: string;
       country?: string;
       webSearch?: boolean;
+      model?: string;
     } = {},
-    model = "gpt-6-luna",
   ) {
-    const { engine = "chatgpt", webSearch, ...region } = hints;
+    const { engine = "chatgpt", webSearch, model, ...region } = hints;
+    const available = catalog[engine];
+    const effectiveModel = model ?? available.model;
+    assert.ok(available.allowedModels.includes(effectiveModel), "unsupported model before lookup");
     const effectiveSearch = webSearch ?? webSearchDefaults[engine];
-    assert.ok(!effectiveSearch || engine === "chatgpt", "unsupported search must bypass lookup");
+    assert.ok(!effectiveSearch || available.webSearch, "unsupported search before lookup");
     const input = {
       engine,
       prompt,
@@ -757,26 +780,73 @@ test("engine query cache keys preserve prompt whitespace and apply HTTP defaults
       ...region,
       webSearch: effectiveSearch,
     };
-    const keyInput = { ...input, ["$" + extraKeyInputs[0]]: model };
+    const resolved = { ...input, model: effectiveModel };
+    const keyInput = { ...input, ["$" + extraKeyInputs[0]]: effectiveModel };
     const canonical = JSON.stringify(keyInput, Object.keys(keyInput).sort());
-    return `rex:c:engine-query:queryEngine:v${info.version.split(".")[0]}.${keyVersion}:shared:2026-11-24:0:` +
-      createHash("sha256").update(canonical, "utf8").digest("hex");
+    const hash = createHash("sha256").update(canonical, "utf8").digest("hex");
+    const key = `rex:c:engine-query:queryengine:v${info.version.split(".")[0]}.${keyVersion}:shared:2026-11-24:0:${hash}`;
+    return { resolved, canonical, key };
   }
   const prompt = "Print 'A  B' verbatim.";
-  assert.equal(cacheKey(prompt), cacheKey(prompt, { locale: "en-US", country: "US" }));
-  assert.notEqual(cacheKey(prompt), cacheKey("Print 'A B' verbatim."));
-  assert.notEqual(cacheKey(prompt), cacheKey(prompt, { country: "CA" }));
-  assert.notEqual(cacheKey(prompt), cacheKey(prompt, {}, "another-model"));
-  assert.equal(cacheKey(prompt), cacheKey(prompt, { webSearch: true }));
-  assert.notEqual(cacheKey(prompt), cacheKey(prompt, { webSearch: false }));
-  const geminiModel = "gemini-3.5-flash-lite";
-  assert.equal(
-    cacheKey(prompt, { engine: "gemini" }, geminiModel),
-    cacheKey(prompt, { engine: "gemini", webSearch: false }, geminiModel),
+  const chatgpt = cacheVector(prompt);
+  const gemini = cacheVector(prompt, { engine: "gemini" });
+  assert.deepEqual(chatgpt, cacheVector(prompt, { model: "gpt-6-luna" }));
+  assert.deepEqual(
+    gemini,
+    cacheVector(prompt, { engine: "gemini", model: "gemini-3.5-flash-lite" }),
   );
+  for (const [vector, engine, model, webSearch, hash] of [
+    [
+      chatgpt,
+      "chatgpt",
+      "gpt-6-luna",
+      true,
+      "39e9048649a1d56787003f1170e1502f8a5870120c9e43c8392be66d96346789",
+    ],
+    [
+      gemini,
+      "gemini",
+      "gemini-3.5-flash-lite",
+      false,
+      "6fed0e5b283798322f38ba66cac4b9a7bffc561553a760cf28228c1289cbab45",
+    ],
+  ] as const) {
+    assert.deepEqual(vector.resolved, {
+      engine,
+      prompt,
+      locale: "en-US",
+      country: "US",
+      model,
+      webSearch,
+    });
+    assert.equal(
+      vector.canonical,
+      JSON.stringify({
+        $engineModel: model,
+        country: "US",
+        engine,
+        locale: "en-US",
+        prompt,
+        webSearch,
+      }),
+    );
+    assert.equal(vector.key, `rex:c:engine-query:queryengine:v2.4:shared:2026-11-24:0:${hash}`);
+  }
+  assert.deepEqual(chatgpt, cacheVector(prompt, { locale: "en-US", country: "US" }));
+  assert.notEqual(chatgpt.key, cacheVector("Print 'A B' verbatim.").key);
+  assert.notEqual(chatgpt.key, cacheVector(prompt, { country: "CA" }).key);
+  assert.notEqual(chatgpt.key, cacheVector(prompt, { model: "test-only-alt" }).key);
+  assert.deepEqual(chatgpt, cacheVector(prompt, { webSearch: true }));
+  assert.notEqual(chatgpt.key, cacheVector(prompt, { webSearch: false }).key);
+  assert.deepEqual(gemini, cacheVector(prompt, { engine: "gemini", webSearch: false }));
   assert.throws(
-    () => cacheKey(prompt, { engine: "gemini", webSearch: true }, geminiModel),
+    () => cacheVector(prompt, { engine: "gemini", webSearch: true }),
     /unsupported search/,
+  );
+  assert.throws(() => cacheVector(prompt, { model: "unlisted" }), /unsupported model/);
+  assert.throws(
+    () => cacheVector(prompt, { engine: "gemini", model: "gpt-6-luna" }),
+    /unsupported model/,
   );
 });
 

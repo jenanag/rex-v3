@@ -358,8 +358,11 @@ The Gemini recording replays offline. The three-engine sources-and-usage
 requirement still applies.
 [Grok PR #34](https://github.com/jenanag/rex-v3/pull/34) remains deferred.
 
-Jay accepted [ADR 0039](adr/0039-engine-query-per-request-model.md) for
-per-request model selection on 2026-11-25. Implementation is follow-up work.
+Engine-query supports per-request model selection under
+[ADR 0039](adr/0039-engine-query-per-request-model.md), accepted by Jay on
+2026-11-25. Discovery lists each engine's default and allowed models. Contract
+tests cover effective model and search cache keys. Runtime cache integration
+remains Phase 3 work.
 Phase 2 acceptance remains pending under the existing completion criteria.
 
 **Languages and the Python bring-up** ([ADR 0024](adr/0024-per-tool-language.md)): every

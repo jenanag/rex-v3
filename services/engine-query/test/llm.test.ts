@@ -2,8 +2,8 @@ import { expect, test } from "vitest";
 import { createLlm, fixtureKey } from "../src/llm/adapter.js";
 import { deployment } from "../src/llm/catalog.js";
 
-const entry = deployment[0];
-const { model } = entry.engine;
+const entry = deployment[0].models[0];
+const { model } = entry;
 const prompt = "What is the Discovery Pass?";
 
 test("mock mode replays synthetic Responses output without credentials or transport", async () => {
@@ -13,7 +13,7 @@ test("mock mode replays synthetic Responses output without credentials or transp
       throw new Error("Unexpected provider traffic");
     },
   });
-  const result = await llm(entry, prompt, "en-US", "US");
+  const result = await llm(entry, prompt, "en-US", "US", true);
   expect(result.parts[0].text).toBe("The pass covers admission to participating sites.");
   expect(result.usage).toEqual({
     provider: "openai",
@@ -23,7 +23,7 @@ test("mock mode replays synthetic Responses output without credentials or transp
     outputTokens: 200,
     costMicrosUsd: 10_211,
   });
-  await expect(llm(entry, "missing fixture", "en-US", "US")).rejects.toMatchObject({
+  await expect(llm(entry, "missing fixture", "en-US", "US", true)).rejects.toMatchObject({
     statusCode: 503,
     problemCode: "provider_unavailable",
   });

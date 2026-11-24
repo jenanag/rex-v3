@@ -53,7 +53,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Engines this deployment can query and the model each one uses */
+        /** Engines this deployment can query and their default and allowed models */
         get: operations["listEngines"];
         put?: never;
         post?: never;
@@ -75,7 +75,10 @@ export interface paths {
         /**
          * Ask one engine one prompt (one sample) and return its answer
          * @description Accepts ChatGPT and Gemini. An unavailable engine returns 422 unsupported_engine
-         *     before any provider call. ChatGPT defaults to required hosted search; Gemini
+         *     before any provider call. Omit model to use the engine's deployment default.
+         *     An exact, schema-valid model ID outside the selected engine's allowlist returns
+         *     422 unsupported_model identifying /model before any provider call.
+         *     ChatGPT defaults to required hosted search; Gemini
          *     defaults to text-only generation. Explicit false selects text-only generation.
          *     Gemini with explicit true returns 422 unsupported_web_search identifying
          *     /webSearch before any provider call.
@@ -108,14 +111,18 @@ export interface components {
             displayName: string;
             /** @description API vendor, e.g. `openai`, `anthropic`, `google`, `perplexity`, `xai`. */
             provider: string;
-            /** @description Model ID used for this engine (deployment config, not contract). */
+            /** @description Default model ID for this engine. */
             model: string;
+            /** @description Exact model IDs this deployment accepts for the engine, including its default. */
+            allowedModels: string[];
             /** @description True if this deployment can use hosted search when requested. */
             webSearch: boolean;
             enabled: boolean;
         };
         EngineQuery: {
             engine: components["schemas"]["EngineId"];
+            /** @description Exact model ID from the selected engine's allowlist. Omission uses the engine's default. */
+            model?: string;
             prompt: string;
             /** @default en-US */
             locale: components["schemas"]["Locale"];
