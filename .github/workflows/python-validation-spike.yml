@@ -1,0 +1,42 @@
+name: Python validation spike
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/python-validation-spike.yml'
+      - 'spikes/openapi-validation/**'
+      - 'services/answer-analysis/contract/openapi.yaml'
+      - 'packages/contracts/openapi/common.yaml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validation:
+    name: Python validation spike
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    defaults:
+      run:
+        working-directory: spikes/openapi-validation/python
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@1db35dd8eee11c5894872e0b383ae6c406cf738d # v10.4.0
+        with:
+          version: '0.13.9'
+          enable-cache: false
+      - run: uv --version
+      - run: uv sync --locked
+      - name: Generate types from the vendored bundle
+        run: |
+          uv run --frozen --offline datamodel-codegen \
+            --input ../../../services/answer-analysis/contract/openapi.yaml \
+            --input-file-type openapi --output-model-type pydantic_v2.BaseModel \
+            --target-python-version 3.13 --disable-timestamp --formatters builtin \
+            --output generated_models.py
+      - name: Check requests and responses through FastAPI
+        run: uv run --frozen --offline pytest -q
+      - name: Measure the approved candidate against ADR 0024
+        run: uv run --frozen --offline python benchmark.py --report-only
