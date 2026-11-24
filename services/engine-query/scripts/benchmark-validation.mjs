@@ -5,6 +5,7 @@ import { performance } from "node:perf_hooks";
 import { createApp } from "../dist/src/app.js";
 import { loadConfig } from "../dist/src/config.js";
 import { createHandlers } from "../dist/src/handlers/index.js";
+import { loadEngineConfig } from "../dist/src/tool-env.js";
 
 const path = "/v1/engine-answers";
 const expectedLimit = 1_048_576;
@@ -46,7 +47,8 @@ function measure(validate, parsed, name) {
 const spec = JSON.parse(readFileSync(new URL("../dist/contract.json", import.meta.url), "utf8"));
 const config = loadConfig();
 assert.equal(config.BODY_LIMIT_BYTES, undefined, "Run with BODY_LIMIT_BYTES unset");
-const app = createApp({ spec, config, handlers: createHandlers(spec), logs: false });
+const handlers = createHandlers(spec, loadEngineConfig());
+const app = createApp({ spec, config, handlers, logs: false });
 let route;
 app.addHook("preHandler", async (request) => {
   if (request.routeOptions.config.operationId === "queryEngine") {

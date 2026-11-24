@@ -2,16 +2,18 @@ import { readFileSync } from "node:fs";
 import { loadConfig } from "./config.js";
 import type { ToolSpec } from "./contract.js";
 import { startTelemetry } from "./telemetry.js";
+import { loadEngineConfig } from "./tool-env.js";
 
 const specFile = new URL("../contract.json", import.meta.url);
 const spec = JSON.parse(readFileSync(specFile, "utf8")) as ToolSpec;
 const config = loadConfig();
+const engineConfig = loadEngineConfig();
 const stopTelemetry = await startTelemetry(config);
 const [{ createApp }, { createHandlers }] = await Promise.all([
   import("./app.js"),
   import("./handlers/index.js"),
 ]);
-const app = createApp({ spec, config, handlers: createHandlers(spec) });
+const app = createApp({ spec, config, handlers: createHandlers(spec, engineConfig) });
 app.addHook("onClose", async () => stopTelemetry());
 
 let shutdown: Promise<void> | undefined;

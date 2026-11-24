@@ -100,7 +100,7 @@ singleFlight:
 
 tools:
   engine-query:
-    keyVersion: 2
+    keyVersion: 3
     operations:
       listEngines: {ttl: PT5M, scope: shared}                   # DEFAULT
       queryEngine:

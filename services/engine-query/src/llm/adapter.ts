@@ -12,17 +12,18 @@ import { ToolProblem } from "../errors.js";
 import type { Engine } from "./catalog.js";
 import { llmEnvProperties } from "./env.js";
 import { retryAfter } from "./retry-after.js";
-import { answerUsage } from "./usage.js";
+import { answerUsage, type EngineResponse } from "./usage.js";
 
 type LlmEnv = {
   LLM_MODE: "live" | "mock" | "record";
   OPENAI_API_KEY?: string;
+  XAI_API_KEY?: string;
 };
 
 export const providerTimeoutMs = 110_000;
-const endpoint = "https://api.openai.com/v1";
+const endpoints = { openai: "https://api.openai.com/v1", xai: "https://api.x.ai/v1" };
 
-function responsesRequest(model: string, prompt: string, locale: string, country: string) {
+function chatGptRequest(model: string, prompt: string, locale: string, country: string) {
   return {
     model,
     instructions:
@@ -47,18 +48,46 @@ function responsesRequest(model: string, prompt: string, locale: string, country
   } satisfies ResponseCreateParamsNonStreaming;
 }
 
-export function fixtureKey(model: string, prompt: string, locale: string, country: string) {
+function grokRequest(model: string, prompt: string, locale: string, country: string) {
+  return {
+    model,
+    input: [
+      {
+        role: "system",
+        content: `Use hosted web search before answering. Answer concisely in Markdown in ${locale}. Prefer sources relevant to country ${country}.`,
+      },
+      { role: "user", content: prompt },
+    ],
+    tools: [{ type: "web_search" }],
+    tool_choice: "required",
+    parallel_tool_calls: false,
+    max_turns: 2,
+    reasoning: { effort: "low" },
+    max_output_tokens: 2_048,
+    stream: false,
+    store: false,
+    service_tier: "default",
+  } satisfies ResponseCreateParamsNonStreaming & { max_turns: number };
+}
+
+function requestFor(entry: Engine, prompt: string, locale: string, country: string) {
+  const { model, provider } = entry.engine;
+  const request = provider === "xai" ? grokRequest : chatGptRequest;
+  return request(model, prompt, locale, country);
+}
+
+export function fixtureKey(entry: Engine, prompt: string, locale: string, country: string) {
   return createHash("sha256")
     .update(
       JSON.stringify({
-        endpoint: endpoint + "/responses",
-        request: responsesRequest(model, prompt, locale, country),
+        endpoint: endpoints[entry.engine.provider] + "/responses",
+        request: requestFor(entry, prompt, locale, country),
       }),
     )
     .digest("hex");
 }
 
-function answerParts(result: Response, model: string): TextPart[] {
+function answerParts(result: Response, { engine: { model, provider } }: Engine): TextPart[] {
   if (result.model !== model) throw new Error("Unexpected provider model");
   if (result.status !== "completed" || result.error || result.incomplete_details)
     throw new Error("Provider response did not complete");
@@ -78,12 +107,25 @@ function answerParts(result: Response, model: string): TextPart[] {
       throw new Error("Provider answer was refused or incomplete");
     return item.content.filter((part) => part.type === "output_text");
   });
-  if (parts.some((part) => typeof part.text !== "string" || !Array.isArray(part.annotations)))
+  if (
+    parts.some(
+      (part) =>
+        typeof part.text !== "string" ||
+        ((provider !== "xai" || part.annotations !== undefined) &&
+          !Array.isArray(part.annotations)),
+    )
+  )
     throw new Error("Invalid provider text part");
   if (!parts.some((part) => part.text.trim())) throw new Error("Provider answer was blank");
   return parts.map(({ text, annotations }) => ({
     text,
-    annotations: annotations.filter((item) => item?.type === "url_citation"),
+    annotations: (annotations ?? [])
+      .filter((item) => item?.type === "url_citation")
+      .map((item) =>
+        provider === "xai" && typeof item.title === "string" && /^\d+$/.test(item.title.trim())
+          ? { ...item, title: "" }
+          : item,
+      ),
   }));
 }
 
@@ -135,29 +177,44 @@ export function createLlm({
     },
   });
 
-  return async (entry: Engine, prompt: string, locale: string, country: string) => {
-    const { model } = entry.engine;
-    const file = join(fixtureDir, fixtureKey(model, prompt, locale, country) + ".json");
+  return async (
+    entry: Engine,
+    prompt: string,
+    locale: string,
+    country: string,
+    warn?: (message: string) => void,
+  ) => {
+    const { provider } = entry.engine;
+    const file = join(fixtureDir, fixtureKey(entry, prompt, locale, country) + ".json");
     try {
-      let result: Response;
+      let result: EngineResponse;
       if (env.LLM_MODE === "mock") {
-        result = JSON.parse(await readFile(file, "utf8")) as Response;
+        result = JSON.parse(await readFile(file, "utf8")) as EngineResponse;
       } else {
-        if (!env.OPENAI_API_KEY) throw new Error("Missing provider credential");
+        const apiKey = provider === "xai" ? env.XAI_API_KEY : env.OPENAI_API_KEY;
+        if (!apiKey) throw new Error("Missing provider credential");
         const client = new OpenAI({
-          apiKey: env.OPENAI_API_KEY,
-          baseURL: endpoint,
+          apiKey,
+          baseURL: endpoints[provider],
           maxRetries: 0,
           fetch,
+          ...(provider === "xai"
+            ? {
+                organization: null,
+                project: null,
+                fetchOptions: { redirect: "error" as const },
+              }
+            : {}),
         });
-        result = await client.responses.create(responsesRequest(model, prompt, locale, country), {
+        result = await client.responses.create(requestFor(entry, prompt, locale, country), {
           signal: AbortSignal.timeout(providerTimeoutMs),
           timeout: providerTimeoutMs,
+          ...(provider === "xai" ? { headers: { Authorization: `Bearer ${apiKey}` } } : {}),
         });
       }
 
-      const usage = answerUsage(result, entry);
-      const parts = answerParts(result, model);
+      const usage = answerUsage(result, entry, warn);
+      const parts = answerParts(result, entry);
       if (env.LLM_MODE === "record") await record(fixtureDir, file, result);
       return { parts, usage };
     } catch (error) {

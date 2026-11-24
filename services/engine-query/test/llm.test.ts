@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { createLlm, fixtureKey } from "../src/llm/adapter.js";
 import { deployment } from "../src/llm/catalog.js";
 
-const entry = deployment[0];
+const entry = deployment(false)[0];
 const { model } = entry.engine;
 const prompt = "What is the Discovery Pass?";
 
@@ -30,8 +30,8 @@ test("mock mode replays synthetic Responses output without credentials or transp
 });
 
 test("fixture keys distinguish prompt whitespace, locale and search country", () => {
-  const key = fixtureKey(model, prompt, "en-US", "US");
-  expect(fixtureKey(model, prompt.replace("the ", "the  "), "en-US", "US")).not.toBe(key);
-  expect(fixtureKey(model, prompt, "fr-CA", "US")).not.toBe(key);
-  expect(fixtureKey(model, prompt, "en-US", "CA")).not.toBe(key);
+  const key = fixtureKey(entry, prompt, "en-US", "US");
+  expect(fixtureKey(entry, prompt.replace("the ", "the  "), "en-US", "US")).not.toBe(key);
+  expect(fixtureKey(entry, prompt, "fr-CA", "US")).not.toBe(key);
+  expect(fixtureKey(entry, prompt, "en-US", "CA")).not.toBe(key);
 });
