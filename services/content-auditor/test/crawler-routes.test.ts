@@ -166,11 +166,56 @@ test("preserves known groups when a group hits its cutoff and repeats identicall
   });
 });
 
+const longAllow = "Allow: /" + "x".repeat(1_800);
+
+test("evaluates one shared rule set for all 16 named crawlers", async () => {
+  const content = [
+    ...crawlers.map(({ robotsToken }) => "User-agent: " + robotsToken),
+    "Disallow: /",
+    longAllow,
+  ].join("\n");
+  const result = await check(content);
+  expect(result.crawlers).toHaveLength(16);
+  expect(
+    Object.fromEntries(
+      Object.entries(Object.groupBy(result.crawlers, ({ access }) => access)).map(
+        ([access, matches]) => [access, matches?.length],
+      ),
+    ),
+  ).toEqual({ disallowed: 16 });
+  expect(result.crawlers.map(({ matchedGroup }) => matchedGroup)).toEqual(
+    crawlers.map(({ robotsToken }) => robotsToken),
+  );
+});
+
+test("compares full rule sets after merging repeated named groups", async () => {
+  const content =
+    crawlers
+      .map(({ robotsToken }, index) => {
+        const agent = "User-agent: " + robotsToken;
+        return index % 2 === 0
+          ? [agent, longAllow, agent, "Disallow: /"].join("\n")
+          : [agent, "Disallow: /", longAllow].join("\n");
+      })
+      .join("\n") + "\nUser-agent: GPTBot\nAllow: /";
+  const result = await check(content);
+  expect(result.crawlers.map(({ access, matchedGroup }) => ({ access, matchedGroup }))).toEqual(
+    crawlers.map(({ id, robotsToken }) => ({
+      access: id === "gptbot" ? "allowed" : "disallowed",
+      matchedGroup: robotsToken,
+    })),
+  );
+});
+
 test("limits aggregate work across distinct selected groups", async () => {
   const content = crawlers
     .map(
-      ({ robotsToken }) =>
-        "User-agent: " + robotsToken + "\nDisallow: /\nAllow: /" + "x".repeat(1_800),
+      ({ robotsToken }, index) =>
+        "User-agent: " +
+        robotsToken +
+        "\nDisallow: /\nAllow: /" +
+        "x".repeat(1_798) +
+        String(index).padStart(2, "0"),
     )
     .join("\n");
   const first = await check(content);

@@ -52,10 +52,9 @@ export function checkCrawlerAccess(
       const token = crawler.robotsToken.toLowerCase();
       const group = groups.has(token) ? token : groups.has("*") ? "*" : null;
       if (group === null) return { ...crawler, access: "allowed", matchedGroup: null };
-      const rules = groups.get(group)!;
-      const access =
-        results.get(group) ?? (rules.hasDisallow ? evaluate(rules.segments) : "allowed");
-      results.set(group, access);
+      const { key, rules, hasDisallow } = groups.get(group)!;
+      const access = results.get(key) ?? (hasDisallow ? evaluate(rules) : "allowed");
+      results.set(key, access);
       return { ...crawler, access, matchedGroup: group === "*" ? "*" : crawler.robotsToken };
     }),
   };

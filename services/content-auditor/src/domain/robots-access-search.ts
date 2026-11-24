@@ -8,7 +8,7 @@ const requestLimit = 250_000;
 
 export function createGroupEvaluator(origin: string) {
   let remaining = requestLimit;
-  return (segments: readonly Rule[][]): Access => {
+  return (rules: readonly Rule[]): Access => {
     let groupRemaining = groupLimit;
     const spend: Spend = (units) => {
       if (units > groupRemaining || units > remaining) throw exhausted;
@@ -16,7 +16,7 @@ export function createGroupEvaluator(origin: string) {
       remaining -= units;
     };
     try {
-      return evaluate(origin, segments, spend);
+      return evaluate(origin, rules, spend);
     } catch (error) {
       if (error !== exhausted) throw error;
       return "unknown";
@@ -36,20 +36,18 @@ function normalize(pattern: string): string {
   }
 }
 
-function evaluate(origin: string, segments: readonly Rule[][], spend: Spend): Access {
+function evaluate(origin: string, selected: readonly Rule[], spend: Spend): Access {
   const rules: Rule[] = [];
   const source = ["User-agent: *\n"];
   let matchWidth = 0;
-  for (const segment of segments) {
-    spend(1);
-    for (const { pattern, allow } of segment) {
-      // Reserve input and worst-case percent encoding before normalizing.
-      spend(1 + 10 * pattern.length);
-      const normalized = normalize(pattern);
-      matchWidth += normalized.length + 1;
-      rules.push({ pattern: normalized, allow });
-      source.push((allow ? "Allow: " : "Disallow: ") + pattern + "\n");
-    }
+  spend(1);
+  for (const { pattern, allow } of selected) {
+    // Reserve input and worst-case percent encoding before normalizing.
+    spend(1 + 10 * pattern.length);
+    const normalized = normalize(pattern);
+    matchWidth += normalized.length + 1;
+    rules.push({ pattern: normalized, allow });
+    source.push((allow ? "Allow: " : "Disallow: ") + pattern + "\n");
   }
   // Only parse the selected group's projection. The parser's per-character
   // matcher can visit each candidate offset for every pattern character.

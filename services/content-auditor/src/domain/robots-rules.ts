@@ -13,17 +13,16 @@ export function readableRobots(status: number | null, content: string | null): c
 }
 
 export type Rule = { pattern: string; allow: boolean };
-type RuleGroup = { segments: Rule[][]; hasDisallow: boolean };
+type RuleGroup = { rules: Rule[]; hasDisallow: boolean; key: string };
 
-// Mirror the group registration in robots-parser 3.0.1. Keep each segment's rules
-// once, even when many agents share it. Expand only a selected group, under budget.
+type GroupMembership = { ids: number[]; rules: Rule[]; hasDisallow: boolean };
+
 export function scanGroups(content: string, tokens: readonly string[]): Map<string, RuleGroup> {
   const tracked = new Set(["*", ...tokens.map((token) => token.toLowerCase())]);
-  const groups = new Map<string, RuleGroup>();
+  const groups = new Map<string, GroupMembership>();
+  const directives = new Map<string, { rule: Rule; groups: Set<GroupMembership> }>();
   let agents = new Set<string>();
   let lastWasAgent = false;
-  let segment: Rule[] | undefined;
-  let segmentHasDisallow = false;
   for (const line of content.split(/\r\n|\r|\n/u)) {
     const comment = line.indexOf("#");
     const directive = comment < 0 ? line : line.slice(0, comment);
@@ -32,11 +31,7 @@ export function scanGroups(content: string, tokens: readonly string[]): Map<stri
     const name = directive.slice(0, colon).trim().toLowerCase();
     if (!name) continue;
     if (name === "user-agent") {
-      if (!lastWasAgent) {
-        agents = new Set();
-        segment = undefined;
-        segmentHasDisallow = false;
-      }
+      if (!lastWasAgent) agents = new Set();
       const token = directive
         .slice(colon + 1)
         .split("/", 1)[0]
@@ -44,27 +39,45 @@ export function scanGroups(content: string, tokens: readonly string[]): Map<stri
         .toLowerCase();
       if (tracked.has(token)) agents.add(token);
     } else if (agents.size && (name === "allow" || name === "disallow" || name === "crawl-delay")) {
-      if (!segment) {
-        segment = [];
-        for (const agent of agents) {
-          if (!groups.has(agent)) groups.set(agent, { segments: [], hasDisallow: false });
+      // Empty rules and Crawl-delay register a group in the pinned parser.
+      const pattern = name === "crawl-delay" ? "" : directive.slice(colon + 1).trim();
+      let entry;
+      if (pattern) {
+        const allow = name === "allow";
+        const key = (allow ? "+" : "-") + pattern;
+        entry = directives.get(key);
+        if (!entry) {
+          entry = { rule: { pattern, allow }, groups: new Set<GroupMembership>() };
+          directives.set(key, entry);
         }
       }
-      if (name !== "crawl-delay") {
-        const pattern = directive.slice(colon + 1).trim();
-        if (pattern) {
-          if (segment.length === 0) {
-            for (const agent of agents) groups.get(agent)!.segments.push(segment);
-          }
-          if (name === "disallow" && !segmentHasDisallow) {
-            segmentHasDisallow = true;
-            for (const agent of agents) groups.get(agent)!.hasDisallow = true;
-          }
-          segment.push({ pattern, allow: name === "allow" });
+      for (const agent of agents) {
+        let group = groups.get(agent);
+        if (!group) {
+          group = { ids: [], rules: [], hasDisallow: false };
+          groups.set(agent, group);
+        }
+        if (entry && !entry.groups.has(group)) {
+          entry.groups.add(group);
+          group.rules.push(entry.rule);
+          if (!entry.rule.allow) group.hasDisallow = true;
         }
       }
     }
     lastWasAgent = name === "user-agent";
   }
-  return groups;
+
+  // Build ordered identities in one pass over the distinct directives. Repeated
+  // groups contribute to the same set. Each rule's pattern is stored only once.
+  let id = 0;
+  for (const { groups: members } of directives.values()) {
+    for (const group of members) group.ids.push(id);
+    id++;
+  }
+  return new Map(
+    [...groups].map(([agent, { ids, rules, hasDisallow }]) => [
+      agent,
+      { key: ids.join(","), rules, hasDisallow },
+    ]),
+  );
 }
