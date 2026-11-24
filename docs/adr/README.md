@@ -67,8 +67,8 @@ that both Python validators missed the large-workload gate and keeps the Python 
 Jay accepted [ADR 0035](0035-answer-analysis-language.md) on 2026-11-24, selecting
 TypeScript for answer-analysis under the fallback in ADR 0024.
 
-[ADR 0036](0036-answer-analysis-body-limit.md) was proposed on 2026-11-24. It
-records the 3 MiB request body ceiling and validation gate for answer-analysis.
+Jay accepted [ADR 0036](0036-answer-analysis-body-limit.md) on 2026-11-24. It sets
+the 3 MiB request body ceiling and validation gate for answer-analysis at scaffolding.
 
 | ADR | Title | Status |
 |---|---|---|
@@ -107,6 +107,6 @@ records the 3 MiB request body ceiling and validation gate for answer-analysis.
 | [0033](0033-citation-extractor-body-limit.md) | Set the citation-extractor request body limit to 4 MiB | Accepted |
 | [0034](0034-python-validation-spike.md) | Evaluate Python request validation against the vendored OpenAPI contract | Accepted |
 | [0035](0035-answer-analysis-language.md) | Use TypeScript for answer-analysis | Accepted |
-| [0036](0036-answer-analysis-body-limit.md) | Set the answer-analysis request body limit to 3 MiB | Proposed |
+| [0036](0036-answer-analysis-body-limit.md) | Set the answer-analysis request body limit to 3 MiB | Accepted |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.

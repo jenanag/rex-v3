@@ -52,7 +52,8 @@ Jay accepted [ADR 0034](docs/adr/0034-python-validation-spike.md) on 2026-11-24.
 Both Python validators missed the large-workload budget. The Python bring-up remains paused.
 Jay accepted [ADR 0035](docs/adr/0035-answer-analysis-language.md) on 2026-11-24,
 selecting TypeScript for answer-analysis.
-[ADR 0036](docs/adr/0036-answer-analysis-body-limit.md) is Proposed for its request body limit.
+Jay accepted [ADR 0036](docs/adr/0036-answer-analysis-body-limit.md) on 2026-11-24,
+setting the 3 MiB request body ceiling for answer-analysis at scaffolding.
 Phase 2 builds the tools one at a time, before the platform. Open choices are tracked as
 [deferred decisions](docs/roadmap.md#deferred-decisions).
 

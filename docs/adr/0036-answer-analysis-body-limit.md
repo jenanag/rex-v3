@@ -1,6 +1,6 @@
 # 0036: Set the answer-analysis request body limit to 3 MiB
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-24, accepted by Jay)
 - **Date:** 2026-11-24
 - **Deciders:** Jay Pascual
 
