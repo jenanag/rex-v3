@@ -26,6 +26,7 @@ function stubFetch() {
 test("calls Chat Completions once and prices each token once, rounding only the total", async () => {
   const fetch = stubFetch().mockImplementation(async () =>
     Response.json({
+      model,
       choices: [{ message: { content: '{"description":"Synthetic."}' } }],
       usage: {
         prompt_tokens: 100,
@@ -62,6 +63,7 @@ test("calls Chat Completions once and prices each token once, rounding only the 
 test("preserves valid low token counts when the provider returns no text", async () => {
   const fetch = stubFetch().mockImplementation(async () =>
     Response.json({
+      model,
       choices: [],
       usage: {
         prompt_tokens: 47,
@@ -120,6 +122,7 @@ test("aborts a pending request at the provider timeout without retrying", async 
 test("rejects an inconsistent provider usage split", async () => {
   const fetch = stubFetch().mockImplementation(async () =>
     Response.json({
+      model,
       choices: [],
       usage: {
         prompt_tokens: 2,

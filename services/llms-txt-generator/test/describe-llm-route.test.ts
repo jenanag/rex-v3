@@ -63,6 +63,41 @@ test.each([{}, { summarizer: "llm", model }])(
   },
 );
 
+test.each([
+  ["matching", "gpt-6-luna", 200],
+  ["unexpected", "different-model", 503],
+  ["missing", undefined, 503],
+] as const)(
+  "checks a %s provider model before using the completion",
+  async (_case, returnedModel, status) => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () =>
+      Response.json({
+        model: returnedModel,
+        choices: [{ message: { content: '{"description":"Install the module."}' } }],
+        usage: {
+          prompt_tokens: 100,
+          completion_tokens: 10,
+          prompt_tokens_details: { cached_tokens: 30, cache_write_tokens: 20 },
+        },
+      }),
+    );
+    vi.stubGlobal("fetch", fetch);
+    const { result } = await post({ ...base, model }, status, provider);
+    expect(fetch).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toMatchObject({ model: "gpt-6-luna" });
+    if (status === 200) {
+      expect(result).toEqual({
+        entry: { url: base.url, title: "Setup Guide", description: "Install the module." },
+        usage: [usage],
+      });
+    } else {
+      expect(result).toMatchObject({ status: 503, code: "provider_unavailable" });
+      expect(result).not.toHaveProperty("usage");
+      expect(result).not.toHaveProperty("entry");
+    }
+  },
+);
+
 test("validates the deployment default without credentials", () => {
   expect(loadConfig({ NODE_ENV: "test" }).LLMS_TXT_GENERATOR_DEFAULT_MODEL).toBe(model);
   expect(

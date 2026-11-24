@@ -91,8 +91,10 @@ export interface paths {
          *     Fit the operation within two minutes. Expect a JSON object containing only `description`, a
          *     string or null. Apply the same normalization, sentence and character limits.
          *     For an unusable completion with valid usage, return the extractive description
-         *     (or null) and retain the usage item. Provider failures return HTTP 503 with
-         *     Problem code `provider_unavailable` and forward a valid upstream Retry-After.
+         *     (or null) and retain the usage item. A live OpenAI completion must report
+         *     the selected model before its output or usage can be used. A missing or
+         *     unexpected model is a provider failure. Provider failures return HTTP 503
+         *     with Problem code `provider_unavailable` and forward a valid upstream Retry-After.
          */
         post: operations["describePage"];
         delete?: never;

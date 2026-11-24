@@ -20,9 +20,13 @@ files using content supplied by the caller ([ADR 0023](../adr/0023-llms-txt-pipe
   source it skips the call. Unusable output falls back to the extractive result while
   preserving the call's usage. The sole initial allowed model and the default for
   `LLMS_TXT_GENERATOR_DEFAULT_MODEL` are `openai/gpt-6-luna`.
+  A matching OpenAI model ID is required before the tool uses a provider
+  completion. A missing or unexpected ID returns HTTP 503 without usage.
   [ADR 0017](../adr/0017-deterministic-first-analysis.md).
 - [Accepted ADR 0040](../adr/0040-llm-model-and-analyzer-cache-eligibility.md)
   defines the caller model pin and page-entry key rules for follow-up work.
+  Provider identity checks use cache key version 6. The later ADR 0040
+  page-entry key changes will bump it from 6 to 7.
 - `generateLlmsTxt` assembles `llms.txt` (and optionally `llms-full.txt`) from the
   entries in input order. The full file quotes supplied page Markdown and truncates
   at a page boundary with a closing notice. See the source contract for formatting
@@ -50,7 +54,7 @@ sitemap-extractor and extracts them through the content-extractor
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `5`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `6`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
@@ -99,6 +103,8 @@ starts and stops a standalone service in `LLM_MODE=mock` and checks both
 `describePage` modes over loopback. The LLM case replays the GPT-6 Luna completion and
 token counts recorded for the synthetic setup page. The tool-local catalog uses
 [published OpenAI standard rates](https://developers.openai.com/api/docs/models/gpt-6-luna#pricing).
+The replay fixture retains its original format. Offline provider stubs test
+the returned model ID check.
 
 ## Shared schemas
 

@@ -162,6 +162,8 @@ async function generate(
     },
     { signal, timeout: timeoutMs },
   );
+  if (provider === "openai" && reply.model !== model) throw new Error("Unexpected provider model");
+
   requireStandardTier(request, reply.service_tier);
   const choice = reply.choices?.[0];
   const tokens = reply.usage;

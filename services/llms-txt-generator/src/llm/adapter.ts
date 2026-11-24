@@ -137,6 +137,8 @@ async function generate(env: LlmEnv, request: LlmRequest): Promise<Completion> {
     },
     { signal, timeout: timeoutMs },
   );
+  if (provider === "openai" && reply.model !== model) throw new Error("Unexpected provider model");
+
   const content = reply.choices?.[0]?.message?.content;
   return completion({
     text: typeof content === "string" ? content : "",
