@@ -1,4 +1,5 @@
 import type { components } from "../../contract/types.js";
+import { luna, type LunaVerdict } from "../llm/luna.js";
 import { packs } from "../lexicons/index.js";
 import { clauses, coveredBy, words } from "./context.js";
 import { findMentionOccurrences } from "./mentions.js";
@@ -13,20 +14,18 @@ const descriptions = {
   "det:rules":
     "Scores English comparison and recommendation patterns with explicit brand mentions.",
 };
-type AnalyzerId = keyof typeof descriptions;
+type DeterministicId = keyof typeof descriptions;
 const languages = [...packs.keys()];
 
-export function listAnalyzers(): Schemas["Analyzer"][] {
-  return Object.entries(descriptions).map(([id, description]) => ({
+export function listAnalyzers(lunaEnabled = false): Schemas["Analyzer"][] {
+  const catalog: Schemas["Analyzer"][] = Object.entries(descriptions).map(([id, description]) => ({
     id,
     kind: "deterministic",
     languages,
     description,
   }));
-}
-
-export function isAdvertised(id: string): id is AnalyzerId {
-  return Object.hasOwn(descriptions, id);
+  if (lunaEnabled) catalog.push(luna);
+  return catalog;
 }
 
 function resolveLanguage(
@@ -57,10 +56,11 @@ function resolveLanguage(
 }
 
 function agreement(results: AnalyzerSentiment[]): Schemas["SentimentAgreement"] | null {
-  const scores = results.flatMap(({ score }) => (score === null ? [] : [score]));
+  const successful = results.filter(({ status }) => status === "ok");
+  const scores = successful.flatMap(({ score }) => (score === null ? [] : [score]));
   if (scores.length < 2) return null;
   const counts = new Map<NonNullable<AnalyzerSentiment["label"]>, number>();
-  for (const { label } of results)
+  for (const { label } of successful)
     if (label !== null) counts.set(label, (counts.get(label) ?? 0) + 1);
   const agreeingCount = Math.max(...counts.values());
   const leaders = [...counts].filter(([, count]) => count === agreeingCount);
@@ -74,79 +74,102 @@ function agreement(results: AnalyzerSentiment[]): Schemas["SentimentAgreement"] 
 }
 
 type Options = {
-  analyzers: AnalyzerId[];
+  analyzers: Schemas["Analyzer"][];
   primary?: string;
   language?: string;
   onUnsupportedLanguage: "fallback" | "error";
 };
 
-export function analyze(
+type LunaOutcome = { verdicts?: ReadonlyMap<string, LunaVerdict>; usage?: Schemas["LlmUsage"] };
+
+export function prepareAnalysis(
   { text, brands }: Pick<Schemas["AnswerAnalysisRequest"], "text" | "brands">,
   options: Options,
-):
-  | { result: Schemas["AnswerAnalysis"] }
-  | { unsupported: { index: number; language: string | null } } {
+) {
   const found = findMentionOccurrences(text, brands);
   const occurrences = found
     .flatMap(({ mention, spans }) => spans.map((span) => ({ ...span, brandKey: mention.brandKey })))
     .sort((a, b) => a.start - b.start);
   const covered = coveredBy(occurrences);
   const language = resolveLanguage(text, options.language, covered);
-  const pack = language.language
-    ? packs.get(language.language.split("-")[0].toLowerCase())
-    : undefined;
-  const supported = new Set(options.analyzers.filter(() => pack !== undefined));
-  const unsupportedIndex = options.analyzers.findIndex((id) => !supported.has(id));
+  const subtag = language.language?.split("-")[0].toLowerCase();
+  const pack = subtag ? packs.get(subtag) : undefined;
+  const supported = options.analyzers.filter(
+    ({ languages }) =>
+      languages.includes("*") || (subtag !== undefined && languages.includes(subtag)),
+  );
+  const unsupportedIndex = options.analyzers.findIndex((analyzer) => !supported.includes(analyzer));
   if (unsupportedIndex !== -1 && options.onUnsupportedLanguage === "error")
-    return { unsupported: { index: unsupportedIndex, language: language.language } };
+    return { unsupported: { index: unsupportedIndex, language: language.language } } as const;
 
-  // All advertised analyzers are deterministic and share the pack registry.
-  const firstSupported = options.analyzers.find((id) => supported.has(id));
   const requested = options.primary;
-  const primary =
-    requested && isAdvertised(requested) && supported.has(requested) ? requested : firstSupported;
-  const analyzers: AnalyzerRun[] = options.analyzers.map((analyzer) => ({
-    analyzer,
-    kind: "deterministic",
-    status: supported.has(analyzer) ? "ok" : "unsupported",
-    primary: analyzer === primary,
-  }));
-  const results = new Map(options.analyzers.map((id) => [id, new Map() as Contributions] as const));
-  if (pack && options.analyzers.length && occurrences.length) {
+  const preferred =
+    requested === undefined
+      ? supported.find(({ kind }) => kind === "deterministic")
+      : supported.find(({ id }) => id === requested);
+  const primary = preferred ?? supported[0];
+  const deterministic = supported
+    .filter(({ kind }) => kind === "deterministic")
+    .map(({ id }) => id as DeterministicId);
+  const needsLuna = found.length > 0 && supported.some(({ id }) => id === luna.id);
+
+  const results = new Map<DeterministicId, Contributions>();
+  for (const id of deterministic) results.set(id, new Map());
+  if (pack && deterministic.length && occurrences.length) {
     const score = createScorers(text, pack);
     for (const clause of clauses(text, pack, occurrences, covered)) {
-      for (const id of options.analyzers) score[id](clause, results.get(id)!);
+      for (const id of deterministic) score[id](clause, results.get(id)!);
     }
   }
-  const mentions = found.map(({ mention }) => {
-    const sentimentByAnalyzer = options.analyzers.map((analyzer): AnalyzerSentiment =>
-      supported.has(analyzer)
-        ? {
-            analyzer,
-            status: "ok",
-            ...verdict(
-              results.get(analyzer)?.get(mention.brandKey),
-              analyzer === "det:lexicon" ? "No lexicon cues" : "No rule cues",
-            ),
-          }
-        : { analyzer, status: "unsupported", score: null, label: null },
-    );
-    const selected = sentimentByAnalyzer.find((entry) => entry.analyzer === primary);
+
+  function finish(lunaOutcome: LunaOutcome = {}): Schemas["AnswerAnalysis"] {
+    const analyzers: AnalyzerRun[] = options.analyzers.map((analyzer) => ({
+      analyzer: analyzer.id,
+      kind: analyzer.kind,
+      status: !supported.includes(analyzer)
+        ? "unsupported"
+        : analyzer.id === luna.id && needsLuna && !lunaOutcome.verdicts
+          ? "failed"
+          : "ok",
+      primary: analyzer === primary,
+    }));
+    const mentions = found.map(({ mention }) => {
+      const sentimentByAnalyzer = analyzers.map(({ analyzer, kind, status }): AnalyzerSentiment => {
+        if (status !== "ok") return { analyzer, status, score: null, label: null };
+        if (kind === "llm")
+          return { analyzer, status, ...lunaOutcome.verdicts!.get(mention.brandKey)! };
+        return {
+          analyzer,
+          status,
+          ...verdict(
+            results.get(analyzer as DeterministicId)?.get(mention.brandKey),
+            analyzer === "det:lexicon" ? "No lexicon cues" : "No rule cues",
+          ),
+        };
+      });
+      const selected = sentimentByAnalyzer.find((entry) => entry.analyzer === primary?.id);
+      return {
+        ...mention,
+        sentiment: selected?.label ?? null,
+        sentimentScore: selected?.score ?? null,
+        sentimentByAnalyzer,
+        agreement: agreement(sentimentByAnalyzer),
+      };
+    });
     return {
-      ...mention,
-      sentiment: selected?.label ?? null,
-      sentimentScore: selected?.score ?? null,
-      sentimentByAnalyzer,
-      agreement: agreement(sentimentByAnalyzer),
-    };
-  });
-  return {
-    result: {
       ...language,
-      primaryFallback: requested !== undefined && primary !== undefined && primary !== requested,
+      primaryFallback: requested !== undefined && primary !== undefined && primary.id !== requested,
       analyzers,
       mentions,
-      usage: [],
-    },
-  };
+      usage: lunaOutcome.usage ? [lunaOutcome.usage] : [],
+    };
+  }
+
+  return {
+    found,
+    language: language.language,
+    needsLuna,
+    lunaIsPrimary: primary?.id === luna.id,
+    finish,
+  } as const;
 }

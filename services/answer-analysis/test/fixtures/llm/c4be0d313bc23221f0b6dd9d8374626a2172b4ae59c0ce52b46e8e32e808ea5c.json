@@ -1,0 +1,10 @@
+{
+  "text": "{\"results\":[{\"brandKey\":\"b01\",\"label\":\"positive\",\"score\":0.7,\"rationale\":\"Acme is explicitly described as better than Beta.\"},{\"brandKey\":\"b02\",\"label\":\"negative\",\"score\":-0.7,\"rationale\":\"Beta is explicitly described as worse than Acme.\"}]}",
+  "inputTokens": 261,
+  "outputTokens": 74,
+  "cachedInputTokens": 0,
+  "cacheWriteTokens": 0,
+  "finishReason": "stop",
+  "serviceTier": "default",
+  "refused": false
+}

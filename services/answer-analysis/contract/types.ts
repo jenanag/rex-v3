@@ -74,17 +74,27 @@ export interface paths {
         put?: never;
         /**
          * Detect brand mentions and position, and classify sentiment with one or more analyzers
-         * @description Synchronous. The initial deployment offers the offline English analyzers
-         *     `det:lexicon` and `det:rules`. Their results follow request order, use the
-         *     same accepted brand occurrences, and return empty `usage`. Omitted
-         *     `sentiment` uses the same defaults as an empty object. An explicit empty
-         *     `analyzers` list disables sentiment but still resolves the language.
+         * @description Synchronous. Results follow request order and use the same deterministic
+         *     brand mentions. Omitted `sentiment` defaults to `det:lexicon`; an explicit
+         *     empty `analyzers` list disables sentiment but still resolves the language.
+         *     In enabled deployments, select `llm:openai/gpt-6-luna` explicitly to run
+         *     one batched call for the mentioned brands. If none are mentioned the
+         *     tool makes no call and returns empty mentions and usage.
+         *
+         *     A failed secondary LLM analyzer is reported as `failed` with null per-brand
+         *     scores and labels, excluded from agreement. HTTP 200 includes any valid
+         *     usage reported by the provider, including for unusable completions. A failed
+         *     effective primary returns the shared 503 `provider_unavailable` Problem
+         *     with a valid upstream Retry-After when available. Failure includes
+         *     a timeout, refusal, incomplete or invalid output, invalid usage, or an
+         *     explicitly reported tier other than Standard. The tool does not assign
+         *     Standard cost to a completion served on a different tier.
          *
          *     After transport and schema validation, semantic errors are checked in
          *     this order: `duplicate_brand_key` (exact duplicate key),
          *     `invalid_primary` (primary is not in the effective list),
-         *     `unsupported_analyzer` (ID is not advertised by `listAnalyzers`,
-         *     including LLM IDs in the initial deployment), and `unsupported_language`
+         *     `unsupported_analyzer` (ID is not advertised by `listAnalyzers`),
+         *     and `unsupported_language`
          *     (policy is `error` and an analyzer does not support the given or detected
          *     language). The 422 detail identifies the first offending field in
          *     request order and names supported languages for language errors.
@@ -154,7 +164,7 @@ export interface components {
             text: string;
         });
         /**
-         * @description `ok`; `unsupported` (the analyzer does not support the language); `failed` (provider error or timeout, LLM only).
+         * @description `ok`; `unsupported` (the analyzer does not support the language); `failed` (provider error, unusable completion, or invalid usage, LLM only).
          * @enum {string}
          */
         AnalyzerStatus: "ok" | "unsupported" | "failed";
@@ -390,7 +400,11 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Available analyzers, deterministic ones first. */
+            /**
+             * @description Available analyzers, deterministic ones first. Deployments with Luna
+             *     enabled advertise `llm:openai/gpt-6-luna` with kind `llm` and
+             *     language support `["*"]`, including undetermined language.
+             */
             200: {
                 headers: {
                     [name: string]: unknown;

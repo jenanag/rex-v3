@@ -639,7 +639,11 @@ test("answer analysis cache input preserves analyzer order and applies HTTP defa
   const { components } = parse(await readFile(join(root, answer), "utf8"));
   const { AnswerAnalysisRequest, AnswerAnalysisOptions, SentimentOptions } = components.schemas;
   const preserve = tools["answer-analysis"].operations.analyzeAnswer.preserveArrayOrder;
-  assert.equal(tools["answer-analysis"].keyVersion, 2);
+  assert.equal(tools["answer-analysis"].keyVersion, 3);
+  assert.deepEqual(tools["answer-analysis"].operations.analyzeAnswer.skipWhen, {
+    pointer: "/analyzers/*/status",
+    equals: "failed",
+  });
   assert.deepEqual(preserve, ["/sentiment/analyzers"]);
   assert.ok(
     key.canonicalInput.some(
@@ -703,4 +707,19 @@ test("answer analysis cache input preserves analyzer order and applies HTTP defa
     cacheInput({ analyzers: ["det:lexicon"], onUnsupportedLanguage: "fallback" }),
   );
   assert.notDeepEqual(cacheInput(), cacheInput({ analyzers: [] }));
+});
+
+test("answer-analysis environment docs follow the service schema", async (t) => {
+  const repo = await fixture(t);
+  const render = (...args: string[]) =>
+    repo.run("new-tool", "--render-tool-env", "answer-analysis", ...args);
+  await render("--check");
+  await repo.change(
+    answerDir + "/.env.example",
+    "ANSWER_ANALYSIS_LUNA_ENABLED=false",
+    "ANSWER_ANALYSIS_LUNA_ENABLED=true",
+  );
+  await assert.rejects(render("--check"), /generated environment docs are out of date/);
+  await render();
+  await render("--check");
 });

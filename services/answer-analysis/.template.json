@@ -13,7 +13,8 @@
       "sha256": "52c48f1b13c9ec45b4b69897741b24ce5f88f07fa341d97bc6b8c7f862f261da"
     },
     ".env.example": {
-      "sha256": "c70e5b5b612b33b3df185e68ee1f49e4864a09e3ea48cf79fba06815923070a9"
+      "sha256": "c70e5b5b612b33b3df185e68ee1f49e4864a09e3ea48cf79fba06815923070a9",
+      "owned": true
     },
     ".prettierrc": {
       "sha256": "6b380994ae171521d31a3e92447de7e80a8cfdff7ced1e4787a26ce98dcfe6ae"
@@ -62,13 +63,15 @@
       "owned": true
     },
     "src/llm/adapter.ts": {
-      "sha256": "5c500a5fc433b9745adbc6122b62e34f0787d3151e2185c3f59fd136e6a7a513"
+      "sha256": "5c500a5fc433b9745adbc6122b62e34f0787d3151e2185c3f59fd136e6a7a513",
+      "owned": true
     },
     "src/llm/env.ts": {
       "sha256": "17126c2c44df00b6d54d1f5fae4560df945ea16ff4e95a683726bc2533c1fff8"
     },
     "src/server.ts": {
-      "sha256": "8f7a9df23bf9cec7ae292fe3905e2b99272ade8211324ac9cf5a8413df43a0f0"
+      "sha256": "8f7a9df23bf9cec7ae292fe3905e2b99272ade8211324ac9cf5a8413df43a0f0",
+      "owned": true
     },
     "src/telemetry.ts": {
       "sha256": "5364e46b7dc42c8172ca35feb8d96b3669417b644b8863ba869223cd18cd370e"
@@ -83,7 +86,8 @@
       "sha256": "b4714782756c1ac09528a2c7c53611c5a7f28f5b7cd264d6830a48fb2522e9c8"
     },
     "test/support.ts": {
-      "sha256": "2541354cf437d7f2b88579ea50ab0bccf8e09aca04bbb97afa27ad0fad584f0e"
+      "sha256": "2541354cf437d7f2b88579ea50ab0bccf8e09aca04bbb97afa27ad0fad584f0e",
+      "owned": true
     },
     "tsconfig.build.json": {
       "sha256": "1ee531ddfe863deb84b64239434eb8f0e2b7bc4a279c2a6882d0d8fc0ddf461f"

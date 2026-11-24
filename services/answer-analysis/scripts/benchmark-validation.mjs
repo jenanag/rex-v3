@@ -4,7 +4,7 @@ import { cpus } from "node:os";
 import { performance } from "node:perf_hooks";
 import { createApp } from "../dist/src/app.js";
 import { loadConfig } from "../dist/src/config.js";
-import { handlers } from "../dist/src/handlers/index.js";
+import { createHandlers } from "../dist/src/handlers/index.js";
 
 const path = "/v1/answer-analyses";
 const expectedLimit = 3_145_728;
@@ -108,7 +108,9 @@ function measure(validate, parsed, name) {
 }
 
 const spec = JSON.parse(readFileSync(new URL("../dist/contract.json", import.meta.url), "utf8"));
-const app = createApp({ spec, config: loadConfig(), handlers, logs: false });
+const config = loadConfig();
+const handlers = createHandlers({ lunaEnabled: config.ANSWER_ANALYSIS_LUNA_ENABLED });
+const app = createApp({ spec, config, handlers, logs: false });
 let route;
 app.addHook("preHandler", async (request) => {
   if (request.routeOptions.config.operationId === "analyzeAnswer") {

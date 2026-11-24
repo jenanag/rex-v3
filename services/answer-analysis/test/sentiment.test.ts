@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { analyze } from "../src/domain/analysis.js";
+import { listAnalyzers, prepareAnalysis } from "../src/domain/analysis.js";
 
 const acme = {
   kind: "primary" as const,
@@ -11,12 +11,17 @@ const acme = {
 const beta = { ...acme, key: "beta", name: "Beta", aliases: [] };
 
 function run(text: string, analyzers: ("det:lexicon" | "det:rules")[], brands = [acme, beta]) {
-  const outcome = analyze(
+  const catalog = listAnalyzers();
+  const outcome = prepareAnalysis(
     { text, brands },
-    { analyzers, language: "en", onUnsupportedLanguage: "fallback" },
+    {
+      analyzers: analyzers.map((id) => catalog.find((entry) => entry.id === id)!),
+      language: "en",
+      onUnsupportedLanguage: "fallback",
+    },
   );
-  if (!("result" in outcome)) throw new Error("Expected successful English analysis");
-  return outcome.result.mentions;
+  if (!outcome.finish) throw new Error("Expected successful English analysis");
+  return outcome.finish().mentions;
 }
 
 test("lexicon handles conflicting cues, original occurrence spans, and cue-free mentions", () => {

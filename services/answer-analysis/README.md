@@ -27,7 +27,8 @@ the REx monorepo and re-vendor contract changes there.
 | `LOG_LEVEL` | info | Structured log level. |
 | `PROBLEM_BASE_URI` | https://problems.rex.invalid | Base URI for problem types. |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | unset | OTLP collector. Export is off when unset. |
-| `BODY_LIMIT_BYTES` | unset | Optional override of the Fastify request-body limit. |
+| `BODY_LIMIT_BYTES` | 3145728 | Optional override of the Fastify request-body limit. |
+| `ANSWER_ANALYSIS_LUNA_ENABLED` | false | Advertise and accept the opt-in GPT-6 Luna analyzer. |
 | `LLM_MODE` | unset | Mock by default in tests, live otherwise. |
 | `OPENAI_API_KEY` | unset | OpenAI credential for live or record mode. |
 | `ANTHROPIC_API_KEY` | unset | Anthropic credential for live or record mode. |
@@ -38,6 +39,9 @@ the REx monorepo and re-vendor contract changes there.
 
 Mock mode reads the generated completion fixture in `test/fixtures/llm/`.
 Normal startup applies a 3 MiB request body limit when `BODY_LIMIT_BYTES` is unset.
-The catalog advertises the two offline English analyzers. With the service
+Regenerate the environment example and table from the tool schema using
+`scripts/new-tool --render-tool-env answer-analysis` from the monorepo root.
+
+The catalog advertises the two offline English analyzers and Luna when enabled. With the service
 running, run `node scripts/smoke-analysis.mjs` to check both routes on loopback
 (set `PORT` if the service uses a different port).

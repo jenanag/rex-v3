@@ -1,6 +1,7 @@
 import { envSchema } from "env-schema";
 import { addFormats } from "./contract.js";
 import { envProperties } from "./env.js";
+import { toolEnvProperties } from "./tool-env.js";
 
 export interface Config {
   NODE_ENV: "development" | "test" | "production";
@@ -9,7 +10,8 @@ export interface Config {
   LOG_LEVEL: string;
   PROBLEM_BASE_URI: string;
   OTEL_EXPORTER_OTLP_ENDPOINT?: string;
-  BODY_LIMIT_BYTES?: number;
+  BODY_LIMIT_BYTES: number;
+  ANSWER_ANALYSIS_LUNA_ENABLED: boolean;
 }
 
 export function loadConfig(data: Record<string, unknown> = process.env) {
@@ -19,10 +21,7 @@ export function loadConfig(data: Record<string, unknown> = process.env) {
     ajv: { customOptions: (ajv) => addFormats(ajv) },
     schema: {
       type: "object",
-      properties: {
-        ...envProperties,
-        BODY_LIMIT_BYTES: { ...envProperties.BODY_LIMIT_BYTES, default: 3_145_728 },
-      },
+      properties: { ...envProperties, ...toolEnvProperties },
     },
   });
 }

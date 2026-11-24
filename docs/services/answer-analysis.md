@@ -30,7 +30,7 @@ Per [ADR 0017](../adr/0017-deterministic-first-analysis.md):
   - deterministic: `det:lexicon` (sentiment lexicon with negation and intensifier
     rules, scored within the clauses around each mention) and `det:rules` (comparative
     and recommendation patterns such as "better than", "avoid", "top pick");
-  - planned: `llm:<provider>/<model>`, one batched call per analyzer for all mentions.
+  - opt-in: `llm:openai/gpt-6-luna`, one batched call for the mentioned brands.
 - Each mention returns every analyzer's label, score and short rationale, plus an
   agreement summary; the `primary` analyzer fills `sentiment` and `sentimentScore`.
 - Deterministic analyzers report `unsupported` for languages they do not cover;
@@ -57,8 +57,9 @@ Per [ADR 0017](../adr/0017-deterministic-first-analysis.md):
 
 ## Languages and the lexicon registry
 
-- **Today:** English (`en`) for `det:lexicon` and `det:rules`. The catalog lists
-  these two analyzers, and deterministic calls return `usage: []`.
+- **Today:** English (`en`) for `det:lexicon` and `det:rules`. When enabled, Luna
+  advertises `["*"]`, including undetermined language. Deterministic calls
+  return `usage: []`.
 - **Language in and out:** `sentiment.language` (BCP 47, common.yaml `LanguageTag`)
   or, when omitted, deterministic detection from the text; the response reports
   `language` and `languageSource`. Matching uses the primary subtag (`en-GB` uses the
@@ -85,6 +86,54 @@ Per [ADR 0017](../adr/0017-deterministic-first-analysis.md):
      cached `unsupported` results for that language are not served.
   4. No contract change: `listAnalyzers` shows the new language automatically.
 
+## Luna opt-in
+
+The tool validates `ANSWER_ANALYSIS_LUNA_ENABLED` at startup and defaults it to
+`false`. Set it to `true` and configure `OPENAI_API_KEY` for the live deployment. Callers opt in with `sentiment.analyzers` containing
+`llm:openai/gpt-6-luna`. The omitted default is still `det:lexicon`.
+An answer without mentions makes no provider call.
+
+Each batch uses the accepted mention spans. Every mentioned brand gets a local
+ID and a first excerpt, then up to two distinct later excerpts in round-robin
+order. Each excerpt has at most 160 Unicode code points and carries the
+in-excerpt match offsets. The serialized provider request is limited to 64 KiB
+UTF-8, including the instructions and schema. Luna uses OpenAI Chat Completions
+with strict structured output, a 12,288-token completion cap, and a 60-second
+deadline with zero retries. The tool accepts one verdict per request-local ID,
+with a score in `[-1, 1]`, a consistent label, and a null rationale or at most
+120 Unicode code points. It checks the 48 KiB reply limit before parsing.
+
+The tool records one `classify_sentiment` usage item for valid reported counts,
+even when the batch fails. [OpenAI Standard short-context prices](https://developers.openai.com/api/docs/models/gpt-6-luna#pricing)
+per million tokens are $0.10 uncached input, $0.01 cached input, $0.125 cache writes,
+and $0.50 output. The tool prices each token once and rounds the total once.
+An explicitly reported tier other than `default` fails the analyzer and emits
+an operational diagnostic without pricing or reporting that call's usage.
+For a failed secondary, HTTP 200 includes available usage and marks Luna as
+`failed`; agreement counts only successful analyzers. For a failed primary,
+HTTP 503 uses the shared `provider_unavailable` Problem and forwards a valid
+upstream `Retry-After` when present. The service logs available usage to its
+restricted operational telemetry without prompt or completion text.
+
+### Recorded replay comparison
+
+Run `LLM_MODE=mock npm test -- test/luna.test.ts` from the tool folder.
+The replay fixture for the synthetic answer `Acme is better than Beta.` came
+from one authorized GPT-6 Luna call. The response gives Acme and Beta one
+mention each, in that order, with the full sentence as both snippets.
+
+| Brand | `det:lexicon` | `det:rules` | Luna (recorded) | Agreement |
+| --- | --- | --- | --- | --- |
+| Acme | neutral 0 | positive +0.75 | positive +0.70 | positive, 2 of 3, spread 0.75 |
+| Beta | neutral 0 | negative −0.75 | negative −0.70 | negative, 2 of 3, spread 0.75 |
+
+The effective primary is `det:lexicon`. The batch used the reported
+`default` (Standard) tier with 261 input tokens, zero cache reads and writes,
+and 74 output tokens. The recomputed batch cost is 63 microdollars. In this
+recording, the provider response took 3.84 seconds and the local HTTP route
+took 3.89 seconds. The separate synthetic pricing test covers cache reads
+and writes and yields 167 microdollars.
+
 ## Endpoints
 
 <!-- GENERATED:endpoints START (source: packages/contracts/openapi/services/answer-analysis.yaml) -->
@@ -98,7 +147,7 @@ Per [ADR 0017](../adr/0017-deterministic-first-analysis.md):
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `2`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `3`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
@@ -159,7 +208,5 @@ from the tool folder.
 
 ## Notes
 
-- When LLM analyzers ship, a failed LLM analyzer is reported with `status: failed` and the response is not
-  cached; if the primary analyzer fails the call answers 503 and the worker retries.
 - Brand matching itself (names and aliases) is language independent and runs for every
   language.
