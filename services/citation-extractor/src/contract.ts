@@ -23,6 +23,11 @@ export const addFormats = createRequire(import.meta.url)("ajv-formats") as Forma
 const schemasId = "urn:rex:tool:schemas";
 const schemaPrefix = "#/components/schemas/";
 
+// This subset of the pinned full URI format uses an ASCII reg-name authority
+// and an optional path made of unreserved characters and slash separators.
+// The absolute end check keeps controls and other suffixes on the full parser.
+const simpleHttpUri = /^https?:\/\/[-A-Za-z0-9.]+(?:\/[-A-Za-z0-9._~/]*)?(?![\s\S])/u;
+
 function rebaseRefs(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(rebaseRefs);
   if (!value || typeof value !== "object") return value;
@@ -46,6 +51,10 @@ export function validators(spec: ToolSpec, useDefaults: boolean) {
     useDefaults,
   });
   addFormats(ajv);
+  const fullUri = ajv.formats.uri;
+  if (typeof fullUri !== "function")
+    throw new Error("Expected the pinned ajv-formats URI validator");
+  ajv.addFormat("uri", (value: string) => simpleHttpUri.test(value) || fullUri(value));
   for (const keyword of ["example", "x-rex-service", "x-rex-public", "x-rex-limits"])
     ajv.addKeyword(keyword);
   ajv.addSchema({ $id: schemasId, $defs: rebaseRefs(spec.components?.schemas ?? {}) });
