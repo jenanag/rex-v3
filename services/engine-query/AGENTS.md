@@ -70,8 +70,8 @@ From `x-rex-limits` in the spec (single source); stay within them.
 
 - `listEngines`: internal (workers only); no max duration stated yet; no LLM; no
   outbound fetch.
-- `queryEngine`: internal (workers only); max duration PT120S; one LLM call; no outbound
-  fetch.
+- `queryEngine`: internal (workers only); max duration PT120S; one LLM call; each LLM
+  call up to PT110S; no outbound fetch.
 
 ## Packages
 
@@ -91,6 +91,8 @@ switches: `--llm`). Anything else needs Jay's approval first.
 - `openai`: LLM SDK (also Perplexity and xAI via `baseURL`) (--llm)
 - `@anthropic-ai/sdk`: LLM SDK (--llm)
 - `@google/genai`: LLM SDK (--llm)
+- `mdast-util-from-markdown`: CommonMark source positions for citation placement
+  (engine-query)
 
 ## Rules inside this folder
 

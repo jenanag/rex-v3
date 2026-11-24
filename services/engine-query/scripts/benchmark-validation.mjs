@@ -4,7 +4,7 @@ import { cpus } from "node:os";
 import { performance } from "node:perf_hooks";
 import { createApp } from "../dist/src/app.js";
 import { loadConfig } from "../dist/src/config.js";
-import { handlers } from "../dist/src/handlers/index.js";
+import { createHandlers } from "../dist/src/handlers/index.js";
 
 const path = "/v1/engine-answers";
 const expectedLimit = 1_048_576;
@@ -35,6 +35,8 @@ function measure(validate, parsed, name) {
     const valid = validate(body);
     const elapsed = performance.now() - start;
     assert.equal(valid, true, name + " must pass the registered validator");
+    assert.equal(body.locale, parsed.locale ?? "en-US");
+    assert.equal(body.country, parsed.country ?? "US");
     if (index >= warmups) timings.push(elapsed);
   }
   timings.sort((left, right) => left - right);
@@ -44,7 +46,7 @@ function measure(validate, parsed, name) {
 const spec = JSON.parse(readFileSync(new URL("../dist/contract.json", import.meta.url), "utf8"));
 const config = loadConfig();
 assert.equal(config.BODY_LIMIT_BYTES, undefined, "Run with BODY_LIMIT_BYTES unset");
-const app = createApp({ spec, config, handlers, logs: false });
+const app = createApp({ spec, config, handlers: createHandlers(spec), logs: false });
 let route;
 app.addHook("preHandler", async (request) => {
   if (request.routeOptions.config.operationId === "queryEngine") {
@@ -68,8 +70,8 @@ async function post(wire, status, code) {
 }
 
 try {
-  await post(workloads[0].wire, 501, "not_implemented");
-  assert.ok(route, "The representative request must reach the registered route");
+  await post(exact, 422, "unsupported_engine");
+  assert.ok(route, "The exact-limit request must reach the registered route");
   const { bodyLimit, validate } = route;
   assert.equal(typeof validate, "function");
   assert.equal(bodyLimit, app.initialConfig.bodyLimit);
@@ -90,7 +92,6 @@ try {
     return { name, p99 };
   });
 
-  await post(exact, 501, "not_implemented");
   await post(Buffer.concat([exact, Buffer.from(" ")]), 413, "payload_too_large");
   const overBudget = measured.filter(({ p99 }) => p99 >= budget);
   assert.deepEqual(overBudget, [], `Each workload must stay below ${budget} ms p99`);

@@ -3,39 +3,33 @@ import { loadConfig } from "./config.js";
 import type { ToolSpec } from "./contract.js";
 import { startTelemetry } from "./telemetry.js";
 
+const specFile = new URL("../contract.json", import.meta.url);
+const spec = JSON.parse(readFileSync(specFile, "utf8")) as ToolSpec;
 const config = loadConfig();
 const stopTelemetry = await startTelemetry(config);
-const { createApp } = await import("./app.js");
-const { handlers } = await import("./handlers/index.js");
-const spec = JSON.parse(
-  readFileSync(new URL("../contract.json", import.meta.url), "utf8"),
-) as ToolSpec;
-const app = createApp({ spec, config, handlers });
+const [{ createApp }, { createHandlers }] = await Promise.all([
+  import("./app.js"),
+  import("./handlers/index.js"),
+]);
+const app = createApp({ spec, config, handlers: createHandlers(spec) });
+app.addHook("onClose", async () => stopTelemetry());
+
+let shutdown: Promise<void> | undefined;
+function close() {
+  return (shutdown ??= app.close());
+}
+
 try {
   await app.listen({ host: "0.0.0.0", port: config.PORT });
 } catch (error) {
-  await app.close();
-  await stopTelemetry();
+  await close();
   throw error;
 }
 
-let stopping = false;
-async function stop() {
-  if (stopping) return;
-  stopping = true;
-  try {
-    await app.close();
-  } finally {
-    await stopTelemetry();
-  }
+function stop() {
+  void close().catch(() => {
+    process.exitCode = 1;
+  });
 }
-
-for (const signal of ["SIGINT", "SIGTERM"] as const) {
-  process.once(
-    signal,
-    () =>
-      void stop().catch(() => {
-        process.exitCode = 1;
-      }),
-  );
-}
+process.once("SIGINT", stop);
+process.once("SIGTERM", stop);

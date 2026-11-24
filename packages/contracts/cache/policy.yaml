@@ -100,15 +100,14 @@ singleFlight:
 
 tools:
   engine-query:
-    keyVersion: 1
+    keyVersion: 2
     operations:
       listEngines: {ttl: PT5M, scope: shared}                   # DEFAULT
       queryEngine:
-        # One stored answer per prompt + engine + model + locale + sample per UTC day.
+        # Key the original prompt, engine, model, effective locale and country, and sample per UTC day.
         window: P1D                                              # DEFAULT
         scope: shared
         extraKeyInputs: [engineModel]   # model listEngines reports for the engine
-        normalize: {prompt: collapse-whitespace}
   answer-analysis:
     keyVersion: 3
     operations:

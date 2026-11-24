@@ -1,27 +1,37 @@
 import { expect, test } from "vitest";
-import { createLlm, type LlmRequest } from "../src/llm/adapter.js";
+import { createLlm, fixtureKey } from "../src/llm/adapter.js";
+import { deployment } from "../src/llm/catalog.js";
 
-test("mock mode maps a deterministic fixture to contract usage without credentials", async () => {
-  const request: LlmRequest = {
-    provider: "openai",
-    model: "fixture-model",
-    operation: "echo_test",
-    prompt: "Hello",
-    maxOutputTokens: 32,
-    timeoutMs: 100,
-    price: { inputMicrosPerMillion: 1_000_000, outputMicrosPerMillion: 2_000_000 },
-  };
-  const llm = createLlm({ data: { NODE_ENV: "test" } });
-  await expect(llm(request)).resolves.toEqual({
-    text: "Hello from a fixture",
-    usage: {
-      provider: "openai",
-      model: "fixture-model",
-      operation: "echo_test",
-      inputTokens: 4,
-      outputTokens: 5,
-      costMicrosUsd: 14,
+const entry = deployment[0];
+const { model } = entry.engine;
+const prompt = "What is the Discovery Pass?";
+
+test("mock mode replays synthetic Responses output without credentials or transport", async () => {
+  const llm = createLlm({
+    data: { LLM_MODE: "mock" },
+    fetch: async () => {
+      throw new Error("Unexpected provider traffic");
     },
   });
-  await expect(llm({ ...request, prompt: "missing fixture" })).rejects.toThrow("ENOENT");
+  const result = await llm(entry, prompt, "en-US", "US");
+  expect(result.parts[0].text).toBe("The pass covers admission to participating sites.");
+  expect(result.usage).toEqual({
+    provider: "openai",
+    model,
+    operation: "answer_prompt",
+    inputTokens: 2_000,
+    outputTokens: 200,
+    costMicrosUsd: 10_211,
+  });
+  await expect(llm(entry, "missing fixture", "en-US", "US")).rejects.toMatchObject({
+    statusCode: 503,
+    problemCode: "provider_unavailable",
+  });
+});
+
+test("fixture keys distinguish prompt whitespace, locale and search country", () => {
+  const key = fixtureKey(model, prompt, "en-US", "US");
+  expect(fixtureKey(model, prompt.replace("the ", "the  "), "en-US", "US")).not.toBe(key);
+  expect(fixtureKey(model, prompt, "fr-CA", "US")).not.toBe(key);
+  expect(fixtureKey(model, prompt, "en-US", "CA")).not.toBe(key);
 });
