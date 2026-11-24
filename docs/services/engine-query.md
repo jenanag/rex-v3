@@ -42,6 +42,15 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 See [the tool's operation limits](../../services/engine-query/AGENTS.md#limits).
 <!-- GENERATED:limits END -->
 
+The scaffold uses Fastify's default **1,048,576-byte** request body limit when
+`BODY_LIMIT_BYTES` is unset. Both operations return HTTP 501 `not_implemented`
+for valid requests. The validator benchmark runs a representative, a full
+prompt, and an exact-limit request against the strict **p99 < 5 ms** gate.
+At the limit, the POST reaches its stub. One extra byte returns HTTP 413
+`payload_too_large`. To run the benchmark from the tool folder, run
+`npm run build` and then `node scripts/benchmark-validation.mjs` with
+`BODY_LIMIT_BYTES` unset.
+
 ## Shared schemas
 
 <!-- GENERATED:shared START (source: packages/contracts/openapi/services/engine-query.yaml + common.yaml) -->

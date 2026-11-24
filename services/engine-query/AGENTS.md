@@ -135,10 +135,7 @@ adapter, with recorded fixtures for every engine.
 
 ## Build and test standalone
 
-Not scaffolded yet: today this folder holds only this file and `contract/`.
-`scripts/new-tool` (built in Phase 1) scaffolds the rest at the start of this tool's
-Phase 2 step, with `--lang` as its language ADR decides and `--llm`. Then these commands
-work (for the language above):
+Scaffolded: these commands work in this folder.
 
 ```bash
 cp -r services/engine-query /tmp/engine-query && cd /tmp/engine-query   # any folder outside the repo

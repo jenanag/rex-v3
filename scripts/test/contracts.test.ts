@@ -539,6 +539,9 @@ test("Python vendoring preflights before writing any file", async (t) => {
 test("docs generation detects drift and refreshes from source", async (t) => {
   const repo = await fixture(t);
   await repo.run("gen-docs", "--check");
+  const engineDir = "services/engine-query";
+  assert.match(await readFile(join(repo.dir, engineDir, "AGENTS.md"), "utf8"), /Scaffolded:/);
+  await rm(join(repo.dir, engineDir, "package.json"));
   await repo.change(answer, "Detect brand mentions", "Locate brand mentions");
   await repo.change(
     "docs/roadmap.md",
