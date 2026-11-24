@@ -40,7 +40,6 @@ export const envProperties = {
   BODY_LIMIT_BYTES: {
     type: "integer",
     minimum: 1,
-    default: 12_582_912,
-    description: "Fastify request body limit in bytes for all routes (ADR 0029).",
+    description: "Optional override of the Fastify request-body limit.",
   },
 } as const;
