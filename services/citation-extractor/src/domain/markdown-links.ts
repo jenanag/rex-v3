@@ -41,8 +41,8 @@ class CitationTokenizer extends Tokenizer {
   override autolink(source: string) {
     if (this.lexer.state.inRawBlock) return;
     const token = super.autolink(source);
-    if (token && /^https?:\/\//iu.test(token.href)) {
-      // Autolinks recognize references but do not process backslash escapes.
+    if (token) {
+      // Decode before URL validation. Backslashes remain literal in autolinks.
       token.href = token.href.replace(reference, decodeReference);
       token.text = token.text.replace(reference, decodeReference);
     }

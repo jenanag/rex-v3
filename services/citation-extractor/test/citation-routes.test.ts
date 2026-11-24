@@ -107,6 +107,21 @@ test("decodes an autolink before deduplicating it against an explicit link", asy
   ]);
 });
 
+test("decodes the authority separators in an HTTP autolink", async () => {
+  const citations = await extract("<https:&#47;&#47;example.test/a>", [], []);
+  expect(citations).toEqual([
+    {
+      url: "https://example.test/a",
+      domain: "example.test",
+      title: "https://example.test/a",
+      position: 1,
+      sourceType: "inline_link",
+      ownership: "third_party",
+      brandKey: null,
+    },
+  ]);
+});
+
 test("skips malformed and unrepresentable citations and normalizes usable URLs", async () => {
   const sources = [
     "https://",
