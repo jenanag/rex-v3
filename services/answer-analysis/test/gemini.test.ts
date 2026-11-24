@@ -6,7 +6,13 @@ import { createHandlers } from "../src/handlers/index.js";
 import { createLlm, fixtureKey } from "../src/llm/adapter.js";
 import { buildGeminiBatch, gemini } from "../src/llm/gemini.js";
 import { luna } from "../src/llm/luna.js";
-import { checkResponse, postAnalysis as post, tool } from "./support.js";
+import {
+  checkResponse,
+  postAnalysis as post,
+  retryAfterCases,
+  retryAfterNow,
+  tool,
+} from "./support.js";
 
 const model = "gemini-2.5-flash-lite";
 const lexicon = "det:lexicon";
@@ -254,19 +260,43 @@ test("recorded Luna plus synthetic Gemini and the lexicon agree on deterministic
 });
 
 test("French fallback promotes Gemini and strict language policy makes no provider call", async () => {
-  const provider = stub();
+  const hosts: string[] = [];
+  const fetch = vi.fn<typeof globalThis.fetch>(async (source) => {
+    const { hostname } = new URL(source instanceof Request ? source.url : source);
+    hosts.push(hostname);
+    if (hostname === "generativelanguage.googleapis.com") return Response.json(ok);
+    if (hostname === "api.openai.com") {
+      const verdicts = rows.map((row) => ({ ...row, score: row.score > 0 ? 0.65 : -0.65 }));
+      return Response.json({
+        choices: [{ finish_reason: "stop", message: { content: json(verdicts), refusal: null } }],
+        usage: { prompt_tokens: 100, completion_tokens: 50, total_tokens: 150 },
+        service_tier: "default",
+      });
+    }
+    throw new Error(`Unexpected stub host: ${hostname}`);
+  });
+  const llm = createLlm({
+    data: {
+      LLM_MODE: "live",
+      GEMINI_API_KEY: "synthetic-test-key",
+      OPENAI_API_KEY: "synthetic-test-key",
+    },
+    fetch,
+  });
+  const handlers = createHandlers({ geminiEnabled: true, lunaEnabled: true, llm });
   const french = {
     ...input,
     text: "Acme est meilleur que Beta.",
     sentiment: {
       ...input.sentiment,
+      analyzers: [lexicon, gemini.id, luna.id],
       primary: lexicon,
       language: "fr",
       onUnsupportedLanguage: "fallback",
     },
   };
   const { data: failure } = await post(
-    provider.handlers,
+    handlers,
     {
       ...french,
       sentiment: { ...french.sentiment, onUnsupportedLanguage: "error" },
@@ -277,22 +307,46 @@ test("French fallback promotes Gemini and strict language policy makes no provid
     code: "unsupported_language",
     detail: expect.stringContaining("/sentiment/analyzers/0"),
   });
-  expect(provider.fetch).not.toHaveBeenCalled();
-  const { data } = await post(provider.handlers, french);
+  expect(fetch).not.toHaveBeenCalled();
+  const { data } = await post(handlers, french);
   expect(data).toMatchObject({
     language: "fr",
     primaryFallback: true,
     analyzers: [
       { analyzer: lexicon, status: "unsupported", primary: false },
       { analyzer: gemini.id, status: "ok", primary: true },
+      { analyzer: luna.id, status: "ok", primary: false },
     ],
     mentions: [
-      { brandKey: "acme", sentiment: "positive", agreement: null },
-      { brandKey: "beta", sentiment: "negative", agreement: null },
+      {
+        brandKey: "acme",
+        sentiment: "positive",
+        agreement: {
+          analyzerCount: 2,
+          majorityLabel: "positive",
+          agreeingCount: 2,
+          unanimous: true,
+          scoreSpread: 0.07,
+        },
+      },
+      {
+        brandKey: "beta",
+        sentiment: "negative",
+        agreement: {
+          analyzerCount: 2,
+          majorityLabel: "negative",
+          agreeingCount: 2,
+          unanimous: true,
+          scoreSpread: 0.07,
+        },
+      },
     ],
-    usage: [metered],
+    usage: [
+      metered,
+      { ...recordedLunaUsage, inputTokens: 100, outputTokens: 50, costMicrosUsd: 35 },
+    ],
   });
-  expect(provider.fetch).toHaveBeenCalledOnce();
+  expect(hosts.sort()).toEqual(["api.openai.com", "generativelanguage.googleapis.com"]);
 });
 
 test("no mentions means neither selected provider is called", async () => {
@@ -475,29 +529,33 @@ test.each([
   expect(data.usage).toEqual([{ ...metered, outputTokens, costMicrosUsd }]);
 });
 
-test.each([
-  ["7", "7"],
-  ["Sun, 06 Nov 1994 08:49:37 GMT", "Sun, 06 Nov 1994 08:49:37 GMT"],
-  ["Tue, 31 Nov 2026 08:00:00 GMT", undefined],
-])("Gemini preserves valid Retry-After %s on one attempt", async (header, expected) => {
-  const provider = stub(() =>
-    Response.json(
-      { error: { code: 429, status: "RESOURCE_EXHAUSTED", message: "busy" } },
-      { status: 429, headers: { "Retry-After": header } },
-    ),
-  );
-  const { data, retryAfter } = await post(
-    provider.handlers,
-    {
-      ...input,
-      sentiment: { ...input.sentiment, primary: gemini.id },
-    },
-    503,
-  );
-  expect(data).toMatchObject({ code: "provider_unavailable" });
-  expect(retryAfter).toBe(expected);
-  expect(provider.fetch).toHaveBeenCalledOnce();
-});
+test.each(retryAfterCases)(
+  "Gemini normalizes Retry-After %s on one attempt",
+  async (header, expected) => {
+    const clock = vi.spyOn(Date, "now").mockReturnValue(retryAfterNow);
+    try {
+      const provider = stub(() =>
+        Response.json(
+          { error: { code: 429, status: "RESOURCE_EXHAUSTED", message: "busy" } },
+          { status: 429, headers: { "Retry-After": header } },
+        ),
+      );
+      const { data, retryAfter } = await post(
+        provider.handlers,
+        {
+          ...input,
+          sentiment: { ...input.sentiment, primary: gemini.id },
+        },
+        503,
+      );
+      expect(data).toMatchObject({ code: "provider_unavailable" });
+      expect(retryAfter).toBe(expected);
+      expect(provider.fetch).toHaveBeenCalledOnce();
+    } finally {
+      clock.mockRestore();
+    }
+  },
+);
 
 test("Gemini propagates the 60-second deadline and aborts without retry", async () => {
   const controller = new AbortController();
