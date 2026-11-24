@@ -70,6 +70,9 @@ test("decodes entities once and preserves escapes, codespans and autolinks", asy
       String.raw`](https://example.test/escaped?a=1\&amp;b=2)`,
     "[From reference][r]",
     "<https://example.test/auto?a=1&amp;b=2>",
+    "<https://example.test/once?a=1&amp;amp;b=2>",
+    String.raw`<https://example.test/backslash?a=1\&amp;b=2>`,
+    "<https://example.test/&#37;ZZ>",
     "[Unicode](https://example.test/f&ouml;&ouml;)",
     "",
     String.raw`[r]: <https://example.test/ref?a=1&amp;b=2&c=3\&amp;d=4>`,
@@ -79,8 +82,28 @@ test("decodes entities once and preserves escapes, codespans and autolinks", asy
     ["https://example.test/numeric/test", "A 😀 ≂̸ &unrecognized; &amp;"],
     ["https://example.test/escaped?a=1&amp;b=2", "Escaped &amp; and &amp;"],
     ["https://example.test/ref?a=1&b=2&c=3&amp;d=4", "From reference"],
-    ["https://example.test/auto?a=1&amp;b=2", "https://example.test/auto?a=1&amp;b=2"],
+    ["https://example.test/auto?a=1&b=2", "https://example.test/auto?a=1&b=2"],
+    ["https://example.test/once?a=1&amp;b=2", "https://example.test/once?a=1&amp;b=2"],
     ["https://example.test/f%C3%B6%C3%B6", "Unicode"],
+  ]);
+});
+
+test("decodes an autolink before deduplicating it against an explicit link", async () => {
+  const citations = await extract(
+    "<https://example.test/?a=1&amp;b=2>\n\n[Explicit link](https://example.test/?a=1&b=2)",
+    [],
+    [],
+  );
+  expect(citations).toEqual([
+    {
+      url: "https://example.test/?a=1&b=2",
+      domain: "example.test",
+      title: "https://example.test/?a=1&b=2",
+      position: 1,
+      sourceType: "inline_link",
+      ownership: "third_party",
+      brandKey: null,
+    },
   ]);
 });
 

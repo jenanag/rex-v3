@@ -39,7 +39,14 @@ class CitationTokenizer extends Tokenizer {
   }
 
   override autolink(source: string) {
-    if (!this.lexer.state.inRawBlock) return super.autolink(source);
+    if (this.lexer.state.inRawBlock) return;
+    const token = super.autolink(source);
+    if (token && /^https?:\/\//iu.test(token.href)) {
+      // Autolinks recognize references but do not process backslash escapes.
+      token.href = token.href.replace(reference, decodeReference);
+      token.text = token.text.replace(reference, decodeReference);
+    }
+    return token;
   }
 
   override def(source: string) {
