@@ -21,7 +21,7 @@ to 0023 were Accepted except 0020 (reserved at Phase 0 acceptance) and the super
 0003, 0004, 0005 and 0008. Jay accepted ADRs 0020 and 0024 on 2026-11-22.
 Phase 1 was completed on 2026-11-22. Phase 2 has started. Jay accepted ADRs 0025
 and 0026 on 2026-11-22, ADR 0027, ADR 0028, and ADR 0029 on 2026-11-23, and ADR 0030, ADR 0031, ADR 0032, and ADR 0033
-on 2026-11-24. Jay accepted ADR 0034 on 2026-11-24, recording that both Python validators missed the large-workload budget. The Python bring-up remains paused. Jay accepted ADR 0035 on 2026-11-24, selecting TypeScript for answer-analysis. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
+on 2026-11-24. Jay accepted ADR 0034 on 2026-11-24, recording that both Python validators missed the large-workload budget. The Python bring-up remains paused. Jay accepted ADR 0035 on 2026-11-24, selecting TypeScript for answer-analysis. ADR 0036 is Proposed for its request body limit. Docs and contracts change at Jay’s request. A new ADR amends or supersedes an Accepted decision.
 
 - [README](../README.md), [architecture](architecture.md), [conventions](conventions.md),
   [DRY rule](dry-rule.md), [events](events.md), [glossary](glossary.md), this roadmap.
@@ -345,7 +345,8 @@ The Python spike ran right before step 5. Both validators missed the large-workl
 budget ([ADR 0034](adr/0034-python-validation-spike.md)), so the Python bring-up
 remains paused. Jay accepted [ADR 0035](adr/0035-answer-analysis-language.md) on
 2026-11-24, selecting TypeScript and the existing template for answer-analysis.
-The tool is still unscaffolded. The Go bring-up waits for Phase 7.
+The tool is still unscaffolded. [ADR 0036](adr/0036-answer-analysis-body-limit.md) is Proposed for its 3 MiB request body
+limit and per-workload validation gate. The Go bring-up waits for Phase 7.
 
 - Each tool: contract tests against its vendored spec, unit tests for its domain,
   recorded provider fixtures (no live LLM or web calls in CI), a smoke script that calls
