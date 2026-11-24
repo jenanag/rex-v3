@@ -1,7 +1,6 @@
 import { mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { FastifyBaseLogger } from "fastify";
 import { expect, test, vi } from "vitest";
 import type { components } from "../contract/types.js";
 import { loadConfig } from "../src/config.js";
@@ -9,10 +8,15 @@ import { findMentionOccurrences } from "../src/domain/mentions.js";
 import { createHandlers } from "../src/handlers/index.js";
 import { createLlm, fixtureKey } from "../src/llm/adapter.js";
 import { buildLunaBatch, luna } from "../src/llm/luna.js";
-import { checkResponse, tool } from "./support.js";
+import {
+  checkResponse,
+  postAnalysis as post,
+  retryAfterCases,
+  retryAfterNow,
+  tool,
+} from "./support.js";
 
 type Brand = components["schemas"]["TrackedBrand"];
-const path = "/v1/answer-analyses";
 const model = luna.id;
 const lexicon = "det:lexicon";
 const rules = "det:rules";
@@ -61,39 +65,6 @@ function stub(reply: () => Response | Promise<Response>) {
     fetch,
     llm: createLlm({ data: { LLM_MODE: "live", OPENAI_API_KEY: "synthetic-test-key" }, fetch }),
   };
-}
-
-async function post(
-  operations: ReturnType<typeof createHandlers>,
-  body: unknown,
-  status = 200,
-  warn?: FastifyBaseLogger["warn"],
-) {
-  const app = tool({}, operations);
-  if (warn)
-    app.addHook("preHandler", async (request) => {
-      request.log = Object.create(request.log, { warn: { value: warn } });
-    });
-  try {
-    const reply = await app.inject({
-      method: "POST",
-      url: path,
-      payload: JSON.stringify(body),
-      headers: { "content-type": "application/json" },
-    });
-    expect(reply.statusCode, reply.body).toBe(status);
-    const data = reply.json();
-    checkResponse(
-      "POST",
-      path,
-      status,
-      status === 200 ? "application/json" : "application/problem+json",
-      data,
-    );
-    return { data, retryAfter: reply.headers["retry-after"] };
-  } finally {
-    await app.close();
-  }
 }
 
 test.each([
@@ -410,32 +381,33 @@ test.each([
   },
 );
 
-test.each([
-  ["40", "40"],
-  ["Sun, 06 Nov 1994 08:49:37 GMT", "Sun, 06 Nov 1994 08:49:37 GMT"],
-  ["Sunday, 06-Nov-94 08:49:37 GMT", "Sunday, 06-Nov-94 08:49:37 GMT"],
-  ["Sun Nov  6 08:49:37 1994", "Sun Nov  6 08:49:37 1994"],
-  ["Tue, 31 Nov 2026 08:00:00 GMT", undefined],
-  ["-1", undefined],
-])("503 only forwards valid Retry-After (%s)", async (header, expected) => {
-  const provider = stub(() =>
-    Response.json(
-      { error: { message: "busy" } },
-      { status: 429, headers: { "retry-after": header } },
-    ),
-  );
-  const { data, retryAfter } = await post(
-    createHandlers({ lunaEnabled: true, llm: provider.llm }),
-    {
-      ...input,
-      sentiment: { ...input.sentiment, primary: model },
-    },
-    503,
-  );
-  expect(data.code).toBe("provider_unavailable");
-  expect(retryAfter).toBe(expected);
-  expect(provider.fetch).toHaveBeenCalledTimes(1);
-});
+test.each(retryAfterCases)(
+  "Luna normalizes Retry-After %s on one attempt",
+  async (header, expected) => {
+    const clock = vi.spyOn(Date, "now").mockReturnValue(retryAfterNow);
+    try {
+      const provider = stub(() =>
+        Response.json(
+          { error: { message: "busy" } },
+          { status: 429, headers: { "retry-after": header } },
+        ),
+      );
+      const { data, retryAfter } = await post(
+        createHandlers({ lunaEnabled: true, llm: provider.llm }),
+        {
+          ...input,
+          sentiment: { ...input.sentiment, primary: model },
+        },
+        503,
+      );
+      expect(data.code).toBe("provider_unavailable");
+      expect(retryAfter).toBe(expected);
+      expect(provider.fetch).toHaveBeenCalledTimes(1);
+    } finally {
+      clock.mockRestore();
+    }
+  },
+);
 
 test("timeout fails the secondary with no retries", async () => {
   const provider = stub(() => {

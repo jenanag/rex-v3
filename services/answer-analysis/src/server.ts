@@ -12,7 +12,10 @@ const [{ createApp }, { createHandlers }] = await Promise.all([
 const spec = JSON.parse(
   readFileSync(new URL("../contract.json", import.meta.url), "utf8"),
 ) as ToolSpec;
-const handlers = createHandlers({ lunaEnabled: config.ANSWER_ANALYSIS_LUNA_ENABLED });
+const handlers = createHandlers({
+  lunaEnabled: config.ANSWER_ANALYSIS_LUNA_ENABLED,
+  geminiEnabled: config.ANSWER_ANALYSIS_GEMINI_ENABLED,
+});
 const app = createApp({ spec, config, handlers });
 try {
   await app.listen({ host: "0.0.0.0", port: config.PORT });

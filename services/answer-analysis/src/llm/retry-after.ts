@@ -7,26 +7,21 @@ const obsolete =
 const asctime =
   /^(?<weekday>[A-Za-z]{3}) (?<month>[A-Za-z]{3}) (?<day>\d{2}| \d) (?<clock>\d{2}:\d{2}:\d{2}) (?<year>\d{4})$/;
 
-function isHttpDate(value: string) {
+function httpDateDelay(value: string, now: number) {
   const date = (imf.exec(value) ?? obsolete.exec(value) ?? asctime.exec(value))?.groups;
-  if (!date) return false;
+  if (!date) return undefined;
   const month = monthNames.indexOf(date.month);
   const day = Number(date.day);
   const [hour, minute, second] = date.clock.split(":").map(Number);
-  if (
-    month === -1 ||
-    hour > 23 ||
-    minute > 59 ||
-    (second > 59 && !(second === 60 && hour === 23 && minute === 59))
-  )
-    return false;
+  const leapSecond = second === 60 && hour === 23 && minute === 59;
+  if (month === -1 || hour > 23 || minute > 59 || (second > 59 && !leapSecond)) return undefined;
 
   const clock = new Date(0);
   clock.setUTCHours(hour, minute, Math.min(second, 59), 0);
   const shortYear = date.year.length === 2;
   const year = Number(date.year);
   if (shortYear) {
-    const cutoff = new Date();
+    const cutoff = new Date(now);
     cutoff.setUTCFullYear(cutoff.getUTCFullYear() + 50);
     const candidate = Math.floor(cutoff.getUTCFullYear() / 100) * 100 + year;
     clock.setUTCFullYear(candidate, month, day);
@@ -35,11 +30,15 @@ function isHttpDate(value: string) {
     clock.setUTCFullYear(year, month, day);
   }
   const weekday = weekdayNames[clock.getUTCDay()];
-  return (
-    clock.getUTCMonth() === month &&
-    clock.getUTCDate() === day &&
-    date.weekday === (shortYear ? weekday : weekday.slice(0, 3))
-  );
+  if (
+    clock.getUTCMonth() !== month ||
+    clock.getUTCDate() !== day ||
+    date.weekday !== (shortYear ? weekday : weekday.slice(0, 3))
+  )
+    return undefined;
+
+  const timestamp = clock.getTime() + (leapSecond ? 1000 : 0);
+  return String(Math.max(0, Math.ceil((timestamp - now) / 1000)));
 }
 
 export function retryAfter(error: unknown) {
@@ -51,5 +50,6 @@ export function retryAfter(error: unknown) {
   )
     return undefined;
   const value = error.headers.get("retry-after");
-  return value && (/^\d+$/.test(value) || isHttpDate(value)) ? value : undefined;
+  if (!value) return undefined;
+  return /^\d+$/.test(value) ? value : httpDateDelay(value, Date.now());
 }

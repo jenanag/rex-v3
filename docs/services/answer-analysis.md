@@ -30,7 +30,8 @@ Per [ADR 0017](../adr/0017-deterministic-first-analysis.md):
   - deterministic: `det:lexicon` (sentiment lexicon with negation and intensifier
     rules, scored within the clauses around each mention) and `det:rules` (comparative
     and recommendation patterns such as "better than", "avoid", "top pick");
-  - opt-in: `llm:openai/gpt-6-luna`, one batched call for the mentioned brands.
+  - opt-in: `llm:openai/gpt-6-luna` and `llm:google/gemini-2.5-flash-lite`, one
+    batched call per selected LLM analyzer for the mentioned brands.
 - Each mention returns every analyzer's label, score and short rationale, plus an
   agreement summary; the `primary` analyzer fills `sentiment` and `sentimentScore`.
 - Deterministic analyzers report `unsupported` for languages they do not cover;
@@ -57,8 +58,8 @@ Per [ADR 0017](../adr/0017-deterministic-first-analysis.md):
 
 ## Languages and the lexicon registry
 
-- **Today:** English (`en`) for `det:lexicon` and `det:rules`. When enabled, Luna
-  advertises `["*"]`, including undetermined language. Deterministic calls
+- **Today:** English (`en`) for `det:lexicon` and `det:rules`. Enabled LLM analyzers
+  advertise `["*"]`, including undetermined language. Deterministic calls
   return `usage: []`.
 - **Language in and out:** `sentiment.language` (BCP 47, common.yaml `LanguageTag`)
   or, when omitted, deterministic detection from the text; the response reports
@@ -86,53 +87,73 @@ Per [ADR 0017](../adr/0017-deterministic-first-analysis.md):
      cached `unsupported` results for that language are not served.
   4. No contract change: `listAnalyzers` shows the new language automatically.
 
-## Luna opt-in
+## LLM opt-in
 
-The tool validates `ANSWER_ANALYSIS_LUNA_ENABLED` at startup and defaults it to
-`false`. Set it to `true` and configure `OPENAI_API_KEY` for the live deployment. Callers opt in with `sentiment.analyzers` containing
-`llm:openai/gpt-6-luna`. The omitted default is still `det:lexicon`.
-An answer without mentions makes no provider call.
+The tool validates `ANSWER_ANALYSIS_LUNA_ENABLED` and
+`ANSWER_ANALYSIS_GEMINI_ENABLED` at startup. Both default to `false`. For live
+deployment, enable the selected analyzer and set its provider credential
+(`OPENAI_API_KEY` or `GEMINI_API_KEY`). Callers opt in by including the advertised
+ID in `sentiment.analyzers`. The omitted default is `det:lexicon`.
 
-Each batch uses the accepted mention spans. Every mentioned brand gets a local
-ID and a first excerpt, then up to two distinct later excerpts in round-robin
-order. Each excerpt has at most 160 Unicode code points and carries the
-in-excerpt match offsets. The serialized provider request is limited to 64 KiB
-UTF-8, including the instructions and schema. Luna uses OpenAI Chat Completions
-with strict structured output, a 12,288-token completion cap, and a 60-second
-deadline with zero retries. The tool accepts one verdict per request-local ID,
-with a score in `[-1, 1]`, a consistent label, and a null rationale or at most
-120 Unicode code points. It checks the 48 KiB reply limit before parsing.
+Each selected LLM analyzer makes one batched call using the deterministic mention
+spans. With both selected, the calls run concurrently, each with a 60-second
+deadline and zero retries. An answer without mentions skips both calls. Every
+mentioned brand receives a request-local ID and a first excerpt, then up to two
+distinct later excerpts in round-robin order. Excerpts are capped at 160 Unicode
+code points with half-open match offsets. Each serialized provider request is
+capped at 64 KiB UTF-8, including instructions and schema.
 
-The tool records one `classify_sentiment` usage item for valid reported counts,
-even when the batch fails. [OpenAI Standard short-context prices](https://developers.openai.com/api/docs/models/gpt-6-luna#pricing)
-per million tokens are $0.10 uncached input, $0.01 cached input, $0.125 cache writes,
-and $0.50 output. The tool prices each token once and rounds the total once.
-An explicitly reported tier other than `default` fails the analyzer and emits
-an operational diagnostic without pricing or reporting that call's usage.
-For a failed secondary, HTTP 200 includes available usage and marks Luna as
-`failed`; agreement counts only successful analyzers. For a failed primary,
-HTTP 503 uses the shared `provider_unavailable` Problem and forwards a valid
-upstream `Retry-After` when present. The service logs available usage to its
-restricted operational telemetry without prompt or completion text.
+Luna uses OpenAI Chat Completions with strict structured output. Gemini uses
+Developer API v1 generateContent with a fixed JSON response schema, Standard
+tier, `thinkingBudget: 0`, and `includeThoughts: false`. Both cap output at 12,288
+tokens and check a 48 KiB reply limit before parsing. The tool requires one
+verdict per request-local ID, a score in `[-1, 1]` with a label consistent after
+three-decimal rounding, and a null rationale or one of at most 120 Unicode code
+points.
 
-### Recorded replay comparison
+Each batch with valid usage yields one `classify_sentiment` item in analyzer
+request order. The tool prices each token once and rounds the total once.
+For Luna, Standard short-context rates per million tokens are $0.10 uncached
+input, $0.01 cache reads, $0.125 cache writes, and $0.50 output.
+[OpenAI pricing](https://developers.openai.com/api/docs/models/gpt-6-luna#pricing).
 
-Run `LLM_MODE=mock npm test -- test/luna.test.ts` from the tool folder.
-The replay fixture for the synthetic answer `Acme is better than Beta.` came
-from one authorized GPT-6 Luna call. The response gives Acme and Beta one
-mention each, in that order, with the full sentence as both snippets.
+Gemini Standard text rates per million tokens are $0.10 uncached input, $0.01
+cache reads, and $0.40 output. The adapter charges cached tokens once and adds
+any reported thinking to candidate output. It reconciles the reported totals
+before pricing. [Gemini pricing](https://aistudio.google.com/docs/pricing#gemini-2.5-flash-lite).
 
-| Brand | `det:lexicon` | `det:rules` | Luna (recorded) | Agreement |
+A failed secondary returns HTTP 200 with null labels and scores and any valid
+usage. Agreement counts only successful analyzers. A failed effective primary
+returns the shared HTTP 503 `provider_unavailable` Problem and forwards a valid
+upstream `Retry-After` when supplied. Usage already billed for the request goes
+to restricted telemetry without prompt or completion text. An unexpected
+pricing tier fails the analyzer without a Standard charge.
+
+### Recorded Luna and synthetic Gemini comparison
+
+Run `LLM_MODE=mock npm test -- test/gemini.test.ts test/luna.test.ts` from the
+tool folder. The comparison uses the synthetic answer `Acme is better than Beta.`
+and replays the same authorized Luna recording. Gemini results come from an
+offline HTTP stub. Both brands have one deterministic mention, in source order,
+with the full sentence as the snippet.
+
+| Brand | `det:lexicon` | Luna (recorded) | Gemini (synthetic) | Agreement |
 | --- | --- | --- | --- | --- |
-| Acme | neutral 0 | positive +0.75 | positive +0.70 | positive, 2 of 3, spread 0.75 |
-| Beta | neutral 0 | negative −0.75 | negative −0.70 | negative, 2 of 3, spread 0.75 |
+| Acme | neutral 0 | positive +0.70 | positive +0.72 | positive, 2 of 3, spread 0.72 |
+| Beta | neutral 0 | negative −0.70 | negative −0.72 | negative, 2 of 3, spread 0.72 |
 
-The effective primary is `det:lexicon`. The batch used the reported
-`default` (Standard) tier with 261 input tokens, zero cache reads and writes,
-and 74 output tokens. The recomputed batch cost is 63 microdollars. In this
-recording, the provider response took 3.84 seconds and the local HTTP route
-took 3.89 seconds. The separate synthetic pricing test covers cache reads
-and writes and yields 167 microdollars.
+The effective primary is `det:lexicon`, which adds no usage item. Recorded Luna
+reported Standard tier, 261 input tokens with zero cache reads and writes, and
+74 output tokens. Its batch cost was 63 microdollars. The provider response took
+3.84 seconds and the local route took 3.89 seconds. Synthetic Gemini reports
+1,001 input tokens, including 400 cache reads, and 180 output tokens with zero
+thinking, for 136 microdollars. The existing Luna replay with `det:rules` and
+the synthetic 167-microdollar Luna metering case also remain covered.
+
+The French regression uses synthetic Gemini verdicts. With `fallback`,
+`det:lexicon` is unsupported and Gemini takes over as primary when the caller
+selected `det:lexicon` as primary. With `error`, the route returns HTTP 422
+`unsupported_language` before calling the provider.
 
 ## Endpoints
 
@@ -147,7 +168,7 @@ and writes and yields 167 microdollars.
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `3`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `4`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |

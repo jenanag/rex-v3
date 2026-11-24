@@ -648,7 +648,7 @@ test("answer analysis cache input preserves analyzer order and applies HTTP defa
   const { components } = parse(await readFile(join(root, answer), "utf8"));
   const { AnswerAnalysisRequest, AnswerAnalysisOptions, SentimentOptions } = components.schemas;
   const preserve = tools["answer-analysis"].operations.analyzeAnswer.preserveArrayOrder;
-  assert.equal(tools["answer-analysis"].keyVersion, 3);
+  assert.equal(tools["answer-analysis"].keyVersion, 4);
   assert.deepEqual(tools["answer-analysis"].operations.analyzeAnswer.skipWhen, {
     pointer: "/analyzers/*/status",
     equals: "failed",

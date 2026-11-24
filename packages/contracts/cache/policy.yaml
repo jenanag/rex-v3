@@ -111,7 +111,7 @@ tools:
         webSearchDefaults: {chatgpt: true, gemini: false}
         extraKeyInputs: [engineModel]   # model listEngines reports for the engine
   answer-analysis:
-    keyVersion: 3
+    keyVersion: 4
     operations:
       listAnalyzers: {ttl: PT5M, scope: shared}                 # DEFAULT
       analyzeAnswer:
