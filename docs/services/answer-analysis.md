@@ -3,7 +3,7 @@
 - **Kind:** tool ([what that means](../architecture.md#service-map))
 - **Phase:** 2
 - **Contract:** source [packages/contracts/openapi/services/answer-analysis.yaml](../../packages/contracts/openapi/services/answer-analysis.yaml); vendored, self-contained copy in [services/answer-analysis/contract/](../../services/answer-analysis/contract/openapi.yaml) ([ADR 0018](../adr/0018-tool-portability.md))
-- **Language:** TypeScript for now (`language: ts` in vendoring.yaml). [ADR 0024](../adr/0024-per-tool-language.md) proposes Python: deterministic sentiment, NLP, multilingual lexicons and embeddings have their mature libraries in Python. Its own language ADR, accepted by Jay, decides at the start of its Phase 2 step.
+- **Language:** TypeScript proposed in [ADR 0035](../adr/0035-answer-analysis-language.md) (`language: ts` in vendoring.yaml). Jay must accept the proposal before scaffolding.
 - **Portability:** a self-contained project in its language: copy `services/answer-analysis/` anywhere, then its install, build, test and `docker build` work with nothing else present; no auth, no cache, no bus inside ([ADR 0018](../adr/0018-tool-portability.md))
 - **State:** none (callers cache its results, see below)
 - **Bus:** none

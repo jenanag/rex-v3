@@ -130,10 +130,11 @@ The policy's `resolution` defines caller overrides per environment and per custo
 
 ## Scope and build order
 
-Phase 2, step 5 of 6: language ADR (Python, after the Python spike passes), then
-rule-based first: mention detection, `det:lexicon` and `det:rules` with the lexicon
-registry and the English pack, language detection and `onUnsupportedLanguage`; then LLM
-analyzers per provider and a side-by-side comparison report on a fixture set.
+Phase 2, step 5 of 6: language ADR (TypeScript, proposed in ADR 0035), then scaffold
+after Jay accepts the ADR. Start with deterministic mention detection, `det:lexicon` and
+`det:rules` with the lexicon registry and the English pack, language detection and
+`onUnsupportedLanguage`; then LLM analyzers per provider and a side-by-side comparison
+report on a fixture set.
 
 ## Build and test standalone
 

@@ -64,6 +64,9 @@ the 4 MiB request body ceiling for `citation-extractor` and retains its request 
 Jay accepted [ADR 0034](0034-python-validation-spike.md) on 2026-11-24. It records
 that both Python validators missed the large-workload gate and keeps the Python bring-up paused.
 
+[ADR 0035](0035-answer-analysis-language.md) proposes TypeScript for answer-analysis
+under the fallback in ADR 0024. It is Proposed for Jay’s review.
+
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-monorepo-pnpm-turborepo.md) | Monorepo with pnpm workspaces and Turborepo | Accepted (amended) |
@@ -100,5 +103,6 @@ that both Python validators missed the large-workload gate and keeps the Python 
 | [0032](0032-citation-extractor-language.md) | Use TypeScript for citation-extractor | Accepted |
 | [0033](0033-citation-extractor-body-limit.md) | Set the citation-extractor request body limit to 4 MiB | Accepted |
 | [0034](0034-python-validation-spike.md) | Evaluate Python request validation against the vendored OpenAPI contract | Accepted |
+| [0035](0035-answer-analysis-language.md) | Use TypeScript for answer-analysis | Proposed |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.
