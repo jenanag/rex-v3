@@ -246,7 +246,11 @@ test("422s use the approved precedence and first offending field", async () => {
 
 test("comparative rules assign opposite verdicts to the two mentioned brands", async () => {
   const text = "Acme is better than Beta.";
-  const result = await post({ text, brands: [brand, beta], sentiment: { analyzers: [rules] } });
+  const result = await post({
+    text,
+    brands: [brand, beta],
+    sentiment: { language: "en", analyzers: [rules] },
+  });
   expect(result.mentions).toMatchObject([
     {
       brandKey: "acme",
@@ -268,3 +272,57 @@ test("comparative rules assign opposite verdicts to the two mentioned brands", a
     },
   ]);
 });
+
+test.each([
+  ["I recommend Acme's competitors.", [brand]],
+  ["Avoid Acme’s competitor.", [brand]],
+  ["Acme is better than Beta’s alternative.", [brand, beta]],
+  ["Acme's alternative is better than Beta.", [brand, beta]],
+  ["Avoid Acmes’ competitor.", [{ ...brand, name: "Acmes" }]],
+])("rules leave possessive references neutral in %s", async (text, brands) => {
+  const result = await post({ text, brands, sentiment: { language: "en", analyzers: [rules] } });
+  expect(result.mentions).toMatchObject(
+    brands.map(({ key }, index) => ({
+      brandKey: key,
+      position: index + 1,
+      occurrences: 1,
+      snippet: text,
+      sentiment: "neutral",
+      sentimentScore: 0,
+      sentimentByAnalyzer: [
+        { analyzer: rules, status: "ok", label: "neutral", score: 0, rationale: "No rule cues" },
+      ],
+    })),
+  );
+});
+
+test.each(["Acme", "Acme's", "O’Reilly"])(
+  "rules attribute avoidance to the full name %s",
+  async (name) => {
+    const text = "Avoid " + name + ".";
+    const result = await post({
+      text,
+      brands: [{ ...brand, name, aliases: ["Acme"] }],
+      sentiment: { language: "en", analyzers: [rules] },
+    });
+    expect(result.mentions).toMatchObject([
+      {
+        brandKey: "acme",
+        position: 1,
+        occurrences: 1,
+        snippet: text,
+        sentiment: "negative",
+        sentimentScore: -0.75,
+        sentimentByAnalyzer: [
+          {
+            analyzer: rules,
+            status: "ok",
+            label: "negative",
+            score: -0.75,
+            rationale: "Avoid " + name + " (-0.75)",
+          },
+        ],
+      },
+    ]);
+  },
+);

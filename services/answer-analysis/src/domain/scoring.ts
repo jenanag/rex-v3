@@ -107,8 +107,9 @@ function lexicon(text: string, clause: Clause, pack: Pack, contributions: Contri
   }
 }
 
-function unambiguousSlots(occurrences: Occurrence[]) {
+function unambiguousSlots(text: string, occurrences: Occurrence[]) {
   const slots = new Map<number, Occurrence>();
+  const possessive = /(?:['’]s|(?<=s)['’])(?![\p{L}\p{N}\p{M}\p{Pc}])/iuy;
   for (let i = 0; i < occurrences.length;) {
     const first = occurrences[i++];
     let end = first.end;
@@ -117,7 +118,10 @@ function unambiguousSlots(occurrences: Occurrence[]) {
       ambiguous = true;
       end = Math.max(end, occurrences[i++].end);
     }
-    if (!ambiguous) slots.set(first.start, first);
+    // Match only a suffix outside the accepted span, so a full name such as
+    // Acme's can fill a slot while Acme in "Acme's competitor" cannot.
+    possessive.lastIndex = first.end;
+    if (!ambiguous && !possessive.test(text)) slots.set(first.start, first);
   }
   return slots;
 }
@@ -143,7 +147,7 @@ function rules(
 ) {
   const { words, occurrences, end } = clause;
   const occupied = occupiedWords(clause);
-  const slots = unambiguousSlots(occurrences);
+  const slots = unambiguousSlots(text, occurrences);
   const whitespace = /\s+/uy;
   const candidates = new Set([
     ...words.filter((_, index) => !occupied[index]).map((word) => word.start),
