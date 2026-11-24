@@ -4,7 +4,7 @@ import { afterAll, expect, test } from "vitest";
 import { parse } from "yaml";
 import { createApp } from "../src/app.js";
 import { addFormats, validators, type ToolSpec } from "../src/contract.js";
-import { handlers } from "../src/handlers/index.js";
+import { createHandlers } from "../src/handlers/create-handlers.js";
 import { checkResponse, config, tool } from "./support.js";
 
 const spec = parse(
@@ -88,10 +88,10 @@ test("matches the pinned Ajv format on ordinary, edge, and malformed URI inputs"
 });
 
 test.each([
-  ["https://example.test/guide", 501, []],
-  ["https://example.test/?q=a%20b#fragment", 501, []],
-  ["https://[2001:db8::1]:8443/", 501, []],
-  ["https://example.test:65536/", 501, []],
+  ["https://example.test/guide", 200, []],
+  ["https://example.test/?q=a%20b#fragment", 200, []],
+  ["https://[2001:db8::1]:8443/", 200, []],
+  ["https://example.test:65536/", 200, []],
   ["https://example.test/a%2", 400, ['must match format "uri"']],
   ["https://example.test/a\n", 400, ['must match format "uri"']],
   ["urn:example:item", 400, ['must match pattern "^https?://"']],
@@ -104,8 +104,14 @@ test.each([
   });
   expect(response.statusCode).toBe(status);
   const body = response.json();
-  checkResponse("POST", path, status, "application/problem+json", body);
-  expect(body.code).toBe(status === 501 ? "not_implemented" : "validation_failed");
+  checkResponse(
+    "POST",
+    path,
+    status,
+    status === 200 ? "application/json" : "application/problem+json",
+    body,
+  );
+  if (status === 400) expect(body.code).toBe("validation_failed");
   if (status === 400) {
     expect(body.errors).toEqual(details.map((detail) => ({ pointer: "/sources/0/url", detail })));
   }
@@ -117,7 +123,12 @@ test("the registered validator still applies schema defaults before the handler"
     properties: { markdown: { default?: string } };
   };
   schema.properties.markdown.default = "default answer";
-  const app = createApp({ spec: withDefault, config, handlers, logs: false });
+  const app = createApp({
+    spec: withDefault,
+    config,
+    handlers: createHandlers(withDefault),
+    logs: false,
+  });
   let body;
   app.addHook("preHandler", async (request) => {
     body = request.body;
@@ -128,7 +139,7 @@ test("the registered validator still applies schema defaults before the handler"
       url: path,
       payload: { sources: [{ url: "https://example.test/guide", position: 1 }], brands: [] },
     });
-    expect(response.statusCode).toBe(501);
+    expect(response.statusCode).toBe(200);
     expect(body).toMatchObject({ markdown: "default answer" });
   } finally {
     await app.close();

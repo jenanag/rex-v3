@@ -55,7 +55,30 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Extract and classify the citations of one answer */
+        /**
+         * Extract and classify the citations of one answer
+         * @description Extract citations offline from caller-supplied engine sources and answer
+         *     Markdown. Process engine sources by ascending position, with input order
+         *     breaking ties, then Markdown links in document order. Read explicit links,
+         *     resolved references and HTTP(S) autolinks. Ignore bare URLs, relative
+         *     targets, image destinations, raw HTML URLs and links in code. Use plain
+         *     trimmed Markdown labels, keeping code text and linked image alt text and
+         *     ignoring tooltips. Decode CommonMark character references where recognized.
+         *
+         *     Require HTTP(S) URLs with an explicit nonempty host and no credentials.
+         *     Skip malformed destinations and sources that cannot produce a valid URL
+         *     and domain. Normalize scheme and host to lowercase, remove the default
+         *     port, one trailing host dot, and the fragment, and preserve the serialized
+         *     path, query, non-default port and www. prefix. Strip a leading www. from
+         *     the returned domain, but retain it when matching ownership.
+         *
+         *     Deduplicate by the normalized URL. Keep the first usable occurrence's
+         *     title and source type. An omitted engine title is null. Assign contiguous
+         *     positions starting at 1. Match exact brand domains and their subdomains
+         *     at dot boundaries, using exact matching for IP literals. Prefer the most
+         *     specific domain, then a primary brand, then brand input order. Unmatched
+         *     citations have third_party ownership and a null brandKey.
+         */
         post: operations["extractCitations"];
         delete?: never;
         options?: never;
@@ -260,7 +283,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Citations in order (engine sources first, then inline links), deduplicated by URL. */
+            /** @description Citations in order, deduplicated by normalized URL. An empty array is valid when no usable citations remain. */
             200: {
                 headers: {
                     [name: string]: unknown;

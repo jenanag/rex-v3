@@ -27,19 +27,34 @@ aggregates moved to the orchestrator's `tracking` module.
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `1`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `2`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
 | `extractCitations` | `P30D` | shared |  |
 <!-- GENERATED:cache END -->
 
+### Caller cache acceptance cases
+
+The future caller must validate the original request and check the byte length of
+the serialized tool request before cache lookup. When canonicalization cannot
+produce a safe key, call the tool with the original input and bypass both lookup
+and storage. The citation tool performs its own validation and extraction.
+
+| Case | Expected caller behavior |
+| --- | --- |
+| A cache entry exists for a source URL of `https://example.test/a`; another request supplies `HTTPS://example.test/a`. | Scheme normalization could give them the same key. Reject the uppercase input with HTTP 400 before the cache can serve the entry. |
+| A schema-valid request is exactly 4,194,304 bytes; adding `#x` to a source URL leaves the URL within its schema limit and makes the body 4,194,306 bytes. | Fragment removal could give them the same key. Reject the larger body with HTTP 413 before lookup. |
+| The source URL `http:///path` passes the request schema. WHATWG parsing could repair it to `http://path/`, which is a usable citation. | The empty authority makes the original source unusable. Bypass lookup and storage for a request whose key would erase this distinction. Forward the original request and expect HTTP 200 with the unusable source omitted. |
+| An out-of-range port prevents canonicalization. | Bypass lookup and storage. Forward the original request and let the tool skip the unusable source. |
+
 ## Limits
 
 Jay accepted [ADR 0033](../adr/0033-citation-extractor-body-limit.md) on 2026-11-24.
 The scaffold defaults to `BODY_LIMIT_BYTES=4194304` (4 MiB) and retains the
-current request schema. `extractCitations` returns HTTP 501 with
-`not_implemented` after request validation.
+current request schema. `extractCitations` returns the normalized, deduplicated
+citations in engine-position then Markdown document order. A schema-valid request
+with no usable citations returns HTTP 200 with an empty array.
 
 ### Request validation benchmark
 
@@ -49,12 +64,21 @@ From `services/citation-extractor/`, run `npm ci`, `npm run build`, and
 requires validator-only p99 below 20 ms for each of the four workloads.
 
 The benchmark checks both exact-limit requests through the registered route.
-Each reaches the stub at 4,194,304 bytes and receives HTTP 413 at 4,194,305 bytes.
+Each reaches the extraction handler and returns HTTP 200 at 4,194,304 bytes.
+Adding one byte of JSON whitespace returns HTTP 413.
 
 | Exact-limit workload | Engine sources | Trailing JSON spaces |
 |---|---:|---:|
 | Long strings with escaped Markdown and long source URLs and titles | 405 | 15,467 |
 | Short sources with ASCII Markdown and capped brand fields | 46,000 | 925 |
+
+### Direct smoke check
+
+Build and start the service from its folder using the Node version in `.nvmrc`.
+Run `npm ci`, `npm run build`, and `npm start`, then run
+`node scripts/smoke-citations.mjs` in another terminal. Set `PORT` for both
+commands when using a port other than 8080. The smoke check sends a loopback
+request with an engine citation and a Markdown link containing entities.
 
 <!-- GENERATED:limits START (source: x-rex-limits in packages/contracts/openapi/services/citation-extractor.yaml) -->
 See [the tool's operation limits](../../services/citation-extractor/AGENTS.md#limits).
@@ -79,7 +103,10 @@ See [the tool's operation limits](../../services/citation-extractor/AGENTS.md#li
 
 ## Dependencies
 
-- None (pure function, no network).
+- Extraction runs offline. The tool bundles the semicolon-terminated names from
+  the [WHATWG named character reference table](https://html.spec.whatwg.org/entities.json)
+  retrieved on 2026-11-24. It uses that data for CommonMark references without
+  rendering HTML or adding a runtime decoder dependency.
 <!-- GENERATED:deps START (source: docs/conventions.md#approved-tool-dependencies) -->
 - `fastify`: HTTP server
 - `@fastify/sensible`: HTTP errors and helpers
