@@ -44,8 +44,7 @@
       "sha256": "a7c2a6d8d4c5ad50db15672af7896bd744a2923854fcaa25237ba66c3097f959"
     },
     "src/config.ts": {
-      "sha256": "693c8d51300a849c6412c6b6aee2e18653195d43eb253e632823c66b5d849430",
-      "owned": true
+      "sha256": "693c8d51300a849c6412c6b6aee2e18653195d43eb253e632823c66b5d849430"
     },
     "src/contract.ts": {
       "sha256": "b5c0e8c5516ce71a242fd33f31dae1df37d0c349f38e5b1dd625b3fc40ad2e69"

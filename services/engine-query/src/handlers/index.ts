@@ -1,20 +1,16 @@
 import { performance } from "node:perf_hooks";
 import type { components } from "../../contract/types.js";
 import type { Handlers } from "../app.js";
-import type { Config } from "../config.js";
 import { validators, type ToolSpec } from "../contract.js";
 import { renderAnswer } from "../domain/citations.js";
 import { ToolProblem } from "../errors.js";
 import { createLlm } from "../llm/adapter.js";
 import { deployment } from "../llm/catalog.js";
+import type { EngineConfig } from "../tool-env.js";
 
 type Query = Required<components["schemas"]["EngineQuery"]>;
 
-export function createHandlers(
-  spec: ToolSpec,
-  config: Pick<Config, "ENGINE_QUERY_GROK_ENABLED">,
-  call = createLlm(),
-): Handlers {
+export function createHandlers(spec: ToolSpec, config: EngineConfig, call = createLlm()): Handlers {
   const engines = deployment(config.ENGINE_QUERY_GROK_ENABLED);
   const urlSchema = spec.components?.schemas?.Url;
   if (!urlSchema) throw new Error("Missing bundled Url schema");

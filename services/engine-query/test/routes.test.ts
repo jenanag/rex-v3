@@ -1,6 +1,6 @@
 import { expect, test, vi } from "vitest";
-import { loadConfig } from "../src/config.js";
 import { createLlm } from "../src/llm/adapter.js";
+import { loadEngineConfig } from "../src/tool-env.js";
 import { checkResponse, tool } from "./support.js";
 
 const path = "/v1/engine-answers";
@@ -547,7 +547,7 @@ test.each([
   ["false", false],
   ["true", true],
 ])("startup flag %s controls Grok discovery and eligibility", async (value, enabled) => {
-  const config = loadConfig({
+  const config = loadEngineConfig({
     ...(value === undefined ? {} : { ENGINE_QUERY_GROK_ENABLED: value }),
   });
   expect(config.ENGINE_QUERY_GROK_ENABLED).toBe(enabled);
@@ -587,7 +587,7 @@ test.each([
 });
 
 test("invalid Grok flag fails startup validation", () => {
-  expect(() => loadConfig({ ENGINE_QUERY_GROK_ENABLED: "yes" })).toThrow(
+  expect(() => loadEngineConfig({ ENGINE_QUERY_GROK_ENABLED: "yes" })).toThrow(
     /ENGINE_QUERY_GROK_ENABLED/,
   );
 });

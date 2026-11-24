@@ -1,7 +1,6 @@
 import { envSchema } from "env-schema";
 import { addFormats } from "./contract.js";
 import { envProperties } from "./env.js";
-import { toolEnvProperties } from "./tool-env.js";
 
 export interface Config {
   NODE_ENV: "development" | "test" | "production";
@@ -11,7 +10,6 @@ export interface Config {
   PROBLEM_BASE_URI: string;
   OTEL_EXPORTER_OTLP_ENDPOINT?: string;
   BODY_LIMIT_BYTES?: number;
-  ENGINE_QUERY_GROK_ENABLED: boolean;
 }
 
 export function loadConfig(data: Record<string, unknown> = process.env) {
@@ -19,6 +17,6 @@ export function loadConfig(data: Record<string, unknown> = process.env) {
     env: false,
     data,
     ajv: { customOptions: (ajv) => addFormats(ajv) },
-    schema: { type: "object", properties: { ...envProperties, ...toolEnvProperties } },
+    schema: { type: "object", properties: envProperties },
   });
 }
