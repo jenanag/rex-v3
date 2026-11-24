@@ -33,9 +33,12 @@ It is a monorepo with contract-first OpenAPI 3.1 and AsyncAPI specs:
 
 **Current phase: 3.** Jay approved the start of Phase 3 platform-core work on
 2026-11-25. Phase 2 acceptance remains pending. The [roadmap](docs/roadmap.md)
-tracks the remaining Phase 2 work and the proposed first Phase 3 step. Jay accepted
-Phase 0 on 2026-11-22, the same day Phase 1 was completed. The [ADR index](docs/adr/README.md)
-records the decisions, including ADR 0024 for TypeScript, Python and Go tools.
+tracks the remaining Phase 2 work and the proposed first Phase 3 step.
+
+**Status: Phase 0 accepted by Jay on 2026-11-22.** The [ADR index](docs/adr/README.md)
+records the decisions, including ADR 0024 for TypeScript, Python and Go tools. Phase 1
+was completed on 2026-11-22. The roadmap tracks the tool factory, including
+contract vendoring, the tool template and portability CI.
 Jay accepted ADRs 0025 and 0026 on 2026-11-22. On 2026-11-23, Jay accepted ADR 0027
 and [ADR 0028](docs/adr/0028-llms-txt-generator-language.md), which selects TypeScript
 for `llms-txt-generator`.
