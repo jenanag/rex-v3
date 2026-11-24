@@ -35,8 +35,16 @@ assert.deepEqual(
       webSearch: true,
       enabled: true,
     },
+    {
+      id: "gemini",
+      displayName: "Gemini",
+      provider: "google",
+      model: "gemini-3.5-flash-lite",
+      webSearch: false,
+      enabled: true,
+    },
   ],
-  "GET /v1/engines must list ChatGPT as the sole enabled engine",
+  "GET /v1/engines must list ChatGPT with search capability and text-only Gemini",
 );
 console.log("GET /v1/engines smoke passed (HTTP 200)");
 

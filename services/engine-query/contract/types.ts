@@ -74,15 +74,19 @@ export interface paths {
         put?: never;
         /**
          * Ask one engine one prompt (one sample) and return its answer
-         * @description Accepts the configured ChatGPT engine. A declared engine that is unavailable
-         *     in this deployment returns 422 unsupported_engine before any provider call.
-         *     The tool submits the original prompt to OpenAI Responses with required web
-         *     search, uses locale as an answer-language hint, and uses country for approximate
-         *     search location. The answer preserves Markdown and clickable citation locations.
-         *     Sources are unique, usable HTTP(S) citation annotations in first-citation order.
-         *     An answer with completed search and valid usage can have an empty source list.
-         *     Usage reports one answer_prompt item, including the reported billable search fee.
-         *     Provider failures, refusals, incomplete or unusable answers, missing search
+         * @description Accepts ChatGPT and Gemini. An unavailable engine returns 422 unsupported_engine
+         *     before any provider call. ChatGPT defaults to required hosted search; Gemini
+         *     defaults to text-only generation. Explicit false selects text-only generation.
+         *     Gemini with explicit true returns 422 unsupported_web_search identifying
+         *     /webSearch before any provider call.
+         *     The original prompt is sent verbatim. Locale is an answer-language hint.
+         *     Country is an approximate search location for grounded ChatGPT and a regional
+         *     relevance hint for text-only generation.
+         *     Grounded ChatGPT preserves Markdown and clickable citation locations. Sources
+         *     are unique, usable HTTP(S) citation annotations in first-citation order.
+         *     A completed, metered search can have no usable sources. Text-only answers return
+         *     sources: [] and incur zero search fees. Usage reports one answer_prompt item.
+         *     Provider failures, refusals, incomplete or unusable answers, missing required search
          *     evidence, unexpected model or pricing tier, and missing or inconsistent metering
          *     return 503 provider_unavailable. A valid upstream Retry-After is returned as
          *     non-negative integer seconds.
@@ -106,7 +110,7 @@ export interface components {
             provider: string;
             /** @description Model ID used for this engine (deployment config, not contract). */
             model: string;
-            /** @description True when answers use the engine's web search or grounding. */
+            /** @description True if this deployment can use hosted search when requested. */
             webSearch: boolean;
             enabled: boolean;
         };
@@ -117,6 +121,8 @@ export interface components {
             locale: components["schemas"]["Locale"];
             /** @default US */
             country: components["schemas"]["CountryCode"];
+            /** @description Require completed hosted search when true. Omission defaults to true for ChatGPT and false for Gemini. */
+            webSearch?: boolean;
         };
         /** @description A normalized engine answer. The orchestrator stores it as part of its Answer resource. */
         EngineAnswer: {
@@ -304,7 +310,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Configured engines (small list; not paginated). This deployment lists only ChatGPT (OpenAI GPT-6 Luna with web search enabled). */
+            /** @description Configured engines (small list; not paginated). ChatGPT supports web search. Gemini is text-only. */
             200: {
                 headers: {
                     [name: string]: unknown;

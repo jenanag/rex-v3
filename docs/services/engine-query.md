@@ -28,12 +28,12 @@ orchestrator's `tracking` module.
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `2`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `3`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
 | `listEngines` | `PT5M` | shared |  |
-| `queryEngine` | `P1D` | shared | window, extra key inputs `engineModel` |
+| `queryEngine` | `P1D` | shared | window, extra key inputs `engineModel`, search defaults `chatgpt` = `true`, `gemini` = `false` |
 <!-- GENERATED:cache END -->
 
 ## Limits
@@ -109,17 +109,20 @@ source, and usage over loopback HTTP.
 
 ## Notes
 
-- Jay accepted [ADR 0038](../adr/0038-engine-query-selectable-web-search.md) on
-  2026-11-25. Selectable web search and text-only Gemini are follow-up work.
-- The first integration uses OpenAI GPT-6 Luna through Responses. Discovery lists
-  ChatGPT. Each query uses one required provider-hosted search and reports one
-  usage item at Standard rates, including the reported billable search fee.
-  [OpenAI pricing](https://developers.openai.com/api/docs/pricing#tools).
+- [ADR 0038](../adr/0038-engine-query-selectable-web-search.md) makes search selectable.
+  Discovery reports search capability. ChatGPT uses GPT-6 Luna through OpenAI
+  Responses and defaults to required hosted search. Explicit false uses text-only
+  generation with zero search fees. Gemini
+  defaults to text-only generation, and explicit true returns HTTP 422.
+- Gemini uses `gemini-3.5-flash-lite` on the Gemini Developer API v1. Its Standard
+  text rates are $0.30 uncached input, $0.03 cached input, and $2.50 output including
+  thinking per million tokens. Text-only answers return an empty source list.
+  [Gemini pricing](https://aistudio.google.com/docs/pricing#gemini-3.5-flash-lite).
 - Provider failures return 503. The tool converts a valid upstream `Retry-After`
   to seconds. The worker owns retries.
-- The caller key includes the original prompt, effective locale and country, and
-  the configured model from discovery (`engineModel`), per UTC day and sample.
-  Refresh discovery on rollout and verify the returned model before storage. A
-  search configuration change under the same model requires a key version bump.
+- Apply the engine-specific search defaults in the caller cache policy before
+  lookup. Refresh discovery on rollout and verify the returned model before storage.
+  The orchestrator owns future subscription eligibility in
+  [Phase 6](../roadmap.md#phase-6-monetization).
 - API answers can differ from the consumer apps; AI Overviews needs a SERP provider
   ([deferred decision](../roadmap.md#deferred-decisions)).
