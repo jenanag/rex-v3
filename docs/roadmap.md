@@ -345,9 +345,10 @@ The Python spike ran right before step 5. Both validators missed the large-workl
 budget ([ADR 0034](adr/0034-python-validation-spike.md)), so the Python bring-up
 remains paused. Jay accepted [ADR 0035](adr/0035-answer-analysis-language.md) on
 2026-11-24, selecting TypeScript and the existing template for answer-analysis.
-The tool is still unscaffolded. Jay accepted [ADR 0036](adr/0036-answer-analysis-body-limit.md)
-on 2026-11-24. Scaffolding will configure the 3 MiB limit and verify the HTTP boundary
-and per-workload validation gate. The Go bring-up waits for Phase 7.
+Jay accepted [ADR 0036](adr/0036-answer-analysis-body-limit.md) on 2026-11-24.
+The TypeScript scaffold defaults to the 3 MiB limit and CI checks both exact-limit
+requests and the validator-only p99 gate. Both operations are HTTP 501 stubs.
+The Go bring-up waits for Phase 7.
 
 - Each tool: contract tests against its vendored spec, unit tests for its domain,
   recorded provider fixtures (no live LLM or web calls in CI), a smoke script that calls
