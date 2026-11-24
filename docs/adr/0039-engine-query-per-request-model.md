@@ -1,6 +1,6 @@
 # 0039: Allow per-request model selection in engine-query
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-25, accepted by Jay)
 - **Date:** 2026-11-25
 - **Deciders:** Jay Pascual
 
@@ -24,13 +24,13 @@ current default. ChatGPT keeps `gpt-6-luna`, and Gemini keeps
 Any later addition requires approval and verification of provider compatibility,
 search capability, and metering. Each call still sends one prompt to one engine.
 
-**Discovery and error details proposed for Jay's review.** Keep the existing
-`model` in `GET /v1/engines` as the default and add `allowedModels` with the
-IDs the deployment accepts for that engine, including the default. Use the
+Keep the existing `model` in `GET /v1/engines` as the default and add
+`allowedModels` with the IDs the deployment accepts for that engine, including
+the default. Use the
 same deployment catalog for discovery and request validation. For a
 schema-valid model outside the selected engine's allowlist, return the shared
-HTTP 422 Problem, provisionally `unsupported_model` with detail identifying
-`/model`, before any provider call. Schema-invalid requests retain HTTP 400.
+HTTP 422 Problem with code `unsupported_model` and detail identifying `/model`
+before cache lookup or any provider call. Schema-invalid requests retain HTTP 400.
 
 [ADR 0038](0038-engine-query-selectable-web-search.md) continues to govern
 search capability and defaults. ChatGPT still defaults to required hosted
@@ -71,10 +71,10 @@ sample constant within each comparison:
   policy and golden vectors in the implementation PR. The changed discovery
   output calls for an `engine-query.keyVersion` bump under
   [conventions §15](../conventions.md#15-caching).
-- Phase 2 acceptance remains pending. This proposal adds model choice within
+- Phase 2 acceptance remains pending. This decision adds model choice within
   an engine, and the three-engine sources-and-usage criterion still applies.
   Contract and policy edits, implementation, tests, and live verification
-  follow acceptance.
+  are deferred to follow-up work.
 
 ## Alternatives considered
 

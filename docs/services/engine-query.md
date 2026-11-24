@@ -109,8 +109,8 @@ source, and usage over loopback HTTP.
 
 ## Notes
 
-- [Proposed ADR 0039](../adr/0039-engine-query-per-request-model.md) records
-  per-request model selection as follow-up work pending acceptance.
+- Jay accepted [ADR 0039](../adr/0039-engine-query-per-request-model.md) for
+  per-request model selection on 2026-11-25. Implementation is follow-up work.
 - [ADR 0038](../adr/0038-engine-query-selectable-web-search.md) makes search selectable.
   Discovery reports search capability. ChatGPT uses GPT-6 Luna through OpenAI
   Responses and defaults to required hosted search. Explicit false uses text-only

@@ -62,7 +62,8 @@ Jay accepted [ADR 0037](docs/adr/0037-engine-query-language.md) on 2026-11-24,
 confirming TypeScript and the existing LLM template for engine-query.
 Jay accepted [ADR 0038](docs/adr/0038-engine-query-selectable-web-search.md) on
 2026-11-25. Engine-query supports selectable search and text-only Gemini.
-[ADR 0039](docs/adr/0039-engine-query-per-request-model.md) is Proposed for per-request model selection.
+Jay accepted [ADR 0039](docs/adr/0039-engine-query-per-request-model.md) on
+2026-11-25 for per-request model selection. Implementation follows separately.
 Open choices are tracked as [deferred decisions](docs/roadmap.md#deferred-decisions).
 
 **Coding agents** (Cursor, Claude Code, Codex, Copilot): start at [AGENTS.md](AGENTS.md).
