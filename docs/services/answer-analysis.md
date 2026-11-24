@@ -3,7 +3,7 @@
 - **Kind:** tool ([what that means](../architecture.md#service-map))
 - **Phase:** 2
 - **Contract:** source [packages/contracts/openapi/services/answer-analysis.yaml](../../packages/contracts/openapi/services/answer-analysis.yaml); vendored, self-contained copy in [services/answer-analysis/contract/](../../services/answer-analysis/contract/openapi.yaml) ([ADR 0018](../adr/0018-tool-portability.md))
-- **Language:** TypeScript (`language: ts` in vendoring.yaml), per [ADR 0035](../adr/0035-answer-analysis-language.md), accepted by Jay on 2026-11-24. The tool is still unscaffolded.
+- **Language:** TypeScript (`language: ts` in vendoring.yaml), per [ADR 0035](../adr/0035-answer-analysis-language.md), accepted by Jay on 2026-11-24. The TypeScript scaffold provides both operations as HTTP 501 stubs.
 - **Portability:** a self-contained project in its language: copy `services/answer-analysis/` anywhere, then its install, build, test and `docker build` work with nothing else present; no auth, no cache, no bus inside ([ADR 0018](../adr/0018-tool-portability.md))
 - **State:** none (callers cache its results, see below)
 - **Bus:** none
@@ -87,9 +87,11 @@ See [the tool's operation limits](../../services/answer-analysis/AGENTS.md#limit
 <!-- GENERATED:limits END -->
 
 Jay accepted [ADR 0036](../adr/0036-answer-analysis-body-limit.md) on 2026-11-24.
-It sets a 3 MiB (3,145,728-byte) request body limit and a strict validator-only
-p99 gate below 15 ms per workload. Configuration, HTTP boundary checks, and
-benchmark verification are scheduled for scaffolding.
+Normal startup defaults to `BODY_LIMIT_BYTES=3145728` (3 MiB). The request
+validation benchmark checks HTTP 501 at the exact ceiling and HTTP 413 one byte
+above it for the padded declared fields and nested brand data fixtures. CI
+enforces a strict validator-only p99 below 15 ms for each of the five workloads.
+After building, run `node scripts/benchmark-validation.mjs` from the tool folder.
 
 ## Shared schemas
 
