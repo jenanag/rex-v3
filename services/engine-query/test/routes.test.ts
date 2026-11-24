@@ -298,6 +298,67 @@ test("mock route replays the checked-in synthetic response and reports its usage
   }
 });
 
+test("mock route replays the recorded Parks Canada answer", async () => {
+  const transport = vi.fn(async () => {
+    throw new Error("Unexpected provider traffic");
+  });
+  const app = tool({}, createLlm({ data: { LLM_MODE: "mock" }, fetch: transport }));
+  try {
+    const { body } = await post(
+      app,
+      {
+        engine: "chatgpt",
+        locale: "en-CA",
+        country: "CA",
+        prompt:
+          "What does the Parks Canada Discovery Pass cover? Cite two official Parks Canada pages in your answer.",
+      },
+      200,
+    );
+    expect(body).toEqual({
+      answer: {
+        engine: "chatgpt",
+        model: "gpt-6-luna",
+        text: [
+          "The **Parks Canada Discovery Pass** covers unlimited **daily admission** for 12 months to ",
+          "participating Parks Canada places—national parks, national historic sites, and national marine ",
+          "conservation areas. It covers the admission privileges normally included with a daily pass, but ",
+          "**not** separately charged items such as camping or accommodations, backcountry overnight use, ",
+          "guided tours, hot springs, or parking where those have an extra fee. It also doesn’t cover ",
+          "places not administered by Parks Canada. ",
+          "([parks.canada.ca](https://www.parks.canada.ca/termes-terms/reservation?utm_source=openai))\n",
+          "\n",
+          "Sources: [Parks Canada — Reservation policies and Discovery Pass ",
+          "terms](https://www.parks.canada.ca/termes-terms/reservation) · [Parks Canada — Discovery Pass ",
+          "for independent ",
+          "travellers](https://parks.canada.ca/voyage-travel/voyagistes-traveltrade/~/link.aspx?_id=C9A7C8E853CA42CB91F6D629C07031F6&_z=z)",
+        ].join(""),
+        sources: [
+          {
+            url: "https://www.parks.canada.ca/termes-terms/reservation?utm_source=openai",
+            title: "Reservation policies",
+            position: 1,
+          },
+        ],
+        latencyMs: expect.any(Number),
+      },
+      usage: [
+        {
+          provider: "openai",
+          model: "gpt-6-luna",
+          operation: "answer_prompt",
+          inputTokens: 8_563,
+          outputTokens: 268,
+          costMicrosUsd: 11_099,
+        },
+      ],
+    });
+    expect(transport).not.toHaveBeenCalled();
+  } finally {
+    await app.close();
+  }
+});
+
 test.each([
   [0, 211],
   [1, 10_211],

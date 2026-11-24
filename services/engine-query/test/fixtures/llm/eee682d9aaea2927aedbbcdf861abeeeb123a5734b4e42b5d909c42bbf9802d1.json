@@ -1,0 +1,55 @@
+{
+  "model": "gpt-6-luna",
+  "status": "completed",
+  "service_tier": "default",
+  "output": [
+    {
+      "type": "web_search_call",
+      "status": "completed",
+      "action": {
+        "type": "search"
+      }
+    },
+    {
+      "type": "message",
+      "role": "assistant",
+      "status": "completed",
+      "content": [
+        {
+          "type": "output_text",
+          "text": "The **Parks Canada Discovery Pass** covers unlimited **daily admission** for 12 months to participating Parks Canada places—national parks, national historic sites, and national marine conservation areas. It covers the admission privileges normally included with a daily pass, but **not** separately charged items such as camping or accommodations, backcountry overnight use, guided tours, hot springs, or parking where those have an extra fee. It also doesn’t cover places not administered by Parks Canada. ([parks.canada.ca](https://www.parks.canada.ca/termes-terms/reservation?utm_source=openai))\n\nSources: [Parks Canada — Reservation policies and Discovery Pass terms](https://www.parks.canada.ca/termes-terms/reservation) · [Parks Canada — Discovery Pass for independent travellers](https://parks.canada.ca/voyage-travel/voyagistes-traveltrade/~/link.aspx?_id=C9A7C8E853CA42CB91F6D629C07031F6&_z=z)",
+          "annotations": [
+            {
+              "type": "url_citation",
+              "url": "https://www.parks.canada.ca/termes-terms/reservation?utm_source=openai",
+              "title": "Reservation policies",
+              "start_index": 508,
+              "end_index": 599
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "usage": {
+    "input_tokens": 8563,
+    "output_tokens": 268,
+    "total_tokens": 8831,
+    "input_tokens_details": {
+      "cached_tokens": 0,
+      "cache_write_tokens": 4360,
+      "cache_write_tokens_details": {
+        "ttl_30m_tokens": 4360,
+        "ttl_12h_tokens": 0
+      }
+    },
+    "output_tokens_details": {
+      "reasoning_tokens": 55
+    }
+  },
+  "tool_usage": {
+    "web_search": {
+      "num_requests": 1
+    }
+  }
+}

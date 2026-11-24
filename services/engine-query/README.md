@@ -38,5 +38,8 @@ the REx monorepo and re-vendor contract changes there.
 
 Mock mode reads the matching Responses fixture in `test/fixtures/llm/`. Its
 identity includes the endpoint and full serialized provider request, including
-instructions and search settings. The included response is synthetic and covers
-annotations and metering without provider traffic.
+instructions and search settings. The Parks Canada Discovery Pass fixture was
+recorded from a single GPT-6 Luna Responses request with a synthetic prompt.
+It keeps the answer, citation offsets, completed search status, and usage fields
+needed for replay. The synthetic fixture and metering cases cover additional
+provider behavior. Mock replay runs without credentials or provider traffic.
