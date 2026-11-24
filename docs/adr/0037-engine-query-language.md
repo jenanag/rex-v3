@@ -1,6 +1,6 @@
 # 0037: Use TypeScript for engine-query
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-24, accepted by Jay)
 - **Date:** 2026-11-24
 - **Deciders:** Jay Pascual
 - **Tool:** `engine-query`
@@ -18,7 +18,7 @@ Node.js SDKs fit that call model and the existing TypeScript LLM adapter.
 ## Decision
 
 Use TypeScript and the existing TypeScript LLM template in `services/_template`.
-After Jay accepts this ADR, scaffold with
+Jay’s acceptance satisfies the language gate. Scaffold with
 `scripts/new-tool engine-query --lang ts --llm`.
 Provider and model selection, pricing, and implementation details are separate
 decisions.

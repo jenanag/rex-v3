@@ -54,7 +54,8 @@ Jay accepted [ADR 0035](docs/adr/0035-answer-analysis-language.md) on 2026-11-24
 selecting TypeScript for answer-analysis.
 Jay accepted [ADR 0036](docs/adr/0036-answer-analysis-body-limit.md) on 2026-11-24,
 setting the 3 MiB request body ceiling for answer-analysis at scaffolding.
-[ADR 0037](docs/adr/0037-engine-query-language.md) is Proposed for engine-query.
+Jay accepted [ADR 0037](docs/adr/0037-engine-query-language.md) on 2026-11-24,
+confirming TypeScript and the existing LLM template for engine-query.
 Phase 2 builds the tools one at a time, before the platform. Open choices are tracked as
 [deferred decisions](docs/roadmap.md#deferred-decisions).
 
