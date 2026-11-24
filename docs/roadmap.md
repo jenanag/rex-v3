@@ -309,9 +309,11 @@ and latency check](services/content-auditor.md#crawler-access-smoke-and-latency-
 
 [ADR 0032](adr/0032-citation-extractor-language.md), accepted by Jay on 2026-11-24,
 selects TypeScript for `citation-extractor`. Jay also accepted
-[ADR 0033](adr/0033-citation-extractor-body-limit.md) on 2026-11-24. Scaffolding will
-configure the 4 MiB (4,194,304-byte) ceiling, retain the current request schema,
-and verify the validator-only p99 gate below 20 ms and the body-size boundary in CI.
+[ADR 0033](adr/0033-citation-extractor-body-limit.md) on 2026-11-24. The scaffold
+sets the 4 MiB (4,194,304-byte) ceiling, retains the request schema, and registers
+`extractCitations` as an HTTP 501 stub. The
+[validation benchmark](services/citation-extractor.md#request-validation-benchmark)
+checks both exact-limit workloads and enforces validator-only p99 below 20 ms in CI.
 
 Built in this order, each started with its language ADR and `scripts/new-tool --lang
 <language>` and finished (definition of done below) before the next one starts. The order goes from no LLM to
