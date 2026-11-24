@@ -90,7 +90,9 @@ Per [ADR 0017](../adr/0017-deterministic-first-analysis.md):
 
 [Accepted ADR 0040](../adr/0040-llm-model-and-analyzer-cache-eligibility.md)
 defines the caller's analyzer eligibility check before cached result lookup.
-Implementation is follow-up work.
+Implementation is follow-up work. Provider identity checks use cache key version
+4. A later eligibility-only change keeps that version if canonical inputs and
+tool outputs stay the same.
 
 The tool validates `ANSWER_ANALYSIS_LUNA_ENABLED` at startup and defaults it to
 `false`. Set it to `true` and configure `OPENAI_API_KEY` for the live deployment. Callers opt in with `sentiment.analyzers` containing
@@ -108,9 +110,12 @@ with a score in `[-1, 1]`, a consistent label, and a null rationale or at most
 120 Unicode code points. It checks the 48 KiB reply limit before parsing.
 
 The tool records one `classify_sentiment` usage item for valid reported counts,
-even when the batch fails. [OpenAI Standard short-context prices](https://developers.openai.com/api/docs/models/gpt-6-luna#pricing)
+even when the batch fails after the provider model is verified. The same
+tool-local entry supplies the analyzer ID, provider model, and rates.
+[OpenAI Standard short-context prices](https://developers.openai.com/api/docs/models/gpt-6-luna#pricing)
 per million tokens are $0.10 uncached input, $0.01 cached input, $0.125 cache writes,
 and $0.50 output. The tool prices each token once and rounds the total once.
+Missing or unexpected provider model IDs fail the analyzer without usage.
 An explicitly reported tier other than `default` fails the analyzer and emits
 an operational diagnostic without pricing or reporting that call's usage.
 For a failed secondary, HTTP 200 includes available usage and marks Luna as
@@ -137,6 +142,8 @@ and 74 output tokens. The recomputed batch cost is 63 microdollars. In this
 recording, the provider response took 3.84 seconds and the local HTTP route
 took 3.89 seconds. The separate synthetic pricing test covers cache reads
 and writes and yields 167 microdollars.
+The replay fixture retains its original format. Offline provider stubs test
+the returned model ID check.
 
 ## Endpoints
 
@@ -151,7 +158,7 @@ and writes and yields 167 microdollars.
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `3`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `4`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |

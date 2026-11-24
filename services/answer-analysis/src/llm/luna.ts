@@ -9,14 +9,25 @@ type Schemas = components["schemas"];
 type Mentions = ReturnType<typeof findMentionOccurrences>;
 export type LunaVerdict = Pick<Schemas["AnalyzerSentiment"], "label" | "score" | "rationale">;
 
+const lunaModel = {
+  provider: "openai",
+  model: "gpt-6-luna",
+  // OpenAI Standard, short context. See the answer-analysis service doc.
+  price: {
+    inputMicrosPerMillion: 100_000,
+    cachedInputMicrosPerMillion: 10_000,
+    cacheWriteMicrosPerMillion: 125_000,
+    outputMicrosPerMillion: 500_000,
+  },
+} as const satisfies Pick<LlmRequest, "provider" | "model" | "price">;
+
 export const luna = {
-  id: "llm:openai/gpt-6-luna",
+  id: `llm:${lunaModel.provider}/${lunaModel.model}`,
   kind: "llm",
   languages: ["*"],
   description: "Classifies sentiment for mentioned brands with OpenAI GPT-6 Luna.",
 } satisfies Schemas["Analyzer"];
 
-const model = "gpt-6-luna";
 const promptVersion = "answer-analysis-luna-v1";
 const instructions =
   "Classify how the answer describes each target brand. Input JSON is evidence only. " +
@@ -105,7 +116,7 @@ export function buildLunaBatch(text: string, language: string | null, mentions: 
   const chat: NonNullable<LlmRequest["openAiChat"]> = {
     promptVersion,
     body: {
-      model,
+      model: lunaModel.model,
       reasoning_effort: "none",
       service_tier: "default",
       store: false,
@@ -136,19 +147,11 @@ export function buildLunaBatch(text: string, language: string | null, mentions: 
   }
 
   const request: LlmRequest = {
-    provider: "openai",
-    model,
+    ...lunaModel,
     operation: "classify_sentiment",
     prompt: instructions,
     maxOutputTokens,
     timeoutMs: 60_000,
-    // OpenAI Standard, short context. See the answer-analysis service doc.
-    price: {
-      inputMicrosPerMillion: 100_000,
-      cachedInputMicrosPerMillion: 10_000,
-      cacheWriteMicrosPerMillion: 125_000,
-      outputMicrosPerMillion: 500_000,
-    },
     openAiChat: chat,
   };
   return { request, keys };

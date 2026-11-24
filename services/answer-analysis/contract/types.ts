@@ -86,9 +86,10 @@ export interface paths {
          *     usage reported by the provider, including for unusable completions. A failed
          *     effective primary returns the shared 503 `provider_unavailable` Problem
          *     with a valid upstream Retry-After when available. Failure includes
-         *     a timeout, refusal, incomplete or invalid output, invalid usage, or an
-         *     explicitly reported tier other than Standard. The tool does not assign
-         *     Standard cost to a completion served on a different tier.
+         *     a timeout, refusal, incomplete or invalid output, invalid usage, a missing
+         *     or unexpected model in the live provider reply, or an explicitly reported
+         *     tier other than Standard. The tool prices usage only for a verified model
+         *     served at the expected tier.
          *
          *     After transport and schema validation, semantic errors are checked in
          *     this order: `duplicate_brand_key` (exact duplicate key),

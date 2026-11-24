@@ -46,9 +46,11 @@ function completion(
     finish = "stop",
     refusal = null as string | null,
     serviceTier = "default",
+    returnedModel = metered.model as string | null,
   } = {},
 ) {
   return Response.json({
+    ...(returnedModel === null ? {} : { model: returnedModel }),
     choices: [{ finish_reason: finish, message: { content, refusal } }],
     usage,
     service_tier: serviceTier,
@@ -341,6 +343,57 @@ test("oversized span is clipped, with in-excerpt offsets and the same brand ID",
 
 const input = { text, brands, sentiment: { language: "en", analyzers: [lexicon, model] } };
 const jsonRows = (...results: unknown[]) => JSON.stringify({ results });
+
+test.each([
+  ["matching", "gpt-6-luna"],
+  ["unexpected", "different-model"],
+  ["missing", null],
+] as const)(
+  "checks a %s provider model when Luna is primary or secondary",
+  async (_case, returnedModel) => {
+    for (const primary of [model, lexicon]) {
+      const provider = stub(() => completion(undefined, { returnedModel }));
+      const report = vi.fn();
+      const handlers = createHandlers({
+        lunaEnabled: true,
+        llm: provider.llm,
+        reportFailedPrimaryUsage: report,
+      });
+      const matches = returnedModel === metered.model;
+      const status = !matches && primary === model ? 503 : 200;
+      const { data } = await post(
+        handlers,
+        { ...input, sentiment: { ...input.sentiment, primary } },
+        status,
+      );
+      expect(provider.fetch).toHaveBeenCalledOnce();
+      expect(JSON.parse(String(provider.fetch.mock.calls[0][1]?.body))).toMatchObject({
+        model: "gpt-6-luna",
+      });
+      expect(report).not.toHaveBeenCalled();
+      if (status === 503) {
+        expect(data).toMatchObject({ status: 503, code: "provider_unavailable" });
+        expect(data).not.toHaveProperty("usage");
+      } else {
+        expect(data.analyzers[1]).toMatchObject({
+          analyzer: model,
+          status: matches ? "ok" : "failed",
+          primary: primary === model,
+        });
+        expect(data.usage).toEqual(matches ? [metered] : []);
+        expect(
+          data.mentions.map(
+            ({ sentimentByAnalyzer }: components["schemas"]["MentionDetail"]) =>
+              sentimentByAnalyzer[1],
+          ),
+        ).toMatchObject([
+          { analyzer: model, label: matches ? "positive" : null, score: matches ? 0.6 : null },
+          { analyzer: model, label: matches ? "negative" : null, score: matches ? -0.5 : null },
+        ]);
+      }
+    }
+  },
+);
 
 test.each([
   ["missing row", jsonRows(rows[1])],

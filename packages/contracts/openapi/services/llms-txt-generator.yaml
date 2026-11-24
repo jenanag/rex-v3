@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: REx llms-txt-generator tool
-  version: 4.0.0
+  version: 4.0.1
   description: |
     Stateless tool: writes one page's llms.txt entry from its extracted content
     (extractively or with an LLM), assembles a site's llms.txt (and optionally
@@ -64,8 +64,10 @@ paths:
         Fit the operation within two minutes. Expect a JSON object containing only `description`, a
         string or null. Apply the same normalization, sentence and character limits.
         For an unusable completion with valid usage, return the extractive description
-        (or null) and retain the usage item. Provider failures return HTTP 503 with
-        Problem code `provider_unavailable` and forward a valid upstream Retry-After.
+        (or null) and retain the usage item. A live OpenAI completion must report
+        the selected model before its output or usage can be used. A missing or
+        unexpected model is a provider failure. Provider failures return HTTP 503
+        with Problem code `provider_unavailable` and forward a valid upstream Retry-After.
       tags: [llms.txt]
       requestBody:
         required: true
