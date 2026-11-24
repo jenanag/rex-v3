@@ -26,7 +26,6 @@ export function answerUsage(
   if (
     count(usage?.total_tokens) !== inputTokens + outputTokens ||
     reads + writes > inputTokens ||
-    searches > 1 ||
     (reasoning !== undefined && count(reasoning) > outputTokens) ||
     (writeDetails !== undefined &&
       (count(writeDetails.ttl_12h_tokens) !== 0 || count(writeDetails.ttl_30m_tokens) !== writes))

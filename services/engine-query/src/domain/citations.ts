@@ -27,6 +27,34 @@ function utf16Boundaries(text: string) {
   return offsets;
 }
 
+function codeSpans(text: string) {
+  const runs = [...text.matchAll(/`+/g)];
+  const nextByWidth = new Map<number, number>();
+  const pairs = new Map<number, { start: number; closing: number }>();
+  for (let index = runs.length - 1; index >= 0; index--) {
+    const run = runs[index];
+    let before = run.index;
+    while (text[before - 1] === "\\") before--;
+    // An escape outside code consumes only the first backtick. Inside code,
+    // the full run can close the span regardless of preceding backslashes.
+    const escaped = (run.index - before) % 2;
+    const width = run[0].length;
+    const closing = nextByWidth.get(width - escaped);
+    if (closing !== undefined) pairs.set(index, { start: run.index + escaped, closing });
+    nextByWidth.set(width, index);
+  }
+
+  const spans: { start: number; end: number }[] = [];
+  for (let index = 0; index < runs.length; index++) {
+    const pair = pairs.get(index);
+    if (!pair) continue;
+    const delimiter = runs[pair.closing];
+    spans.push({ start: pair.start, end: delimiter.index + delimiter[0].length });
+    index = pair.closing;
+  }
+  return spans;
+}
+
 function markdownLinks(text: string) {
   // Recognize the inline link and autolink forms used in provider Markdown.
   // A balanced parenthesis pair inside a destination is part of the URL.
@@ -43,7 +71,10 @@ export function renderAnswer(parts: TextPart[], validUrl: (value: string) => boo
   const sources = new Map<string, Source>();
   const paragraphs = parts.map(({ text, annotations }) => {
     const offsets = utf16Boundaries(text);
-    const links = markdownLinks(text);
+    const code = codeSpans(text);
+    const links = markdownLinks(text).filter(
+      (link) => !code.some((span) => span.start <= link.start && link.start < span.end),
+    );
     const insertions = new Map<number, string[]>();
 
     // Stable sort preserves provider order for equal starts within this text part.
@@ -63,13 +94,14 @@ export function renderAnswer(parts: TextPart[], validUrl: (value: string) => boo
       // Responses annotations describe the index of the last cited code point.
       const end = offsets[citation.end_index + 1];
       if (start === undefined || end === undefined || start >= end) continue;
+      const boundary = code.find((span) => span.start < end && end < span.end)?.end ?? end;
       const existing = links.find(
         (link) =>
           (link.start < end && start < link.end) ||
-          (link.start >= end && !text.slice(end, link.start).trim()),
+          (link.start >= boundary && !text.slice(boundary, link.start).trim()),
       );
       if (existing && normalizedUrl(existing.url, validUrl) === url) continue;
-      const at = existing && existing.start < end ? Math.max(end, existing.end) : end;
+      const at = existing && existing.start < end ? Math.max(boundary, existing.end) : boundary;
       const label = ` [${source.position}](<${url.replaceAll("&", "&amp;")}>)`;
       const labels = insertions.get(at) ?? [];
       labels.push(label);

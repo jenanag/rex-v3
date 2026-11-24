@@ -192,6 +192,32 @@ test("Markdown citations use code-point offsets and deduplicate source rows in f
   }
 });
 
+test.each([
+  ["single backticks", "`Guide`"],
+  ["double backticks with literal backticks", "`` `Guide` ``"],
+  ["link-like text in single backticks", "`[Guide](https://example.test/guide)`"],
+  ["link-like text in double backticks", "``[Guide](https://example.test/guide)``"],
+])("places a clickable citation after a code span with %s", async (_name, span) => {
+  const url = "https://example.test/guide";
+  const text = "See " + span + " for the command.";
+  const start = text.indexOf("Guide");
+  const reply = {
+    ...completion,
+    output: [search, message(text, [cite(url, "Guide", start, start + 4)])],
+  };
+  const app = tool(
+    {},
+    provider(async () => Response.json(reply)),
+  );
+  try {
+    const { body } = await post(app, query, 200);
+    expect(body.answer.text).toBe(`See ${span} [1](<${url}>) for the command.`);
+    expect(body.answer.sources).toEqual([{ url, title: "Guide", position: 1 }]);
+  } finally {
+    await app.close();
+  }
+});
+
 test("mock route replays the checked-in synthetic response and reports its usage", async () => {
   const transport = vi.fn(async () => {
     throw new Error("Unexpected provider traffic");
@@ -210,20 +236,27 @@ test("mock route replays the checked-in synthetic response and reports its usage
   }
 });
 
-test("completed search with explicit zero billable searches still returns 200", async () => {
-  const reply = { ...completion, tool_usage: { web_search: { num_requests: 0 } } };
-  const app = tool(
-    {},
-    provider(async () => Response.json(reply)),
-  );
-  try {
-    const { body } = await post(app, query, 200);
-    expect(body.answer.sources).toEqual([]);
-    expect(body.usage).toEqual([{ ...expectedUsage, costMicrosUsd: 211 }]);
-  } finally {
-    await app.close();
-  }
-});
+test.each([
+  [0, 211],
+  [1, 10_211],
+  [2, 20_211],
+])(
+  "a completed search with %i reported billable searches returns HTTP 200",
+  async (count, cost) => {
+    const reply = { ...completion, tool_usage: { web_search: { num_requests: count } } };
+    const transport = vi.fn<typeof globalThis.fetch>(async () => Response.json(reply));
+    const app = tool({}, provider(transport));
+    try {
+      const { body } = await post(app, query, 200);
+      expect(body.answer.sources).toEqual([]);
+      expect(body.usage).toEqual([{ ...expectedUsage, costMicrosUsd: cost }]);
+      expect(transport).toHaveBeenCalledOnce();
+      expect(JSON.parse(String(transport.mock.calls[0][1]?.body)).max_tool_calls).toBe(1);
+    } finally {
+      await app.close();
+    }
+  },
+);
 
 test.each([
   ["unexpected model", { model: "other-model" }],
@@ -248,6 +281,8 @@ test.each([
   ["missing token usage", { usage: undefined }],
   ["missing search metering", { tool_usage: undefined }],
   ["invalid search count", { tool_usage: { web_search: { num_requests: -1 } } }],
+  ["fractional search count", { tool_usage: { web_search: { num_requests: 1.5 } } }],
+  ["unsafe search count", { tool_usage: { web_search: { num_requests: 2 ** 53 } } }],
   ["inconsistent token total", { usage: { ...usage, total_tokens: 0 } }],
   [
     "overlapping cache counts",
