@@ -162,15 +162,15 @@ test("Markdown citations use code-point offsets and deduplicate source rows in f
           action: { type: "search", sources: [{ url: "https://example.test/uncited" }] },
         },
         message(text, [
-          cite(b, " ", startLink, startLink + linked.length - 1),
-          cite(a, "Later duplicate", 8, 12),
-          cite("HTTPS://EXAMPLE.TEST:443/a?symbol=1&b=2#frag", " Guide A ", 1, 6),
-          cite("https://user@example.test/private", "Skip", 1, 6),
-          cite("https:///path", "Skip empty host", 1, 6),
-          cite("https://example.test/%ZZ", "Skip malformed percent", 1, 6),
-          cite("javascript:alert(1)", "Skip scheme", 1, 6),
+          cite(b, " ", startLink, startLink + linked.length),
+          cite(a, "Later duplicate", 8, 13),
+          cite("HTTPS://EXAMPLE.TEST:443/a?symbol=1&b=2#frag", " Guide A ", 1, 7),
+          cite("https://user@example.test/private", "Skip", 1, 7),
+          cite("https:///path", "Skip empty host", 1, 7),
+          cite("https://example.test/%ZZ", "Skip malformed percent", 1, 7),
+          cite("javascript:alert(1)", "Skip scheme", 1, 7),
         ]),
-        message("Final.", [cite(b, "Ignored later title", 0, 5)]),
+        message("Final.", [cite(b, "Ignored later title", 0, 6)]),
       ],
     }),
   );
@@ -203,7 +203,7 @@ test.each([
   const start = text.indexOf("Guide");
   const reply = {
     ...completion,
-    output: [search, message(text, [cite(url, "Guide", start, start + 4)])],
+    output: [search, message(text, [cite(url, "Guide", start, start + 5)])],
   };
   const app = tool(
     {},
@@ -265,12 +265,32 @@ test.each([
   const start = text.indexOf("Guide");
   const reply = {
     ...completion,
-    output: [search, message(text, [cite(url, "Guide", start, start + 4)])],
+    output: [search, message(text, [cite(url, "Guide", start, start + 5)])],
   };
   const app = tool(
     {},
     provider(async () => Response.json(reply)),
   );
+  try {
+    const { body } = await post(app, query, 200);
+    expect(body.answer.text).toBe(expected);
+    expect(body.answer.sources).toEqual([{ url, title: "Guide", position: 1 }]);
+  } finally {
+    await app.close();
+  }
+});
+
+test.each([
+  ["at the end of the answer", "Guide", "Guide [1](<https://example.test/guide>)"],
+  [
+    "before a paragraph break",
+    "Guide\n\nMore prose.",
+    "Guide [1](<https://example.test/guide>)\n\nMore prose.",
+  ],
+])("inserts a citation %s using the exclusive end offset", async (_name, text, expected) => {
+  const url = "https://example.test/guide";
+  const reply = { ...completion, output: [search, message(text, [cite(url, "Guide", 0, 5)])] };
+  const app = tool({}, provider(async () => Response.json(reply)));
   try {
     const { body } = await post(app, query, 200);
     expect(body.answer.text).toBe(expected);
@@ -288,7 +308,7 @@ test("mock route replays the checked-in synthetic response and reports its usage
   try {
     const { body } = await post(app, query, 200);
     expect(body.answer).toMatchObject({
-      text: expect.stringContaining("The pass covers admission to participating sites"),
+      text: "The pass covers admission to participating sites [1](<https://example.test/discovery>).",
       sources: [{ url: "https://example.test/discovery", title: "Discovery Pass", position: 1 }],
     });
     expect(body.usage).toEqual([expectedUsage]);

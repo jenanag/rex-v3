@@ -105,8 +105,10 @@ export function renderAnswer(parts: TextPart[], validUrl: (value: string) => boo
       }
 
       const start = offsets[citation.start_index];
-      // Responses annotations describe the index of the last cited code point.
-      const end = offsets[citation.end_index + 1];
+      // The API reference describes the last cited character. In the recorded
+      // Luna response, [508, 599) covers the full parenthesized citation and
+      // code point 599 is the following newline. Use that exclusive boundary.
+      const end = offsets[citation.end_index];
       if (start === undefined || end === undefined || start >= end) continue;
       const label = `[${source.position}](<${url.replaceAll("&", "&amp;")}>)`;
       const fence = blocks.find((range) => range.start < end && end <= range.end);
