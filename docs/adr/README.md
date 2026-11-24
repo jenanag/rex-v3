@@ -56,6 +56,8 @@ TypeScript for `content-auditor` and records its Phase 2 build order.
 Jay accepted [ADR 0031](0031-content-auditor-body-limits.md) on 2026-11-24.
 It sets the tool-wide and public-route byte ceilings and their validator-only
 CI gates for `content-auditor`.
+Jay accepted [ADR 0032](0032-citation-extractor-language.md) on 2026-11-24. It selects
+TypeScript for `citation-extractor` and records its Phase 2 build order.
 
 | ADR | Title | Status |
 |---|---|---|
@@ -90,5 +92,6 @@ CI gates for `content-auditor`.
 | [0029](0029-llms-txt-generator-body-limit.md) | Set the llms-txt-generator request body limit to 12 MiB | Accepted |
 | [0030](0030-content-auditor-language.md) | Use TypeScript for content-auditor | Accepted |
 | [0031](0031-content-auditor-body-limits.md) | Set request body limits for content-auditor | Accepted |
+| [0032](0032-citation-extractor-language.md) | Use TypeScript for citation-extractor | Accepted |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.
