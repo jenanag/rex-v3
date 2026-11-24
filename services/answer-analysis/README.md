@@ -38,4 +38,6 @@ the REx monorepo and re-vendor contract changes there.
 
 Mock mode reads the generated completion fixture in `test/fixtures/llm/`.
 Normal startup applies a 3 MiB request body limit when `BODY_LIMIT_BYTES` is unset.
-Both analysis operations return HTTP 501.
+The catalog advertises the two offline English analyzers. With the service
+running, run `node scripts/smoke-analysis.mjs` to check both routes on loopback
+(set `PORT` if the service uses a different port).

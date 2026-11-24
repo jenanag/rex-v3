@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: REx answer-analysis tool
-  version: 1.0.0
+  version: 2.0.0
   description: |
     Stateless tool: finds tracked brands in one answer text and returns, per
     mentioned brand, its position, occurrences, a snippet and sentiment. Brands are
@@ -93,15 +93,20 @@ paths:
         notes: 'LLM only for llm: analyzers; each adds one batched call'
       summary: Detect brand mentions and position, and classify sentiment with one or more analyzers
       description: |
-        Synchronous. Deterministic analyzers answer in milliseconds; each LLM
-        analyzer adds one batched call (up to 60 s). An LLM analyzer that fails is
-        reported with `status: failed` while the others are still returned. If the
-        primary analyzer fails, the call answers 503 so the caller retries.
+        Synchronous. The initial deployment offers the offline English analyzers
+        `det:lexicon` and `det:rules`. Their results follow request order, use the
+        same accepted brand occurrences, and return empty `usage`. Omitted
+        `sentiment` uses the same defaults as an empty object. An explicit empty
+        `analyzers` list disables sentiment but still resolves the language.
 
-        422 codes: `invalid_primary` (`primary` is not in `analyzers`) and
-        `unsupported_language` (with `onUnsupportedLanguage: error`, a requested
-        analyzer does not support the language; `detail` names the analyzer and its
-        supported languages).
+        After transport and schema validation, semantic errors are checked in
+        this order: `duplicate_brand_key` (exact duplicate key),
+        `invalid_primary` (primary is not in the effective list),
+        `unsupported_analyzer` (ID is not advertised by `listAnalyzers`,
+        including LLM IDs in the initial deployment), and `unsupported_language`
+        (policy is `error` and an analyzer does not support the given or detected
+        language). The 422 detail identifies the first offending field in
+        request order and names supported languages for language errors.
       tags:
         - Analysis
       requestBody:
@@ -209,15 +214,18 @@ components:
           $ref: '#/components/schemas/SentimentOptions'
     AnswerAnalysisRequest:
       type: object
-      allOf:
-        - $ref: '#/components/schemas/AnswerAnalysisOptions'
-        - type: object
-          required:
-            - text
-          properties:
-            text:
-              type: string
-              maxLength: 200000
+      required:
+        - brands
+        - text
+      properties:
+        brands:
+          $ref: '#/components/schemas/AnswerAnalysisOptions/properties/brands'
+        sentiment:
+          $ref: '#/components/schemas/SentimentOptions'
+          default: {}
+        text:
+          type: string
+          maxLength: 200000
       unevaluatedProperties: false
     AnalyzerStatus:
       type: string

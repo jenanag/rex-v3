@@ -6,7 +6,7 @@ type Mention = Pick<
   "position" | "occurrences" | "snippet"
 > & { brandKey: Brand["key"] };
 
-type Span = { start: number; end: number };
+export type Span = { start: number; end: number };
 
 const wordAtEnd = /[\p{L}\p{N}\p{M}\p{Pc}]$/u;
 const graphemes = new Intl.Segmenter("en", { granularity: "grapheme" });
@@ -201,33 +201,39 @@ function snippets(text: string) {
   };
 }
 
-export function detectMentions(text: string, brands: readonly Brand[]): Mention[] {
+export function findMentionOccurrences(text: string, brands: readonly Brand[]) {
   const indexedText = searchText(text);
-  const found: { brandKey: string; occurrences: number; first: Span; index: number }[] = [];
+  const found: { brandKey: string; spans: Span[]; index: number }[] = [];
 
   for (const [index, brand] of brands.entries()) {
     const pattern = matcher(brand);
     if (!pattern) continue;
-    let first: Span | undefined;
     let lastEnd = 0;
-    let occurrences = 0;
+    const spans: Span[] = [];
     for (const span of brandMatches(pattern, indexedText)) {
       if (span.start < lastEnd) continue;
-      first ??= span;
       lastEnd = span.end;
-      occurrences++;
+      spans.push(span);
     }
-    if (first) found.push({ brandKey: brand.key, occurrences, first, index });
+    if (spans.length) found.push({ brandKey: brand.key, spans, index });
   }
 
   if (found.length === 0) return [];
   const snippet = snippets(text);
   return found
-    .sort((a, b) => a.first.start - b.first.start || a.index - b.index)
-    .map(({ brandKey, occurrences, first }, index) => ({
-      brandKey,
-      position: index + 1,
-      occurrences,
-      snippet: snippet(first),
+    .sort((a, b) => a.spans[0].start - b.spans[0].start || a.index - b.index)
+    .map(({ brandKey, spans }, index) => ({
+      spans,
+      mention: {
+        brandKey,
+        position: index + 1,
+        occurrences: spans.length,
+        snippet: snippet(spans[0]),
+      } satisfies Mention,
     }));
+}
+
+export function detectMentions(text: string, brands: readonly Brand[]): Mention[] {
+  return findMentionOccurrences(text, brands).map(({ mention }) => mention);
+
 }

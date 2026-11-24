@@ -187,6 +187,8 @@ function cache(name: string, doc: string) {
           Object.entries(entry.rawUrlKeyInputs)
             .map(([alias, pointer]) => tick(alias) + " from " + tick(pointer))
             .join(", "),
+      entry.preserveArrayOrder &&
+        "preserve array order at " + entry.preserveArrayOrder.map(tick).join(", "),
       entry.normalize && "normalization in " + source,
     ]
       .filter(Boolean)

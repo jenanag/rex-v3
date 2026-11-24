@@ -147,6 +147,23 @@ const cases: [string, string, (repo: Fixture) => Promise<void>, string?][] = [
     (repo) => repo.change(policy, "prompt: collapse-whitespace", "absent: collapse-whitespace"),
   ],
   [
+    "missing analyzer order exception",
+    "cache-policy",
+    (repo) => repo.change(policy, "        preserveArrayOrder: [/sentiment/analyzers]\n", ""),
+    "including /sentiment/analyzers",
+  ],
+  [
+    "order preservation targets an array that is already ordered",
+    "cache-policy",
+    (repo) =>
+      repo.change(
+        policy,
+        "preserveArrayOrder: [/sentiment/analyzers]",
+        "preserveArrayOrder: [/sentiment/analyzers, /brands]",
+      ),
+    "must target a request array with uniqueItems: true at /brands",
+  ],
+  [
     "missing raw URL mapping",
     "cache-policy",
     (repo) => repo.change(policy, "          robotsTxtUrl: /robotsTxt/url\n", ""),
@@ -615,4 +632,72 @@ test("crawler cache policy preserves the trailing-dot origin distinction", async
     $robotsTxtUrl: requests[1].robotsTxt.url,
   });
   assert.notDeepEqual(withRawInputs(requests[0]), withRawInputs(requests[1]));
+});
+
+test("answer analysis cache input preserves analyzer order and applies HTTP defaults", async () => {
+  const { tools, key } = parse(await readFile(join(root, policy), "utf8"));
+  const { components } = parse(await readFile(join(root, answer), "utf8"));
+  const { AnswerAnalysisRequest, AnswerAnalysisOptions, SentimentOptions } = components.schemas;
+  const preserve = tools["answer-analysis"].operations.analyzeAnswer.preserveArrayOrder;
+  assert.equal(tools["answer-analysis"].keyVersion, 2);
+  assert.deepEqual(preserve, ["/sentiment/analyzers"]);
+  assert.ok(
+    key.canonicalInput.some(
+      (step: unknown) => typeof step === "string" && step.includes("uniqueItems: true") && step.includes("preserveArrayOrder"),
+    ),
+  );
+  assert.ok(SentimentOptions.properties.analyzers.uniqueItems);
+  assert.equal(
+    AnswerAnalysisOptions.properties.sentiment.$ref,
+    "#/components/schemas/SentimentOptions",
+  );
+  assert.deepEqual(AnswerAnalysisRequest.properties.sentiment.default, {});
+  assert.equal(
+    AnswerAnalysisRequest.properties.brands.$ref,
+    "#/components/schemas/AnswerAnalysisOptions/properties/brands",
+  );
+  assert.equal(
+    AnswerAnalysisRequest.properties.sentiment.$ref,
+    AnswerAnalysisOptions.properties.sentiment.$ref,
+  );
+  assert.equal(AnswerAnalysisOptions.properties.sentiment.default, undefined);
+
+  // Exercise the policy steps that distinguish these inputs. The runtime
+  // cache itself belongs to callers and is not implemented by this fixture.
+  function cacheInput(sentiment?: { analyzers?: string[]; onUnsupportedLanguage?: string }) {
+    const effective = { ...AnswerAnalysisRequest.properties.sentiment.default, ...sentiment };
+    for (const [name, schema] of Object.entries<{ default?: unknown }>(
+      SentimentOptions.properties,
+    )) {
+      if (schema.default !== undefined && !Object.hasOwn(effective, name))
+        effective[name] = schema.default;
+    }
+    return {
+      text: "Acme is a top pick, but Acme is bad.",
+      brands: [{ key: "acme", kind: "primary", name: "Acme", aliases: [], domains: [] }],
+      sentiment: Object.fromEntries(
+        Object.keys(effective)
+          .sort()
+          .map((name) => [
+            name,
+            SentimentOptions.properties[name].uniqueItems &&
+            !preserve.includes("/sentiment/" + name)
+              ? [...effective[name]].sort()
+              : effective[name],
+          ]),
+      ),
+    };
+  }
+
+  const ordered = ["det:lexicon", "det:rules"];
+  const reversed = ordered.toReversed();
+  assert.deepEqual(cacheInput({ analyzers: ordered }).sentiment.analyzers, ordered);
+  assert.deepEqual(cacheInput({ analyzers: reversed }).sentiment.analyzers, reversed);
+  assert.notDeepEqual(cacheInput({ analyzers: ordered }), cacheInput({ analyzers: reversed }));
+  assert.deepEqual(cacheInput(), cacheInput({}));
+  assert.deepEqual(
+    cacheInput(),
+    cacheInput({ analyzers: ["det:lexicon"], onUnsupportedLanguage: "fallback" }),
+  );
+  assert.notDeepEqual(cacheInput(), cacheInput({ analyzers: [] }));
 });

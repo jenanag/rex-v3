@@ -127,11 +127,16 @@ async function post(payload, status, code) {
     payload,
   });
   assert.equal(response.statusCode, status, path + " with " + payload.length + " bytes");
-  assert.equal(response.json().code, code);
+  if (code) assert.equal(response.json().code, code);
+  return response.json();
 }
 
 try {
-  await post(Buffer.from(JSON.stringify(representative)), 501, "not_implemented");
+  const supported = await post(Buffer.from(JSON.stringify(representative)), 200);
+  assert.deepEqual(
+    supported.analyzers.map(({ analyzer }) => analyzer),
+    representative.sentiment.analyzers,
+  );
   assert.ok(route, "The representative request must reach the registered route");
   const { bodyLimit, validate } = route;
   assert.equal(bodyLimit, expectedLimit, "Expected the ADR 0036 route limit");
@@ -180,10 +185,11 @@ try {
 
   for (const { name, wire } of boundaries) {
     const oversized = Buffer.concat([wire, Buffer.from(" ")]);
-    await post(wire, 501, "not_implemented");
+    const problem = await post(wire, 422, "unsupported_analyzer");
+    assert.match(problem.detail, /^\/sentiment\/analyzers\/0:/);
     await post(oversized, 413, "payload_too_large");
     console.log(
-      "%s | %d bytes reached handler (501), %d bytes rejected (413)",
+      "%s | %d bytes reached handler (422 unsupported_analyzer), %d bytes rejected (413)",
       name,
       wire.length,
       oversized.length,
