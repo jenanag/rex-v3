@@ -85,6 +85,23 @@ test("matches canonically reordered marks and preserves marks unattached to lett
   ]);
 });
 
+test.each(["!\u0323", "\u0385\u0323"])("matches a mark at its original boundary in %j", (text) => {
+  expect(detectMentions(text, [brand("dot", "\u0323")])).toEqual([
+    { brandKey: "dot", position: 1, occurrences: 1, snippet: text },
+  ]);
+});
+
+test("counts matches from reordered boundaries in source order without overlaps", () => {
+  const text = "\u0385\u0323!!!";
+  expect(
+    detectMentions(text, [brand("suffix", "\u0323!", ["!!"]), brand("dot", "\u0323")]),
+  ).toEqual([
+    { brandKey: "suffix", position: 1, occurrences: 2, snippet: text },
+    { brandKey: "dot", position: 2, occurrences: 1, snippet: text },
+  ]);
+  expect(detectMentions("\u0385\u0323A", [brand("dot", "\u0323")])).toEqual([]);
+});
+
 test("splits a 500-code-point snippet around the first mention and shifts space at either end", () => {
   const tracked = [brand("cafe", "Café")];
   const left = "x".repeat(300);

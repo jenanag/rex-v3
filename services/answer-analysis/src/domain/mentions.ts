@@ -20,23 +20,25 @@ function* normalizedParts(value: string) {
     const end = start + original.length;
     const decomposed = original.normalize("NFD");
     const split = /^[^\p{L}\p{M}](?=\p{M})/u.exec(original)?.[0];
+    let reorderedMarks: { start: number; value: string } | undefined;
     if (split) {
       const base = split.normalize("NFD");
       const marks = original.slice(split.length).normalize("NFD");
+      const middle = start + split.length;
       // Preserve the source boundary after punctuation when the pieces
       // stay in that order after decomposition.
       if (base + marks === decomposed) {
-        const middle = start + split.length;
         yield { normalized: base, start, end: middle };
         yield { normalized: marks, start: middle, end };
         continue;
       }
+      if (!wordAtEnd.test(split)) reorderedMarks = { start: middle, value: marks };
     }
     const normalized = decomposed.replace(
       /(\p{L})(\p{M}+)/gu,
       (_, letter: string, marks: string) => letter + marks.replace(/[\p{M}&&\p{Diacritic}]/gv, ""),
     );
-    yield { normalized, start, end };
+    yield { normalized, start, end, reorderedMarks };
   }
 }
 
@@ -45,8 +47,9 @@ function searchText(text: string) {
   const parts: string[] = [];
   const starts: (number | undefined)[] = [];
   const ends: (number | undefined)[] = [];
+  const reordered: { start: number; marks: string; next: number; end?: number }[] = [];
   let wordBefore = false;
-  for (const { normalized, start, end } of normalizedParts(text)) {
+  for (const { normalized, start, end, reorderedMarks } of normalizedParts(text)) {
     parts.push(normalized);
     // Only whole source spans with valid original boundaries can match.
     // A symbol such as ≠ can introduce a combining mark during decomposition.
@@ -56,9 +59,17 @@ function searchText(text: string) {
       starts.push(i === 0 && !wordBefore ? start : undefined);
       ends.push(i === normalized.length - 1 && !wordAfter ? end : undefined);
     }
+    if (reorderedMarks) {
+      reordered.push({
+        start: reorderedMarks.start,
+        marks: reorderedMarks.value,
+        next: ends.length,
+        end: wordAfter ? undefined : end,
+      });
+    }
     wordBefore = wordAtEnd.test(text.slice(start, end));
   }
-  return { value: parts.join(""), starts, ends };
+  return { value: parts.join(""), starts, ends, reordered };
 }
 
 function matcher(brand: Brand) {
@@ -83,12 +94,15 @@ function matcher(brand: Brand) {
 
   // Unicode-aware ignoreCase uses Unicode simple case folding.
   const search = new RegExp(alternatives.map(({ source }) => source).join("|"), "giu");
-  return { search, alternatives };
+  return { search, alternatives, maxLength: candidates[0].length };
 }
 
-function* brandMatches(
-  { search, alternatives }: NonNullable<ReturnType<typeof matcher>>,
-  { value, starts, ends }: ReturnType<typeof searchText>,
+type Matcher = NonNullable<ReturnType<typeof matcher>>;
+type SearchText = ReturnType<typeof searchText>;
+
+function* canonicalMatches(
+  { search, alternatives }: Matcher,
+  { value, starts, ends, reordered }: SearchText,
 ): Generator<Span> {
   for (let match = search.exec(value); match; match = search.exec(value)) {
     const offset = match.index;
@@ -109,11 +123,52 @@ function* brandMatches(
       }
       if (end !== undefined) {
         yield { start, end };
-        continue;
+        // An earlier match from a reordered boundary may overlap this one.
+        if (reordered.length === 0) continue;
       }
     }
     const character = value.codePointAt(offset)!;
     search.lastIndex = offset + (character > 0xffff ? 2 : 1);
+  }
+}
+
+function* reorderedMatches(
+  { alternatives, maxLength }: Matcher,
+  { value, ends, reordered }: SearchText,
+): Generator<Span> {
+  for (const { start, marks, next, end: marksEnd } of reordered) {
+    const room = maxLength - marks.length;
+    if (room < 0) continue;
+    // Normalize the original suffix independently at this boundary. The
+    // canonical view still preserves the whole symbol sequence for other matches.
+    const suffix = marks + value.slice(next, next + room + 1);
+    for (const literal of alternatives) {
+      literal.lastIndex = 0;
+      if (!literal.test(suffix)) continue;
+      const consumedAfterMarks = literal.lastIndex - marks.length;
+      if (consumedAfterMarks < 0) continue;
+      const end = consumedAfterMarks === 0 ? marksEnd : ends[next + consumedAfterMarks - 1];
+      if (end !== undefined) {
+        yield { start, end };
+        break;
+      }
+    }
+  }
+}
+
+function* brandMatches(pattern: Matcher, indexedText: SearchText): Generator<Span> {
+  const suffixes = reorderedMatches(pattern, indexedText);
+  let suffix = suffixes.next();
+  for (const span of canonicalMatches(pattern, indexedText)) {
+    while (!suffix.done && suffix.value.start < span.start) {
+      yield suffix.value;
+      suffix = suffixes.next();
+    }
+    yield span;
+  }
+  while (!suffix.done) {
+    yield suffix.value;
+    suffix = suffixes.next();
   }
 }
 
@@ -154,9 +209,12 @@ export function detectMentions(text: string, brands: readonly Brand[]): Mention[
     const pattern = matcher(brand);
     if (!pattern) continue;
     let first: Span | undefined;
+    let lastEnd = 0;
     let occurrences = 0;
     for (const span of brandMatches(pattern, indexedText)) {
+      if (span.start < lastEnd) continue;
       first ??= span;
+      lastEnd = span.end;
       occurrences++;
     }
     if (first) found.push({ brandKey: brand.key, occurrences, first, index });
