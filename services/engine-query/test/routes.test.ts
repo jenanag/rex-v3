@@ -290,7 +290,10 @@ test.each([
 ])("inserts a citation %s using the exclusive end offset", async (_name, text, expected) => {
   const url = "https://example.test/guide";
   const reply = { ...completion, output: [search, message(text, [cite(url, "Guide", 0, 5)])] };
-  const app = tool({}, provider(async () => Response.json(reply)));
+  const app = tool(
+    {},
+    provider(async () => Response.json(reply)),
+  );
   try {
     const { body } = await post(app, query, 200);
     expect(body.answer.text).toBe(expected);
