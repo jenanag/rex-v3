@@ -21,7 +21,11 @@ Per [ADR 0017](../adr/0017-deterministic-first-analysis.md):
 
 - **Mentions, position, occurrences, snippet:** always deterministic (name and alias
   matching, word boundaries, case and diacritics insensitive). Position is the rank of
-  each brand's first mention among the tracked brands.
+  each brand's first mention among the tracked brands. The mention core folds case
+  and letter diacritics while matching internal spacing and punctuation literally.
+  It counts non-overlapping occurrences independently per brand, choosing the longest
+  match at a shared start within a brand. Input brand order breaks first-position
+  ties. The snippet is a slice of the original text capped at 500 Unicode code points.
 - **Sentiment:** up to 5 analyzers per call, side by side:
   - deterministic: `det:lexicon` (sentiment lexicon with negation and intensifier
     rules, scored over the sentences around each mention) and `det:rules` (comparative
