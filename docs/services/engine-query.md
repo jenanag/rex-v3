@@ -3,7 +3,7 @@
 - **Kind:** tool ([what that means](../architecture.md#service-map))
 - **Phase:** 2
 - **Contract:** source [packages/contracts/openapi/services/engine-query.yaml](../../packages/contracts/openapi/services/engine-query.yaml); vendored, self-contained copy in [services/engine-query/contract/](../../services/engine-query/contract/openapi.yaml) ([ADR 0018](../adr/0018-tool-portability.md))
-- **Language:** TypeScript (`language: ts` in vendoring.yaml), as Jay decided in [ADR 0024](../adr/0024-per-tool-language.md): one prompt to one engine per call, the fan-out across engines stays in workers, so Go would gain little; the official npm SDKs cover the engines. Its own language ADR, accepted by Jay, confirms it at the start of its Phase 2 step.
+- **Language:** TypeScript (`language: ts` in vendoring.yaml), as Jay decided in [ADR 0024](../adr/0024-per-tool-language.md). [ADR 0037](../adr/0037-engine-query-language.md) is Proposed and records the choice of the existing TypeScript LLM template. Scaffolding awaits Jay's acceptance of ADR 0037.
 - **Portability:** a self-contained project in its language: copy `services/engine-query/` anywhere, then its install, build, test and `docker build` work with nothing else present; no auth, no cache, no bus inside ([ADR 0018](../adr/0018-tool-portability.md))
 - **State:** none (callers cache its results, see below)
 - **Bus:** none

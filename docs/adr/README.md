@@ -70,6 +70,9 @@ TypeScript for answer-analysis under the fallback in ADR 0024.
 Jay accepted [ADR 0036](0036-answer-analysis-body-limit.md) on 2026-11-24. It sets
 the 3 MiB request body ceiling and validation gate for answer-analysis at scaffolding.
 
+[ADR 0037](0037-engine-query-language.md) was proposed on 2026-11-24 to record
+the TypeScript choice for engine-query and use of the existing LLM template.
+
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-monorepo-pnpm-turborepo.md) | Monorepo with pnpm workspaces and Turborepo | Accepted (amended) |
@@ -108,5 +111,6 @@ the 3 MiB request body ceiling and validation gate for answer-analysis at scaffo
 | [0034](0034-python-validation-spike.md) | Evaluate Python request validation against the vendored OpenAPI contract | Accepted |
 | [0035](0035-answer-analysis-language.md) | Use TypeScript for answer-analysis | Accepted |
 | [0036](0036-answer-analysis-body-limit.md) | Set the answer-analysis request body limit to 3 MiB | Accepted |
+| [0037](0037-engine-query-language.md) | Use TypeScript for engine-query | Proposed |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.

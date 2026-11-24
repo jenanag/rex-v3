@@ -129,8 +129,9 @@ The policy's `resolution` defines caller overrides per environment and per custo
 
 ## Scope and build order
 
-Phase 2, step 6 of 6: language ADR (TypeScript, Jay's decision), then the engines
-through the official SDKs in its LLM adapter, recorded fixtures for every engine.
+Phase 2, step 6 of 6: language ADR (TypeScript, ADR 0037 Proposed). Jay's acceptance is
+required before scaffolding with the TypeScript LLM template. Then add the engines
+through the official SDKs in its LLM adapter, with recorded fixtures for every engine.
 
 ## Build and test standalone
 
