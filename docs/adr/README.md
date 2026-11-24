@@ -85,6 +85,9 @@ Jay accepted [ADR 0040](0040-llm-model-and-analyzer-cache-eligibility.md) on 202
 It defines caller-side model resolution for page entries and analyzer eligibility
 before result lookup. Implementation follows separately.
 
+[ADR 0041](0041-standardize-tool-provider-model-selection.md) was Proposed on 2026-11-25.
+It records the pre-release cutover to explicit provider and model pairs for three tools.
+
 | ADR | Title | Status |
 |---|---|---|
 | [0001](0001-monorepo-pnpm-turborepo.md) | Monorepo with pnpm workspaces and Turborepo | Accepted (amended) |
@@ -127,5 +130,6 @@ before result lookup. Implementation follows separately.
 | [0038](0038-engine-query-selectable-web-search.md) | Make web search selectable in engine-query | Accepted |
 | [0039](0039-engine-query-per-request-model.md) | Allow per-request model selection in engine-query | Accepted |
 | [0040](0040-llm-model-and-analyzer-cache-eligibility.md) | Resolve LLM model selection and analyzer eligibility before cache lookup | Accepted |
+| [0041](0041-standardize-tool-provider-model-selection.md) | Standardize provider and model selection in tool requests | Proposed |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.
