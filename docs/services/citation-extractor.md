@@ -3,7 +3,7 @@
 - **Kind:** tool ([what that means](../architecture.md#service-map))
 - **Phase:** 2
 - **Contract:** source [packages/contracts/openapi/services/citation-extractor.yaml](../../packages/contracts/openapi/services/citation-extractor.yaml); vendored, self-contained copy in [services/citation-extractor/contract/](../../services/citation-extractor/contract/openapi.yaml) ([ADR 0018](../adr/0018-tool-portability.md))
-- **Language:** TypeScript (`language: ts` in vendoring.yaml), per [ADR 0032](../adr/0032-citation-extractor-language.md), accepted by Jay on 2026-11-24. Scaffolding is the next step.
+- **Language:** TypeScript (`language: ts` in vendoring.yaml), per [ADR 0032](../adr/0032-citation-extractor-language.md), accepted by Jay on 2026-11-24.
 - **Portability:** a self-contained project in its language: copy `services/citation-extractor/` anywhere, then its install, build, test and `docker build` work with nothing else present; no auth, no cache, no bus inside ([ADR 0018](../adr/0018-tool-portability.md))
 - **State:** none (callers cache its results, see below)
 - **Bus:** none
@@ -35,6 +35,11 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 <!-- GENERATED:cache END -->
 
 ## Limits
+
+Jay accepted [ADR 0033](../adr/0033-citation-extractor-body-limit.md) on 2026-11-24.
+Scaffolding will configure the 4 MiB (4,194,304-byte) request ceiling with the
+current request schema and verify the validator-only p99 gate below 20 ms
+and the exact-limit and one-byte-over behavior in CI.
 
 <!-- GENERATED:limits START (source: x-rex-limits in packages/contracts/openapi/services/citation-extractor.yaml) -->
 See [the tool's operation limits](../../services/citation-extractor/AGENTS.md#limits).
