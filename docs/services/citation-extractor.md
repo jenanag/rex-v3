@@ -37,9 +37,24 @@ keyVersion `1`. The values below are defaults; scope and freshness can be overri
 ## Limits
 
 Jay accepted [ADR 0033](../adr/0033-citation-extractor-body-limit.md) on 2026-11-24.
-Scaffolding will configure the 4 MiB (4,194,304-byte) request ceiling with the
-current request schema and verify the validator-only p99 gate below 20 ms
-and the exact-limit and one-byte-over behavior in CI.
+The scaffold defaults to `BODY_LIMIT_BYTES=4194304` (4 MiB) and retains the
+current request schema. `extractCitations` returns HTTP 501 with
+`not_implemented` after request validation.
+
+### Request validation benchmark
+
+From `services/citation-extractor/`, run `npm ci`, `npm run build`, and
+`node scripts/benchmark-validation.mjs` with the Node version in the root
+`.nvmrc`. The shared tool workflow runs the same benchmark offline and
+requires validator-only p99 below 20 ms for each of the four workloads.
+
+The benchmark checks both exact-limit requests through the registered route.
+Each reaches the stub at 4,194,304 bytes and receives HTTP 413 at 4,194,305 bytes.
+
+| Exact-limit workload | Engine sources | Trailing JSON spaces |
+|---|---:|---:|
+| Long strings with escaped Markdown and long source URLs and titles | 405 | 15,467 |
+| Short sources with ASCII Markdown and capped brand fields | 46,000 | 925 |
 
 <!-- GENERATED:limits START (source: x-rex-limits in packages/contracts/openapi/services/citation-extractor.yaml) -->
 See [the tool's operation limits](../../services/citation-extractor/AGENTS.md#limits).
