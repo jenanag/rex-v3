@@ -153,27 +153,57 @@ test("registered defaults and explicit hints map verbatim prompts to one Respons
   }
 });
 
-test("ChatGPT text-only mode sends no search settings and needs no search metering", async () => {
-  const text = "Synthetic text-only answer.";
+const textOnlyAnswer = "Synthetic text-only answer.";
+const textOnlyRequest = {
+  model: "gpt-6-luna",
+  instructions: "Answer in Markdown. Prefer locale en-US. Use US as a regional relevance hint.",
+  input: [{ role: "user", content: query.prompt }],
+  reasoning: { effort: "low" },
+  max_output_tokens: 2_048,
+  service_tier: "default",
+  store: false,
+  prompt_cache_options: { ttl: "30m" },
+};
+
+test.each([
+  ["absent", undefined],
+  ["zero", { web_search: { num_requests: 0 } }],
+])(
+  "ChatGPT text-only mode accepts %s search usage without search fees",
+  async (_name, toolUsage) => {
+    const transport = vi.fn<typeof globalThis.fetch>(async () =>
+      Response.json({ ...completion, output: [message(textOnlyAnswer)], tool_usage: toolUsage }),
+    );
+    const app = tool({}, provider(transport));
+    try {
+      const { body } = await post(app, { ...query, webSearch: false }, 200);
+      expect(body.answer).toMatchObject({ text: textOnlyAnswer, sources: [] });
+      expect(body.usage).toEqual([{ ...expectedUsage, costMicrosUsd: 211 }]);
+      expect(transport).toHaveBeenCalledOnce();
+      expect(JSON.parse(String(transport.mock.calls[0][1]?.body))).toEqual(textOnlyRequest);
+    } finally {
+      await app.close();
+    }
+  },
+);
+
+test.each([
+  [
+    "a billable search without an execution record",
+    [message(textOnlyAnswer)],
+    { web_search: { num_requests: 1 } },
+  ],
+  ["a completed search without search usage", [search, message(textOnlyAnswer)], undefined],
+])("ChatGPT text-only mode rejects %s", async (_name, output, toolUsage) => {
   const transport = vi.fn<typeof globalThis.fetch>(async () =>
-    Response.json({ ...completion, output: [message(text)], tool_usage: undefined }),
+    Response.json({ ...completion, output, tool_usage: toolUsage }),
   );
   const app = tool({}, provider(transport));
   try {
-    const { body } = await post(app, { ...query, webSearch: false }, 200);
-    expect(body.answer).toMatchObject({ text, sources: [] });
-    expect(body.usage).toEqual([{ ...expectedUsage, costMicrosUsd: 211 }]);
+    const { body } = await post(app, { ...query, webSearch: false }, 503);
+    expect(body).toMatchObject({ code: "provider_unavailable" });
     expect(transport).toHaveBeenCalledOnce();
-    expect(JSON.parse(String(transport.mock.calls[0][1]?.body))).toEqual({
-      model: "gpt-6-luna",
-      instructions: "Answer in Markdown. Prefer locale en-US. Use US as a regional relevance hint.",
-      input: [{ role: "user", content: query.prompt }],
-      reasoning: { effort: "low" },
-      max_output_tokens: 2_048,
-      service_tier: "default",
-      store: false,
-      prompt_cache_options: { ttl: "30m" },
-    });
+    expect(JSON.parse(String(transport.mock.calls[0][1]?.body))).toEqual(textOnlyRequest);
   } finally {
     await app.close();
   }

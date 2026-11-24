@@ -96,6 +96,8 @@ function answerParts(result: Response, model: string, webSearch: boolean): TextP
     )
   )
     throw new Error("Required web search did not complete");
+  if (!webSearch && result.output.some((item) => item.type === "web_search_call"))
+    throw new Error("Provider reported web search in text-only mode");
 
   const parts = result.output.flatMap((item) => {
     if (item.type !== "message" || item.role !== "assistant") return [];

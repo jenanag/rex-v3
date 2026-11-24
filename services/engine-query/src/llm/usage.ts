@@ -21,7 +21,10 @@ export function answerUsage(
   const outputTokens = count(usage?.output_tokens);
   const reads = count(usage?.input_tokens_details?.cached_tokens);
   const writes = count(usage?.input_tokens_details?.cache_write_tokens);
-  const searches = webSearch ? count(response.tool_usage?.web_search?.num_requests) : 0;
+  const reportedSearches = response.tool_usage?.web_search?.num_requests;
+  const searches = count(!webSearch && reportedSearches === undefined ? 0 : reportedSearches);
+  if (!webSearch && searches !== 0)
+    throw new Error("Provider reported billable web search in text-only mode");
   const writeDetails = usage?.input_tokens_details?.cache_write_tokens_details;
   const reasoning = usage?.output_tokens_details?.reasoning_tokens;
   if (
