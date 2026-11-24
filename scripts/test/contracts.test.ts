@@ -726,8 +726,8 @@ test("engine query cache keys preserve prompt whitespace and apply HTTP defaults
   const { locale, country } = components.schemas.EngineQuery.properties;
   const { keyVersion, operations } = tools["engine-query"];
   const { normalize, extraKeyInputs } = operations.queryEngine;
-  assert.equal(keyVersion, 2);
-  assert.equal(info.version, "2.0.0");
+  assert.equal(keyVersion, 3);
+  assert.equal(info.version, "2.1.0");
   assert.deepEqual(extraKeyInputs, ["engineModel"]);
   assert.equal(normalize?.prompt, undefined);
 
@@ -744,6 +744,11 @@ test("engine query cache keys preserve prompt whitespace and apply HTTP defaults
   assert.notEqual(cacheKey(prompt), cacheKey("Print 'A B' verbatim."));
   assert.notEqual(cacheKey(prompt), cacheKey(prompt, { country: "CA" }));
   assert.notEqual(cacheKey(prompt), cacheKey(prompt, {}, "another-model"));
+  assert.notEqual(cacheKey(prompt), cacheKey(prompt, { engine: "grok" }, "grok-4.3"));
+  assert.equal(
+    cacheKey(prompt, { engine: "grok" }, "grok-4.3"),
+    cacheKey(prompt, { engine: "grok", locale: "en-US", country: "US" }, "grok-4.3"),
+  );
 });
 
 test("answer-analysis environment docs follow the service schema", async (t) => {
