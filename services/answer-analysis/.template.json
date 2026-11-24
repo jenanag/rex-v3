@@ -31,7 +31,8 @@
       "sha256": "90de4b0b0e9685649e5629e8b4eb8027dfa1ae147eb9084d63d942cedde1f497"
     },
     "README.md": {
-      "sha256": "d5375d83f80aa7439bb80feeb459127b1bfb42255a8bacd50e9c266a82201671"
+      "sha256": "d5375d83f80aa7439bb80feeb459127b1bfb42255a8bacd50e9c266a82201671",
+      "owned": true
     },
     "scripts/build-contract.mjs": {
       "sha256": "0063f003aacd19685a20ceded97c39b988cd56062f8ac1c990b7b17784f06b47"

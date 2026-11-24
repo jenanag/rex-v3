@@ -36,7 +36,6 @@ the REx monorepo and re-vendor contract changes there.
 | `XAI_API_KEY` | unset | xAI credential for live or record mode. |
 <!-- GENERATED:env END -->
 
-The LLM adapter's fixture filename is the SHA-256 of the JSON request fields
-`provider`, `model`, `operation`, `prompt`, and `maxOutputTokens`, in that order.
-Mock mode reads the corresponding JSON completion in `test/fixtures/llm/`.
-Record mode writes a fixture and uses the configured provider credentials.
+Mock mode reads the generated completion fixture in `test/fixtures/llm/`.
+Normal startup applies a 3 MiB request body limit when `BODY_LIMIT_BYTES` is unset.
+Both analysis operations return HTTP 501.
