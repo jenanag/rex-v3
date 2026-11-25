@@ -41,11 +41,14 @@ and its wire contract remain deferred.
 The result's optional key identifies a cache entry or an accepted archive
 capture. By-reference archive failures throw a retryable `CacheArchiveError`.
 
-The backend owns transport timeouts and compression. The wrapper checks the
-uncompressed serialized response size before publication. A backend must
-atomically honor the lease token and write deadline, and bound its own read
-when no caller deadline is available. Redis, caller integration, and publishing
-remain deferred.
+The wrapper checks the uncompressed serialized response size before publication.
+`RedisCacheBackend` uses a Redis URL or Unix socket and requires an explicit I/O
+timeout and the policy's uncompressed size limit. It stores the response and its
+timestamps together with the supplied absolute expiry. The backend's I/O limit
+applies even without a caller deadline. A timed-out operation awaiting a Redis
+reply retires its connection. Subsequent calls can connect again without
+replaying pending commands. Call `close()` when disposing of the backend.
+Caller integration, deployment, and publishing remain deferred.
 
 From the repo root on the Node version in `.nvmrc` run:
 
@@ -53,4 +56,14 @@ From the repo root on the Node version in `.nvmrc` run:
 npm ci --prefix packages/cache
 npm run build --prefix packages/cache
 npm test --prefix packages/cache
+```
+
+For integration tests, start a disposable Redis 7.4.8 with TCP disabled and a
+private Unix socket. Use a fresh directory and stop that Redis process when the
+tests finish. In separate shells from the repo root, run:
+
+```sh
+redis-server --port 0 --unixsocket /path/to/fixture/redis.sock --unixsocketperm 600 \
+  --save "" --appendonly no
+REX_CACHE_TEST_REDIS_SOCKET=/path/to/fixture/redis.sock npm run test:redis --prefix packages/cache
 ```
