@@ -90,8 +90,9 @@ It sets the coordinated pre-release cutover to explicit provider and model
 pairs for three tools and amends ADRs 0017, 0038, 0039, and 0040.
 Implementation follows separately.
 
-[ADR 0042](0042-cache-window-expiry-and-single-flight-deadlines.md) was proposed
-on 2026-11-25 to define window expiry, caller deadlines, and single-flight takeover.
+Jay accepted [ADR 0042](0042-cache-window-expiry-and-single-flight-deadlines.md) on 2026-11-25.
+It defines window expiry, caller deadlines, and single-flight takeover and amends
+the single-flight guarantee in ADR 0016.
 
 | ADR | Title | Status |
 |---|---|---|
@@ -136,6 +137,6 @@ on 2026-11-25 to define window expiry, caller deadlines, and single-flight takeo
 | [0039](0039-engine-query-per-request-model.md) | Allow per-request model selection in engine-query | Accepted (amended) |
 | [0040](0040-llm-model-and-analyzer-cache-eligibility.md) | Resolve LLM model selection and analyzer eligibility before cache lookup | Accepted (amended) |
 | [0041](0041-standardize-tool-provider-model-selection.md) | Standardize provider and model selection in tool requests | Accepted |
-| [0042](0042-cache-window-expiry-and-single-flight-deadlines.md) | Set cache window expiry and single-flight deadlines | Proposed |
+| [0042](0042-cache-window-expiry-and-single-flight-deadlines.md) | Set cache window expiry and single-flight deadlines | Accepted |
 
 Statuses: Proposed, Accepted, Superseded by NNNN, Deprecated.

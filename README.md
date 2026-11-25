@@ -69,7 +69,8 @@ on 2026-11-25 for caller model resolution and analyzer eligibility. Implementati
 Jay accepted [ADR 0041](docs/adr/0041-standardize-tool-provider-model-selection.md) on
 2026-11-25 for a coordinated cutover to provider and model pairs across three
 tools. Implementation follows separately.
-[ADR 0042](docs/adr/0042-cache-window-expiry-and-single-flight-deadlines.md) is Proposed.
+Jay accepted [ADR 0042](docs/adr/0042-cache-window-expiry-and-single-flight-deadlines.md) on
+2026-11-25. Implementation follows separately.
 Open choices are tracked as [deferred decisions](docs/roadmap.md#deferred-decisions).
 
 **Coding agents** (Cursor, Claude Code, Codex, Copilot): start at [AGENTS.md](AGENTS.md).

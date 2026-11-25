@@ -1,9 +1,9 @@
 # 0042: Set cache window expiry and single-flight deadlines
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-11-25, accepted by Jay)
 - **Date:** 2026-11-25
 - **Deciders:** Jay Pascual
-- **Amends on acceptance:** [ADR 0016](0016-cache-first.md) for the single-flight
+- **Amends:** [ADR 0016](0016-cache-first.md) for the single-flight
   guarantee under **Redelivery**.
 
 ## Context
@@ -62,10 +62,9 @@ twice.
 
 ## Consequences
 
-After acceptance, add the boundary rule to `storeRules` and deadline and
+At implementation, add the boundary rule to `storeRules` and deadline and
 takeover rules to `singleFlight` in the cache policy. Keep the current
-`resolution` TTL rules. Add the dated amendment link to ADR 0016 at
-acceptance. The rules preserve the OpenAPI contracts and key versions.
+`resolution` TTL rules. The rules preserve the OpenAPI contracts and key versions.
 Runtime implementation, tests, Redis integration, and deployments follow
 in later work.
 
