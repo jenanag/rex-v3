@@ -21,6 +21,7 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
+            packages/cache/package-lock.json
             spikes/openapi-validation/ts/package-lock.json
       - run: npm ci --no-audit --no-fund
       - run: npm run lint:openapi
@@ -28,6 +29,11 @@ jobs:
       - name: Cross-file rules, vendored contracts and generated docs
         run: scripts/check-contracts
       - run: npm run test:contracts
+      - name: Test deterministic cache core
+        run: |
+          npm ci --prefix packages/cache --no-audit --no-fund
+          npm run build --prefix packages/cache
+          npm test --prefix packages/cache
       - name: Install ADR 0020 validation spike
         run: npm ci --prefix spikes/openapi-validation/ts --no-audit --no-fund
       - name: Measure ADR 0020 request validation

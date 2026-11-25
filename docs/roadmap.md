@@ -410,9 +410,10 @@ a real prompt.
 
 **Current phase:** 3
 
-**Status:** Started with Jay's approval on 2026-11-25. The next proposed
-implementation step is `@rex/cache` key derivation and golden tests based on
-[cache policy](../packages/contracts/cache/policy.yaml).
+**Status:** Started with Jay's approval on 2026-11-25. The
+[`@rex/cache` deterministic core](../packages/cache/README.md) derives keys and
+resolves overrides using the [cache policy](../packages/contracts/cache/policy.yaml).
+Redis and caller integration remain pending.
 Jay accepted [ADR 0040](adr/0040-llm-model-and-analyzer-cache-eligibility.md)
 on 2026-11-25. It defines model selection and analyzer eligibility rules for
 key derivation. The coordinated [ADR 0041](adr/0041-standardize-tool-provider-model-selection.md)
