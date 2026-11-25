@@ -143,6 +143,9 @@ export function utcBucket(timestamp: number, window?: CacheWindow): string {
   if (!Number.isFinite(date.getTime())) throw new RangeError("Invalid cache timestamp");
   if (!window) return "-";
   if (window === "PT1H") return date.toISOString().slice(0, 13).toLowerCase();
-  if (window === "P7D") date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+  if (window === "P7D") {
+    date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+    return "p7d-" + date.toISOString().slice(0, 10);
+  }
   return date.toISOString().slice(0, 10);
 }

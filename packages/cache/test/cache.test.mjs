@@ -277,7 +277,7 @@ test("customer and environment overrides resolve each field and isolate tenants"
   assert.equal(result.window, "P7D");
   assert.equal(
     result.key,
-    "rex:c:engine-query:queryengine:v3.5:t-org_01jd3z8xqk5v7n2m4p6r8t0w2y:2026-11-23:12:c29e8ec918fbfa5b6eee5262e7aaa390126b25c795577f2df63eebcccaa06c96",
+    "rex:c:engine-query:queryengine:v3.5:t-org_01jd3z8xqk5v7n2m4p6r8t0w2y:p7d-2026-11-23:12:c29e8ec918fbfa5b6eee5262e7aaa390126b25c795577f2df63eebcccaa06c96",
   );
   assert.notEqual(
     result.key,
@@ -377,8 +377,8 @@ test("explicit timestamps select UTC hour, midnight, and Monday buckets", () => 
   for (const [window, before, at, previous, next] of [
     ["PT1H", "2026-11-23T00:59:59.999Z", "2026-11-23T01:00:00Z", "2026-11-23t00", "2026-11-23t01"],
     ["P1D", "2026-11-22T23:59:59.999Z", "2026-11-23T00:00:00Z", "2026-11-22", "2026-11-23"],
-    ["P7D", "2026-11-22T23:59:59.999Z", "2026-11-23T00:00:00Z", "2026-11-16", "2026-11-23"],
-    ["P7D", "2023-12-31T23:59:59.999Z", "2024-01-01T00:00:00Z", "2023-12-25", "2024-01-01"],
+    ["P7D", "2026-11-22T23:59:59.999Z", "2026-11-23T00:00:00Z", "p7d-2026-11-16", "p7d-2026-11-23"],
+    ["P7D", "2023-12-31T23:59:59.999Z", "2024-01-01T00:00:00Z", "p7d-2023-12-25", "p7d-2024-01-01"],
   ]) {
     for (const [when, bucket] of [
       [before, previous],
@@ -398,6 +398,23 @@ test("explicit timestamps select UTC hour, midnight, and Monday buckets", () => 
       );
     }
   }
+});
+
+test("daily and weekly keys differ at Monday midnight without changing canonical bytes", () => {
+  const at = (window, when) =>
+    query(luna, {}, { timestamp: Date.parse(when), customerOverrides: { "*": { window } } });
+  const monday = "2026-11-23T00:00:00Z";
+  const daily = at("P1D", monday);
+  const weekly = at("P7D", monday);
+  assert.equal(daily.status, "cacheable");
+  assert.equal(weekly.status, "cacheable");
+  assert.notEqual(daily.key, weekly.key);
+  assert.deepEqual(daily.canonicalBytes, weekly.canonicalBytes);
+  assert.equal(at("P7D", "2026-11-29T23:59:59.999Z").key, weekly.key);
+  assert.equal(
+    at("P7D", "2026-11-30T00:00:00Z").key,
+    "rex:c:engine-query:queryengine:v3.5:shared:p7d-2026-11-30:0:c29e8ec918fbfa5b6eee5262e7aaa390126b25c795577f2df63eebcccaa06c96",
+  );
 });
 
 test("policy normalization and declared extras apply in order; JCS emits canonical UTF-8", () => {
