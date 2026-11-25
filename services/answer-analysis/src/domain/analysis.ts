@@ -20,6 +20,7 @@ const languages = [...packs.keys()];
 export function listAnalyzers(lunaEnabled = false): Schemas["Analyzer"][] {
   const catalog: Schemas["Analyzer"][] = Object.entries(descriptions).map(([id, description]) => ({
     id,
+    selector: id,
     kind: "deterministic",
     languages,
     description,

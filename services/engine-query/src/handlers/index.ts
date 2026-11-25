@@ -15,48 +15,37 @@ export function createHandlers(spec: ToolSpec, call = createLlm()): Handlers {
   const validUrl = validators(spec, false)(urlSchema);
   return {
     listEngines: async () => ({
-      data: deployment.map(
-        ({ engine, models }) =>
-          ({
-            ...engine,
-            provider: models[0].provider,
-            model: models[0].model,
-            allowedModels: models.map(({ model }) => model),
-          }) satisfies components["schemas"]["Engine"],
-      ),
+      data: deployment.map(({ displayName, webSearch, provider, model }) => ({
+        displayName,
+        webSearch,
+        provider,
+        model,
+      })),
     }),
     queryEngine: async (request) => {
-      const { engine, model, prompt, locale, country, webSearch } = request.body as Query;
-      const entry = deployment.find(
-        ({ engine: configured }) => configured.id === engine && configured.enabled,
+      const { provider, model, prompt, locale, country, webSearch } = request.body as Query;
+      const selected = deployment.find(
+        (allowed) => allowed.provider === provider && allowed.model === model,
       );
-      if (!entry)
-        throw new ToolProblem(422, "unsupported_engine", "/engine: Engine is not configured");
-
-      const selected =
-        model === undefined
-          ? entry.models[0]
-          : entry.models.find((allowed) => allowed.model === model);
       if (!selected)
         throw new ToolProblem(
           422,
           "unsupported_model",
-          "/model: Model is not allowed for this engine",
+          "/provider and /model: Pair is not allowed by this deployment",
         );
 
-      const search = webSearch ?? entry.searchDefault;
-      if (search && !entry.engine.webSearch)
+      if (webSearch && !selected.webSearch)
         throw new ToolProblem(
           422,
           "unsupported_web_search",
-          "/webSearch: Engine does not support web search",
+          "/webSearch: Provider/model pair does not support web search",
         );
 
       const start = performance.now();
-      const { parts, usage } = await call(selected, prompt, locale, country, search);
+      const { parts, usage } = await call(selected, prompt, locale, country, webSearch);
       return {
         answer: {
-          engine: entry.engine.id,
+          provider: selected.provider,
           model: selected.model,
           ...renderAnswer(parts, validUrl),
           latencyMs: Math.round(performance.now() - start),

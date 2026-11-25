@@ -1,8 +1,8 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { createLlm, type LlmRequest } from "../src/llm/adapter.js";
-import { defaultModel, pricedModels } from "../src/llm/models.js";
+import { pricedModels } from "../src/llm/models.js";
 
-const { provider, model, price } = pricedModels.get(defaultModel)!;
+const { provider, model, price } = pricedModels[0];
 const request: LlmRequest = {
   provider,
   model,

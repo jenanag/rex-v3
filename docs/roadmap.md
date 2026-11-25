@@ -358,11 +358,12 @@ The Gemini recording replays offline. The three-engine sources-and-usage
 requirement still applies.
 [Grok PR #34](https://github.com/jenanag/rex-v3/pull/34) remains deferred.
 
-Engine-query supports per-request model selection under
-[ADR 0039](adr/0039-engine-query-per-request-model.md), accepted by Jay on
-2026-11-25. Discovery lists each engine's default and allowed models. Contract
-tests cover effective model and search cache keys. Runtime cache integration
-remains Phase 3 work.
+[ADR 0041](adr/0041-standardize-tool-provider-model-selection.md) coordinates
+the provider and model selection cutover across engine-query, llms-txt-generator,
+and answer-analysis. Discovery exposes the supported pairs, and contract tests
+cover model and search cache identity, ordered analyzers, and original page URLs.
+This updates [ADR 0039](adr/0039-engine-query-per-request-model.md) for engine-query.
+Runtime cache integration remains Phase 3 work.
 Phase 2 acceptance remains pending under the existing completion criteria.
 
 **Languages and the Python bring-up** ([ADR 0024](adr/0024-per-tool-language.md)): every
@@ -414,11 +415,9 @@ implementation step is `@rex/cache` key derivation and golden tests based on
 [cache policy](../packages/contracts/cache/policy.yaml).
 Jay accepted [ADR 0040](adr/0040-llm-model-and-analyzer-cache-eligibility.md)
 on 2026-11-25. It defines model selection and analyzer eligibility rules for
-follow-up work, with offline acceptance cases.
-Jay accepted [ADR 0041](adr/0041-standardize-tool-provider-model-selection.md) on
-2026-11-25. The three-tool contract cutover precedes or accompanies these caller
-key rules. Implementation follows separately. Platform vendoring activation, registry setup, and
-publishing remain later work.
+key derivation. The coordinated [ADR 0041](adr/0041-standardize-tool-provider-model-selection.md)
+cutover applies them directly to the new request shapes, with offline acceptance
+cases. Platform vendoring activation, registry setup, and publishing remain later work.
 
 - Private npm registry (GitHub Packages, scope `@rex`) and Changesets releases.
 - `@rex/cache` (`packages/cache`, published, [ADR 0019](adr/0019-internal-packages.md)) implementing [policy.yaml](../packages/contracts/cache/policy.yaml)
@@ -562,14 +561,14 @@ in Phases 1 and 2 depends on them.
 ### Opt-in Gemini web search
 
 Gemini currently runs text-only. Discovery advertises `webSearch: false`.
-Omitting `webSearch` or passing `false` selects text-only generation. An explicit
-`true` returns HTTP 422 before any provider call.
+Under ADR 0041 the tool requires an explicit setting. Passing `false` selects
+text-only generation, and `true` returns HTTP 422 before any provider call.
 
 A future deployment that supports Gemini search would reuse the existing request
 field, advertise `webSearch: true` in discovery, and accept explicit
-`webSearch: true` in requests. Keep Gemini's omitted default off by treating
-capability and the per-engine default separately. Include the effective search
-mode in the caller cache key.
+`webSearch: true` in requests. Keep the caller's text-only default separate
+from deployment capability, and include the effective search mode in the caller
+cache key.
 
 An interactive Google Search grounding flow would need to show the grounded
 results and associated Search Suggestions to the user who submitted the prompt.

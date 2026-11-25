@@ -1,5 +1,3 @@
-import { defaultModel, pricedModels } from "./llm/models.js";
-
 export const envProperties = {
   NODE_ENV: {
     type: "string",
@@ -39,16 +37,9 @@ export const envProperties = {
     pattern: "^https?://",
     description: "OTLP collector. Export is off when unset.",
   },
-  LLMS_TXT_GENERATOR_DEFAULT_MODEL: {
-    type: "string",
-    enum: [...pricedModels.keys()],
-    default: defaultModel,
-    description: "Default priced model for LLM-assisted page descriptions.",
-  },
   BODY_LIMIT_BYTES: {
     type: "integer",
     minimum: 1,
-    default: 12_582_912,
-    description: "Fastify request body limit in bytes for all routes (ADR 0029).",
+    description: "Optional override of the Fastify request-body limit.",
   },
 } as const;

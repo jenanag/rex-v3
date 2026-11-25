@@ -10,7 +10,9 @@ import { parse, stringify } from "yaml";
 
 const exec = promisify(execFile);
 const root = resolve(".");
-const gitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], { encoding: "utf8" }).trim();
+const gitDir = execFileSync("git", ["rev-parse", "--absolute-git-dir"], {
+  encoding: "utf8",
+}).trim();
 const answer = "packages/contracts/openapi/services/answer-analysis.yaml";
 const answerDir = "services/answer-analysis";
 const manifest = "packages/contracts/vendoring.yaml";
@@ -148,8 +150,8 @@ const cases: [string, string, (repo: Fixture) => Promise<void>, string?][] = [
     (repo) =>
       repo.change(
         policy,
-        "        extraKeyInputs: [engineModel]",
-        "        normalize: {absent: collapse-whitespace}\n        extraKeyInputs: [engineModel]",
+        "        window: P1D",
+        "        normalize: {absent: collapse-whitespace}\n        window: P1D",
       ),
   ],
   [
@@ -173,6 +175,18 @@ const cases: [string, string, (repo: Fixture) => Promise<void>, string?][] = [
     "missing raw URL mapping",
     "cache-policy",
     (repo) => repo.change(policy, "          robotsTxtUrl: /robotsTxt/url\n", ""),
+  ],
+  [
+    "missing original page URL mapping",
+    "cache-policy",
+    (repo) => repo.change(policy, "        rawUrlKeyInputs: {url: /url}\n", ""),
+    "describePage: rawUrlKeyInputs must be a nonempty mapping",
+  ],
+  [
+    "page URL mapping targets an optional metadata URL",
+    "cache-policy",
+    (repo) => repo.change(policy, "{url: /url}", "{url: /metadata/canonicalUrl}"),
+    "must target a required shared Url at /metadata/canonicalUrl",
   ],
   [
     "swapped raw URL mappings",
@@ -462,10 +476,15 @@ test("breaking request changes require an info.version major bump", async (t) =>
   await git("init", "-b", "main");
   await git("add", "packages/contracts/openapi");
   await git(
-    "-c", "user.name=REx tests",
-    "-c", "user.email=tests@rex.invalid",
-    "-c", "commit.gpgSign=false",
-    "commit", "-qm", "Request contract baseline",
+    "-c",
+    "user.name=REx tests",
+    "-c",
+    "user.email=tests@rex.invalid",
+    "-c",
+    "commit.gpgSign=false",
+    "commit",
+    "-qm",
+    "Request contract baseline",
   );
   await git("update-ref", "refs/remotes/origin/main", "HEAD");
 
@@ -648,7 +667,7 @@ test("answer analysis cache input preserves analyzer order and applies HTTP defa
   const { components } = parse(await readFile(join(root, answer), "utf8"));
   const { AnswerAnalysisRequest, AnswerAnalysisOptions, SentimentOptions } = components.schemas;
   const preserve = tools["answer-analysis"].operations.analyzeAnswer.preserveArrayOrder;
-  assert.equal(tools["answer-analysis"].keyVersion, 4);
+  assert.equal(tools["answer-analysis"].keyVersion, 5);
   assert.deepEqual(tools["answer-analysis"].operations.analyzeAnswer.skipWhen, {
     pointer: "/analyzers/*/status",
     equals: "failed",
@@ -680,7 +699,8 @@ test("answer analysis cache input preserves analyzer order and applies HTTP defa
 
   // Exercise the policy steps that distinguish these inputs. The runtime
   // cache itself belongs to callers and is not implemented by this fixture.
-  function cacheInput(sentiment?: { analyzers?: string[]; onUnsupportedLanguage?: string }) {
+  type Selector = string | { provider: string; model: string };
+  function cacheInput(sentiment?: { analyzers?: Selector[]; onUnsupportedLanguage?: string }) {
     const effective = { ...AnswerAnalysisRequest.properties.sentiment.default, ...sentiment };
     for (const [name, schema] of Object.entries<{ default?: unknown }>(
       SentimentOptions.properties,
@@ -705,7 +725,8 @@ test("answer analysis cache input preserves analyzer order and applies HTTP defa
     };
   }
 
-  const ordered = ["det:lexicon", "det:rules"];
+  const luna = { provider: "openai", model: "gpt-6-luna" };
+  const ordered = ["det:lexicon", luna];
   const reversed = ordered.toReversed();
   assert.deepEqual(cacheInput({ analyzers: ordered }).sentiment.analyzers, ordered);
   assert.deepEqual(cacheInput({ analyzers: reversed }).sentiment.analyzers, reversed);
@@ -716,137 +737,236 @@ test("answer analysis cache input preserves analyzer order and applies HTTP defa
     cacheInput({ analyzers: ["det:lexicon"], onUnsupportedLanguage: "fallback" }),
   );
   assert.notDeepEqual(cacheInput(), cacheInput({ analyzers: [] }));
+  const keyFor = (input: unknown) =>
+    "rex:c:answer-analysis:analyzeanswer:v3.5:shared:-:0:" + canonicalHash(input);
+  assert.equal(keyFor(cacheInput()), keyFor(cacheInput({})));
+  assert.equal(
+    keyFor(cacheInput({ analyzers: ordered })),
+    keyFor(
+      cacheInput({ analyzers: ["det:lexicon", { model: luna.model, provider: luna.provider }] }),
+    ),
+  );
+  assert.notEqual(
+    keyFor(cacheInput({ analyzers: ordered })),
+    keyFor(cacheInput({ analyzers: reversed })),
+  );
+
+  assert.equal(
+    keyFor(cacheInput()),
+    "rex:c:answer-analysis:analyzeanswer:v3.5:shared:-:0:e709689548ff05e5ed3bd1e4a1122022e8ea6a5d6af07adf52ea9c5391406b5a",
+  );
+  assert.equal(
+    keyFor(cacheInput({ analyzers: ordered })),
+    "rex:c:answer-analysis:analyzeanswer:v3.5:shared:-:0:024482406262eae9ee6f712fd99794db43fe0bc9e4202a3a1f6479d48666c70c",
+  );
+  assert.equal(
+    keyFor(cacheInput({ analyzers: reversed })),
+    "rex:c:answer-analysis:analyzeanswer:v3.5:shared:-:0:8a527de041b4866e21df3e475e2d3affbe135bb1675344e19ae06868c71630c5",
+  );
+  const warm = new Map([
+    [keyFor(cacheInput({ analyzers: ordered })), { analyzers: [{ status: "ok" }] }],
+  ]);
+  let lookups = 0;
+  // The catalog here represents discovery obtained for this deployment. A null
+  // catalog means discovery is stale or unavailable.
+  function callerLookup(current: Selector[] | null) {
+    if (!current) return undefined;
+    if (
+      ordered.some(
+        (item) => !current.some((allowed) => canonicalJson(allowed) === canonicalJson(item)),
+      )
+    )
+      return { status: 422, code: "unsupported_analyzer" };
+    lookups++;
+    return warm.get(keyFor(cacheInput({ analyzers: ordered })));
+  }
+  const gate = key.canonicalInput.find((step: string) => step.includes("For analyzeAnswer"));
+  assert.match(gate, /before looking up the result/);
+  assert.match(gate, /Stale or unavailable discovery cannot authorize a hit/);
+  assert.match(gate, /HTTP 422 unsupported_analyzer/);
+  assert.deepEqual(callerLookup(ordered), { analyzers: [{ status: "ok" }] });
+  assert.deepEqual(callerLookup(["det:lexicon"]), { status: 422, code: "unsupported_analyzer" });
+  assert.equal(callerLookup(null), undefined);
+  assert.equal(lookups, 1);
 });
 
-test("engine query cache keys resolve model and search before hashing", async () => {
-  const { key, tools } = parse(await readFile(join(root, policy), "utf8"));
+// The vectors below use only JSON objects, strings, booleans, and arrays.
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return "[" + value.map(canonicalJson).join(",") + "]";
+  if (value !== null && typeof value === "object") {
+    const fields = Object.entries(value).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return (
+      "{" +
+      fields.map(([name, item]) => JSON.stringify(name) + ":" + canonicalJson(item)).join(",") +
+      "}"
+    );
+  }
+  return JSON.stringify(value);
+}
+
+function canonicalHash(value: unknown) {
+  return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
+}
+
+test("engine query cache vectors key the explicit pair and search mode once", async () => {
+  const { tools } = parse(await readFile(join(root, policy), "utf8"));
   const { info, components } = parse(
     await readFile(join(root, "packages/contracts/openapi/services/engine-query.yaml"), "utf8"),
   );
-  const { locale, country, webSearch, model } = components.schemas.EngineQuery.properties;
+  const { properties, required, allOf } = components.schemas.EngineQuery;
+  const { locale, country, webSearch } = properties;
   const { keyVersion, operations } = tools["engine-query"];
-  const { normalize, extraKeyInputs, webSearchDefaults } = operations.queryEngine;
-  assert.equal(keyVersion, 4);
-  assert.equal(info.version, "2.2.0");
+  assert.equal(keyVersion, 5);
+  assert.equal(info.version, "3.0.0");
   assert.equal(webSearch.type, "boolean");
   assert.equal(webSearch.default, undefined);
-  assert.equal(model.type, "string");
-  assert.equal(model.minLength, 1);
-  assert.equal(model.default, undefined);
-  assert.deepEqual(webSearchDefaults, { chatgpt: true, gemini: false });
-  assert.ok(!components.schemas.EngineQuery.required.includes("webSearch"));
-  assert.ok(!components.schemas.EngineQuery.required.includes("model"));
-  assert.deepEqual(extraKeyInputs, ["engineModel"]);
-  assert.ok(
-    key.canonicalInput.some((step: string) => step.includes("Exclude the request model field")),
-  );
-  assert.equal(normalize?.prompt, undefined);
+  assert.deepEqual(required, ["webSearch", "prompt"]);
+  assert.equal(allOf[0].$ref, "../common.yaml#/components/schemas/ProviderModel");
+  const { components: shared } = parse(await readFile(join(root, common), "utf8"));
+  assert.deepEqual(shared.schemas.ProviderModel.required, ["provider", "model"]);
+  for (const field of ["provider", "model"]) {
+    assert.deepEqual(shared.schemas.ProviderModel.properties[field], {
+      type: "string",
+      minLength: 1,
+    });
+  }
+  assert.equal(operations.queryEngine.extraKeyInputs, undefined);
+  assert.equal(operations.queryEngine.webSearchDefaults, undefined);
+  assert.equal(operations.queryEngine.normalize?.prompt, undefined);
 
-  const catalog = {
-    chatgpt: {
-      model: "gpt-6-luna",
-      allowedModels: ["gpt-6-luna", "test-only-alt"],
-      webSearch: true,
-    },
-    gemini: {
-      model: "gemini-3.5-flash-lite",
-      allowedModels: ["gemini-3.5-flash-lite"],
-      webSearch: false,
-    },
-  };
-
-  // Test-only caller fixture with a fixed scope, UTC window and sample.
-  function cacheVector(
-    prompt: string,
-    hints: {
-      engine?: keyof typeof catalog;
-      locale?: string;
-      country?: string;
-      webSearch?: boolean;
-      model?: string;
-    } = {},
-  ) {
-    const { engine = "chatgpt", webSearch, model, ...region } = hints;
-    const available = catalog[engine];
-    const effectiveModel = model ?? available.model;
-    assert.ok(available.allowedModels.includes(effectiveModel), "unsupported model before lookup");
-    const effectiveSearch = webSearch ?? webSearchDefaults[engine];
-    assert.ok(!effectiveSearch || available.webSearch, "unsupported search before lookup");
+  const luna = { provider: "openai", model: "gpt-6-luna", webSearch: true };
+  const gemini = { provider: "google", model: "gemini-3.5-flash-lite", webSearch: false };
+  const catalog = [luna, gemini, { ...luna, model: "test-only-alt" }];
+  const prompt = "Print 'A  B' verbatim.";
+  function vector(selection: typeof luna, hints: { locale?: string; country?: string } = {}) {
+    const allowed = catalog.find(
+      ({ provider, model }) => provider === selection.provider && model === selection.model,
+    );
+    assert.ok(allowed, "unsupported pair before lookup");
+    assert.ok(!selection.webSearch || allowed.webSearch, "unsupported search before lookup");
     const input = {
-      engine,
       prompt,
       locale: locale.default,
       country: country.default,
-      ...region,
-      webSearch: effectiveSearch,
+      ...hints,
+      ...selection,
     };
-    const resolved = { ...input, model: effectiveModel };
-    const keyInput = { ...input, ["$" + extraKeyInputs[0]]: effectiveModel };
-    const canonical = JSON.stringify(keyInput, Object.keys(keyInput).sort());
-    const hash = createHash("sha256").update(canonical, "utf8").digest("hex");
-    const key = `rex:c:engine-query:queryengine:v${info.version.split(".")[0]}.${keyVersion}:shared:2026-11-24:0:${hash}`;
-    return { resolved, canonical, key };
+    return {
+      canonical: canonicalJson(input),
+      key: `rex:c:engine-query:queryengine:v3.5:shared:2026-11-24:0:${canonicalHash(input)}`,
+    };
   }
-  const prompt = "Print 'A  B' verbatim.";
-  const chatgpt = cacheVector(prompt);
-  const gemini = cacheVector(prompt, { engine: "gemini" });
-  assert.deepEqual(chatgpt, cacheVector(prompt, { model: "gpt-6-luna" }));
-  assert.deepEqual(
-    gemini,
-    cacheVector(prompt, { engine: "gemini", model: "gemini-3.5-flash-lite" }),
-  );
-  for (const [vector, engine, model, webSearch, hash] of [
-    [
-      chatgpt,
-      "chatgpt",
-      "gpt-6-luna",
-      true,
-      "39e9048649a1d56787003f1170e1502f8a5870120c9e43c8392be66d96346789",
-    ],
-    [
-      gemini,
-      "gemini",
-      "gemini-3.5-flash-lite",
-      false,
-      "6fed0e5b283798322f38ba66cac4b9a7bffc561553a760cf28228c1289cbab45",
-    ],
+  for (const [pair, digest] of [
+    [luna, "c29e8ec918fbfa5b6eee5262e7aaa390126b25c795577f2df63eebcccaa06c96"],
+    [gemini, "f8b792a85586dbbde9d5ab7443ff8eea0140bc5b29edbb71592f6c766936cb78"],
   ] as const) {
-    assert.deepEqual(vector.resolved, {
-      engine,
+    assert.deepEqual(vector(pair), vector(pair, { locale: "en-US", country: "US" }));
+    assert.deepEqual(JSON.parse(vector(pair).canonical), {
       prompt,
       locale: "en-US",
       country: "US",
-      model,
-      webSearch,
+      ...pair,
     });
     assert.equal(
-      vector.canonical,
-      JSON.stringify({
-        $engineModel: model,
-        country: "US",
-        engine,
-        locale: "en-US",
-        prompt,
-        webSearch,
-      }),
+      vector(pair).key,
+      `rex:c:engine-query:queryengine:v3.5:shared:2026-11-24:0:${digest}`,
     );
-    assert.equal(vector.key, `rex:c:engine-query:queryengine:v2.4:shared:2026-11-24:0:${hash}`);
   }
-  assert.deepEqual(chatgpt, cacheVector(prompt, { locale: "en-US", country: "US" }));
-  assert.notEqual(chatgpt.key, cacheVector("Print 'A B' verbatim.").key);
-  assert.notEqual(chatgpt.key, cacheVector(prompt, { country: "CA" }).key);
-  assert.notEqual(chatgpt.key, cacheVector(prompt, { model: "test-only-alt" }).key);
-  assert.deepEqual(chatgpt, cacheVector(prompt, { webSearch: true }));
-  assert.notEqual(chatgpt.key, cacheVector(prompt, { webSearch: false }).key);
-  assert.deepEqual(gemini, cacheVector(prompt, { engine: "gemini", webSearch: false }));
-  assert.throws(
-    () => cacheVector(prompt, { engine: "gemini", webSearch: true }),
-    /unsupported search/,
+  assert.notEqual(vector(luna).key, vector(gemini).key);
+  assert.notEqual(vector(luna).key, vector({ ...luna, model: "test-only-alt" }).key);
+  assert.notEqual(vector(luna).key, vector({ ...luna, webSearch: false }).key);
+  assert.throws(() => vector({ ...gemini, webSearch: true }), /unsupported search/);
+  assert.throws(() => vector({ ...luna, provider: "google" }), /unsupported pair/);
+});
+
+test("page entry cache vectors preserve raw URLs in both summarizer modes", async () => {
+  const { tools } = parse(await readFile(join(root, policy), "utf8"));
+  const tool = tools["llms-txt-generator"];
+  const inputs = tool.operations.describePage.rawUrlKeyInputs;
+  assert.deepEqual(inputs, { url: "/url" });
+  assert.equal(tool.keyVersion, 7);
+  const { info, components } = parse(
+    await readFile(
+      join(root, "packages/contracts/openapi/services/llms-txt-generator.yaml"),
+      "utf8",
+    ),
   );
-  assert.throws(() => cacheVector(prompt, { model: "unlisted" }), /unsupported model/);
-  assert.throws(
-    () => cacheVector(prompt, { engine: "gemini", model: "gpt-6-luna" }),
-    /unsupported model/,
+  assert.equal(info.version, "5.0.0");
+  const { summarizer } = components.schemas.PageEntryOptions.properties;
+  const llm = { provider: "openai", model: "gpt-6-luna" };
+  function keyFor(
+    url: string,
+    options: { summarizer?: string; provider?: string; model?: string },
+  ) {
+    const canonical = {
+      summarizer: summarizer.default,
+      ...options,
+      url: new URL(url).href,
+      ["$" + Object.keys(inputs)[0]]: url,
+      metadata: { title: "Guide", description: null, canonicalUrl: null, language: "en" },
+      content: { text: "Example guide.", markdown: "" },
+    };
+    return "rex:c:llms-txt-generator:describepage:v5.7:shared:-:0:" + canonicalHash(canonical);
+  }
+  const url = "https://example.org/guide";
+  const rawVariant = "https://example.org:443/guide";
+  assert.equal(new URL(url).href, new URL(rawVariant).href);
+  assert.equal(keyFor(url, llm), keyFor(url, { summarizer: "llm", ...llm }));
+  assert.notEqual(keyFor(url, llm), keyFor(url, { ...llm, model: "test-only-alt" }));
+  assert.notEqual(keyFor(url, llm), keyFor(url, { summarizer: "extractive" }));
+  assert.equal(
+    keyFor(rawVariant, { summarizer: "extractive" }),
+    "rex:c:llms-txt-generator:describepage:v5.7:shared:-:0:453328322744b0bc462beedd5e783aa96770e434185c673dd157cc1d6676c657",
+  );
+  assert.equal(
+    keyFor(url, { summarizer: "extractive" }),
+    "rex:c:llms-txt-generator:describepage:v5.7:shared:-:0:d2462a00a264480c5b53efd3416e4a01b8e7b5bc14a95bcb059ff58301f36fd0",
+  );
+  assert.equal(
+    keyFor(rawVariant, llm),
+    "rex:c:llms-txt-generator:describepage:v5.7:shared:-:0:05f46e87aaefee96d2a7ef0119e9e30d00529a52e7783b4e3ae28497638a2e39",
+  );
+  assert.equal(
+    keyFor(url, llm),
+    "rex:c:llms-txt-generator:describepage:v5.7:shared:-:0:b495e67e5febe10ed8e355ff5b4475d1ca8394725dfe30cee9ce371618346881",
+  );
+  for (const options of [llm, { summarizer: "extractive" }]) {
+    assert.notEqual(keyFor(url, options), keyFor(rawVariant, options));
+  }
+});
+
+test("platform contracts keep tracking separate and version the pre-implementation payloads", async () => {
+  const bus = parse(await readFile(join(root, events), "utf8"));
+  const broker = parse(await readFile(join(root, topology), "utf8"));
+  const orchestrator = parse(
+    await readFile(join(root, "packages/contracts/openapi/services/orchestrator.yaml"), "utf8"),
+  );
+  assert.equal(bus.info.version, "4.0.0");
+  assert.equal(broker.version, 1);
+  assert.equal(orchestrator.info.version, "2.0.0");
+  assert.equal(bus.channels.answerCaptureRequested.address, "answer-capture.requested.{engine}");
+  for (const name of ["answerCaptureRequested", "answerCaptureCompleted", "pageAuditRequested"]) {
+    const { version, data } = bus.components.messages[name].payload.allOf[1].properties;
+    assert.equal(version.const, 1);
+    if (name.startsWith("answer")) {
+      assert.ok(data.required.includes("engine"));
+      assert.match(data.properties.engine.$ref, /\/EngineId$/);
+    }
+  }
+  const platform = orchestrator.components.schemas;
+  assert.ok(platform.Answer.allOf[1].required.includes("engine"));
+  assert.match(platform.PromptRunOptions.properties.sentiment.$ref, /\/SentimentOptions$/);
+  assert.match(platform.PromptRunScheduleSpec.properties.params.$ref, /\/PromptRunOptions$/);
+  assert.match(platform.LlmsTxtSettings.allOf[1].$ref, /\/PageEntryOptions$/);
+  assert.deepEqual(platform.LlmsTxtCreatePageOptions.dependentRequired, {
+    provider: ["model"],
+    model: ["provider"],
+  });
+  assert.deepEqual(platform.LlmsTxtCreatePageOptions.then.properties, { provider: false, model: false });
+  assert.ok(
+    !platform.LlmsTxtCreate.allOf.some(({ $ref }: { $ref?: string }) =>
+      $ref?.endsWith("/LlmsTxtSettings"),
+    ),
   );
 });
 

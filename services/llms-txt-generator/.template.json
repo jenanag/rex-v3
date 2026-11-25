@@ -55,8 +55,7 @@
       "owned": true
     },
     "src/env.ts": {
-      "sha256": "9ced6f3e4ca914c6790ec763e897bd20d4d8ec4a5b42c76686e11839fc4e7b27",
-      "owned": true
+      "sha256": "9ced6f3e4ca914c6790ec763e897bd20d4d8ec4a5b42c76686e11839fc4e7b27"
     },
     "src/errors.ts": {
       "sha256": "6e8720703ec5841d529826af091639062d34a2a62fbc8fe4ce83d3b1b4e52fdb"

@@ -53,7 +53,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Engines this deployment can query and their default and allowed models */
+        /** Provider and model pairs this deployment can query and their capabilities */
         get: operations["listEngines"];
         put?: never;
         post?: never;
@@ -74,13 +74,11 @@ export interface paths {
         put?: never;
         /**
          * Ask one engine one prompt (one sample) and return its answer
-         * @description Accepts ChatGPT and Gemini. An unavailable engine returns 422 unsupported_engine
-         *     before any provider call. Omit model to use the engine's deployment default.
-         *     An exact, schema-valid model ID outside the selected engine's allowlist returns
-         *     422 unsupported_model identifying /model before any provider call.
-         *     ChatGPT defaults to required hosted search; Gemini
-         *     defaults to text-only generation. Explicit false selects text-only generation.
-         *     Gemini with explicit true returns 422 unsupported_web_search identifying
+         * @description Require an explicit provider, model, and webSearch selection.
+         *     An exact, schema-valid pair outside the deployment catalog returns
+         *     422 unsupported_model identifying /provider and /model before any provider call.
+         *     False selects text-only generation. True requires completed hosted search.
+         *     Search on a text-only pair returns 422 unsupported_web_search identifying
          *     /webSearch before any provider call.
          *     The original prompt is sent verbatim. Locale is an answer-language hint.
          *     Country is an approximate search location for grounded ChatGPT and a regional
@@ -106,40 +104,27 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         Engine: {
-            id: components["schemas"]["EngineId"];
             /** @example ChatGPT */
             displayName: string;
-            /** @description API vendor, e.g. `openai`, `anthropic`, `google`, `perplexity`, `xai`. */
-            provider: string;
-            /** @description Default model ID for this engine. */
-            model: string;
-            /** @description Exact model IDs this deployment accepts for the engine, including its default. */
-            allowedModels: string[];
-            /** @description True if this deployment can use hosted search when requested. */
+            /** @description True if this pair can use hosted search when requested. */
             webSearch: boolean;
-            enabled: boolean;
-        };
+        } & components["schemas"]["ProviderModel"];
         EngineQuery: {
-            engine: components["schemas"]["EngineId"];
-            /** @description Exact model ID from the selected engine's allowlist. Omission uses the engine's default. */
-            model?: string;
             prompt: string;
             /** @default en-US */
             locale: components["schemas"]["Locale"];
             /** @default US */
             country: components["schemas"]["CountryCode"];
-            /** @description Require completed hosted search when true. Omission defaults to true for ChatGPT and false for Gemini. */
-            webSearch?: boolean;
-        };
-        /** @description A normalized engine answer. The orchestrator stores it as part of its Answer resource. */
+            /** @description Require completed hosted search when true. */
+            webSearch: boolean;
+        } & components["schemas"]["ProviderModel"];
+        /** @description A normalized provider answer. The orchestrator stores it as part of its Answer resource. */
         EngineAnswer: {
-            engine: components["schemas"]["EngineId"];
-            model: string;
             /** @description Answer text as Markdown, normalized across engines. */
             text: string;
             sources: components["schemas"]["AnswerSource"][];
             latencyMs: number;
-        };
+        } & components["schemas"]["ProviderModel"];
         EngineAnswerResult: {
             answer: components["schemas"]["EngineAnswer"];
             usage: components["schemas"]["LlmUsageList"];
@@ -182,14 +167,11 @@ export interface components {
             /** @description Field-level errors; present for `validation_failed`. */
             errors?: components["schemas"]["FieldError"][];
         };
-        /**
-         * @description AI answer engine. Consumers must tolerate unknown values (tolerant reader),
-         *     so adding an engine is a non-breaking change; it also adds a per-engine
-         *     answer-capture queue (bus/topology.yaml expands `{engine}` from this enum).
-         *     The engine-to-model mapping is owned by engine-query (`GET /v1/engines`).
-         * @enum {string}
-         */
-        EngineId: "chatgpt" | "claude" | "gemini" | "perplexity" | "grok";
+        /** @description Exact provider and native model identifiers from the target tool's catalog. */
+        ProviderModel: {
+            provider: string;
+            model: string;
+        };
         /**
          * @description BCP 47 language tag, e.g. `en-US`.
          * @default en-US
@@ -317,7 +299,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Configured engines (small list; not paginated). ChatGPT supports web search. Gemini is text-only. */
+            /** @description Supported pairs (small list; not paginated). OpenAI Luna supports web search. Gemini is text-only. */
             200: {
                 headers: {
                     [name: string]: unknown;

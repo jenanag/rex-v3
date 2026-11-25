@@ -77,10 +77,11 @@ export interface paths {
          *     supplied URL passes schema validation but fails WHATWG URL parsing, return
          *     HTTP 422 with Problem code `invalid_page_url` and detail identifying `/url`.
          *     Omitted `summarizer` selects `llm`. The tool uses the same deterministic
-         *     title and URL. Only the description is model-generated. The initial allowed
-         *     model and deployment default are `openai/gpt-6-luna`. Unsupported explicit
-         *     models return HTTP 422 with Problem code `unsupported_model` and detail
-         *     identifying `/model`. The same `invalid_page_url` rule applies.
+         *     title and URL. Only the description is model-generated. LLM mode requires
+         *     both provider and model. The initial allowed pair is openai / gpt-6-luna.
+         *     An unsupported pair returns HTTP 422 with code unsupported_model identifying
+         *     /provider and /model. Extractive mode omits both fields. The same
+         *     invalid_page_url rule applies.
          *     The prompt uses the deterministic title, supplied metadata description,
          *     optional language, and an excerpt of normalized plain text or visible
          *     Markdown prose. It excludes
@@ -175,15 +176,14 @@ export interface components {
         /** @description How page entries are written (the llms.txt pipeline's per-page step). */
         PageEntryOptions: {
             /**
-             * @description How the description is written. `extractive` is deterministic (meta
-             *     description, else the first paragraph, trimmed) and makes no LLM call;
-             *     `llm` summarizes the page with an LLM (ADR 0017).
+             * @description Extractive mode makes no LLM call. LLM mode requires an explicit provider
+             *     and model and is the default when summarizer is omitted.
              * @default llm
              * @enum {string}
              */
             summarizer: "extractive" | "llm";
-            /** @description LLM to use when `summarizer` is `llm`, as `<provider>/<model>`. Defaults to LLMS_TXT_GENERATOR_DEFAULT_MODEL. */
-            model?: string;
+            provider?: components["schemas"]["provider"];
+            model?: components["schemas"]["model"];
         };
         LlmsTxtAssemblyOptions: {
             /**
@@ -279,6 +279,13 @@ export interface components {
             /** @description Field-level errors; present for `validation_failed`. */
             errors?: components["schemas"]["FieldError"][];
         };
+        /** @description Exact provider and native model identifiers from the target tool's catalog. */
+        ProviderModel: {
+            provider: string;
+            model: string;
+        };
+        provider: string;
+        model: string;
         /** Format: uri */
         Url: string;
         /**

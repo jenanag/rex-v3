@@ -30,7 +30,7 @@ Per [ADR 0017](../adr/0017-deterministic-first-analysis.md):
   - deterministic: `det:lexicon` (sentiment lexicon with negation and intensifier
     rules, scored within the clauses around each mention) and `det:rules` (comparative
     and recommendation patterns such as "better than", "avoid", "top pick");
-  - opt-in: `llm:openai/gpt-6-luna`, one batched call for the mentioned brands.
+  - opt-in: the OpenAI Luna provider and model pair, one batched call for the mentioned brands.
 - Each mention returns every analyzer's label, score and short rationale, plus an
   agreement summary; the `primary` analyzer fills `sentiment` and `sentimentScore`.
 - Deterministic analyzers report `unsupported` for languages they do not cover;
@@ -88,20 +88,18 @@ Per [ADR 0017](../adr/0017-deterministic-first-analysis.md):
 
 ## Luna opt-in
 
-[Accepted ADR 0040](../adr/0040-llm-model-and-analyzer-cache-eligibility.md)
-defines the caller's analyzer eligibility check before cached result lookup.
-Implementation is follow-up work. Provider identity checks use cache key version
-4. A later eligibility-only change keeps that version if canonical inputs and
-tool outputs stay the same.
-
-[Accepted ADR 0041](../adr/0041-standardize-tool-provider-model-selection.md)
-calls for adding provider and model objects to ordered analyzer request selectors
-alongside deterministic IDs, preserving analyzer result IDs. The cutover will
-bump the cache key version to 5. Implementation follows separately.
+[ADR 0041](../adr/0041-standardize-tool-provider-model-selection.md) uses provider
+and model objects alongside deterministic IDs in the ordered request selectors.
+Discovery reports both the selector and the result ID. Under
+[ADR 0040](../adr/0040-llm-model-and-analyzer-cache-eligibility.md), callers must
+check current deployment eligibility before looking up a result. Runtime cache
+integration remains Phase 3 work.
 
 The tool validates `ANSWER_ANALYSIS_LUNA_ENABLED` at startup and defaults it to
-`false`. Set it to `true` and configure `OPENAI_API_KEY` for the live deployment. Callers opt in with `sentiment.analyzers` containing
-`llm:openai/gpt-6-luna`. The omitted default is still `det:lexicon`.
+`false`. Enable it and configure `OPENAI_API_KEY` for a live deployment. Callers
+opt in with the selector `{"provider":"openai","model":"gpt-6-luna"}` in the
+analyzer list. The result ID remains `llm:openai/gpt-6-luna`, and the omitted
+analyzer list still defaults to `det:lexicon`.
 An answer without mentions makes no provider call.
 
 Each batch uses the accepted mention spans. Every mentioned brand gets a local
@@ -163,7 +161,7 @@ the returned model ID check.
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `4`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `5`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
@@ -196,6 +194,7 @@ from the tool folder.
 - [`UnprocessableContent`](../../packages/contracts/openapi/common.yaml) (responses); also used by content-auditor, content-extractor, engine-query, llms-txt-generator, orchestrator, schema-generator, sitemap-extractor.
 - [`LanguageTag`](../../packages/contracts/openapi/common.yaml) (schemas).
 - [`LlmUsageList`](../../packages/contracts/openapi/common.yaml) (schemas); also used by engine-query, llms-txt-generator.
+- [`ProviderModel`](../../packages/contracts/openapi/common.yaml) (schemas); also used by engine-query, llms-txt-generator.
 - [`Sentiment`](../../packages/contracts/openapi/common.yaml) (schemas); also used by orchestrator.
 - [`TrackedBrand`](../../packages/contracts/openapi/common.yaml) (schemas); also used by citation-extractor.
 <!-- GENERATED:shared END -->

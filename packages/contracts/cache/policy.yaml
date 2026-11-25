@@ -36,9 +36,10 @@ key:
     # Steps applied to the request body, in order, before hashing.
     - Capture original request strings at the JSON Pointers in the operation's `rawUrlKeyInputs` map before applying defaults or normalizing. Add these unchanged to the key input as top-level members named by the map keys prefixed with `$`. Neither URL nor operation normalization applies to these copies.
     - Apply the defaults declared in the tool spec, so an omitted field and its default give the same key.
-    - For queryEngine, validate the request and resolve the effective model from the selected engine's discovery catalog before lookup. Omission selects its default. Reject models outside that engine's exact allowlist before key derivation.
-    - For an operation with `webSearchDefaults`, resolve the effective boolean by engine before lookup. Keep an explicit value, or fill in the omitted value from the map. Include the effective value in the key and send it to the tool. Reject search-on for engines without search capability before lookup.
-    - For queryEngine, send both resolved settings to the tool. Exclude the request model field from canonical input and include the effective model exactly once as `$engineModel` via `extraKeyInputs`. Omission and an explicitly selected default share a key.
+    - For queryEngine, validate the exact provider/model pair against current deployment discovery and check the explicit webSearch setting before lookup. Reject unsupported pairs or search settings. Send the same values to the tool.
+    - For describePage, validate the selection before lookup. In LLM mode the first rollout sends the pinned openai / gpt-6-luna pair explicitly. Extractive mode omits both fields. Preserve the original URL in either mode.
+    - For analyzeAnswer, check every requested selector against current discovery for the target deployment before looking up the result. Refresh or invalidate discovery when enablement changes. Stale or unavailable discovery cannot authorize a hit. A confirmed disabled selector returns HTTP 422 unsupported_analyzer even when a successful result is cached.
+    - Include each explicit provider/model pair once per selector in canonical input. Keep selector fields in their original positions and hash the explicit queryEngine webSearch value with the request.
     - Add `extraKeyInputs` of the operation as top-level members prefixed with `$`.
     - Normalize every value whose schema is common.yaml Url or Domain (lowercase scheme and host, drop default port, fragment and trailing dot; keep path and query).
     - Apply the operation's `normalize` rules (`collapse-whitespace` trims and collapses runs of whitespace).
@@ -59,7 +60,7 @@ resolution:
     environment: 'CACHE_POLICY_OVERRIDES (YAML or JSON) of the calling service: a partial `tools` and `external` tree of the same shape as below, merged over it.'
     default: 'This file.'
   rules:
-    - 'Only scope, ttl and window can be overridden. keyVersion, extraKeyInputs, webSearchDefaults, rawUrlKeyInputs, preserveArrayOrder, normalize, skipWhen, cacheable and archiveTo come only from this file.'
+    - 'Only scope, ttl and window can be overridden. keyVersion, extraKeyInputs, rawUrlKeyInputs, preserveArrayOrder, normalize, skipWhen, cacheable and archiveTo come only from this file.'
     - 'A customer override may set scope to `tenant`, never to `shared` (an organization can opt out of sharing, not force sharing of an operation that is tenant-scoped by default or by environment).'
     - 'An override sets the same kind of freshness the entry has: `ttl` for ttl entries, `window` for window entries.'
     - 'Durations are clamped to `limits`. The orchestrator validates customer overrides against this file when they are saved; callers clamp and log anything out of range.'
@@ -103,17 +104,15 @@ singleFlight:
 
 tools:
   engine-query:
-    keyVersion: 4
+    keyVersion: 5
     operations:
       listEngines: {ttl: PT5M, scope: shared}                   # DEFAULT
       queryEngine:
-        # Key the original prompt, engine, model, effective locale, country and search mode, and sample per UTC day.
+        # Key the original prompt, provider, model, webSearch, locale, country and sample per UTC day.
         window: P1D                                              # DEFAULT
         scope: shared
-        webSearchDefaults: {chatgpt: true, gemini: false}
-        extraKeyInputs: [engineModel]   # effective allowed model, defaulting to the discovery model
   answer-analysis:
-    keyVersion: 4
+    keyVersion: 5
     operations:
       listAnalyzers: {ttl: PT5M, scope: shared}                 # DEFAULT
       analyzeAnswer:
@@ -142,11 +141,15 @@ tools:
       generateSchemaMarkup: {ttl: P30D, scope: shared}           # DEFAULT
       validateSchemaMarkup: {ttl: P30D, scope: shared}           # DEFAULT
   llms-txt-generator:
-    keyVersion: 6
+    keyVersion: 7
     operations:
       # Pure functions of the page, entries or file passed in; page freshness comes from extractContent.
       # describePage results are read back by llms-txt-generation (cache, then data-aggregator; ADR 0023).
-      describePage: {ttl: P30D, scope: shared, archiveTo: data-aggregator}  # DEFAULT
+      describePage:
+        ttl: P30D                                              # DEFAULT
+        scope: shared
+        archiveTo: data-aggregator
+        rawUrlKeyInputs: {url: /url}
       generateLlmsTxt: {ttl: P30D, scope: shared}                # DEFAULT
       validateLlmsTxt: {ttl: P30D, scope: shared}                # DEFAULT
 

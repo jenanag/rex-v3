@@ -7,6 +7,14 @@ on:
       - 'spikes/openapi-validation/request-cases.json'
       - 'services/answer-analysis/contract/openapi.yaml'
       - 'packages/contracts/openapi/common.yaml'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/python-validation-spike.yml'
+      - 'spikes/openapi-validation/python/**'
+      - 'spikes/openapi-validation/request-cases.json'
+      - 'services/answer-analysis/contract/openapi.yaml'
+      - 'packages/contracts/openapi/common.yaml'
   workflow_dispatch:
 
 permissions:

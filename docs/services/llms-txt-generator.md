@@ -18,18 +18,15 @@ files using content supplied by the caller ([ADR 0023](../adr/0023-llms-txt-pipe
   empty usage. Default `llm` can make one Chat Completions call for the description,
   using a prompt capped at 16,384 serialized UTF-8 bytes. With no usable description
   source it skips the call. Unusable output falls back to the extractive result while
-  preserving the call's usage. The sole initial allowed model and the default for
-  `LLMS_TXT_GENERATOR_DEFAULT_MODEL` are `openai/gpt-6-luna`.
+  preserving the call's usage. LLM requests send the exact pair, currently
+  OpenAI and GPT-6 Luna. Extractive requests omit both selector fields.
   A matching OpenAI model ID is required before the tool uses a provider
   completion. A missing or unexpected ID returns HTTP 503 without usage.
   [ADR 0017](../adr/0017-deterministic-first-analysis.md).
-- [Accepted ADR 0040](../adr/0040-llm-model-and-analyzer-cache-eligibility.md)
-  defines the caller model pin and page-entry key rules for follow-up work.
-  Provider identity checks use cache key version 6.
-- [Accepted ADR 0041](../adr/0041-standardize-tool-provider-model-selection.md)
-  calls for an explicit provider and model pair for LLM page entries, with
-  original URL keying from ADR 0040 and a bump to cache key version 7 at the
-  cutover. Implementation follows separately.
+- [ADR 0041](../adr/0041-standardize-tool-provider-model-selection.md) applies
+  the explicit Luna pin and original URL keying from
+  [ADR 0040](../adr/0040-llm-model-and-analyzer-cache-eligibility.md). The
+  orchestrator resolves an omitted public model pair before publishing page jobs.
 - `generateLlmsTxt` assembles `llms.txt` (and optionally `llms-full.txt`) from the
   entries in input order. The full file quotes supplied page Markdown and truncates
   at a page boundary with a closing notice. See the source contract for formatting
@@ -57,11 +54,11 @@ sitemap-extractor and extracts them through the content-extractor
 <!-- GENERATED:cache START (source: packages/contracts/cache/policy.yaml) -->
 Caller cache policy: [policy.yaml](../../packages/contracts/cache/policy.yaml) ([ADR 0016](../adr/0016-cache-first.md)).
 
-keyVersion `6`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
+keyVersion `7`. The values below are defaults; scope and freshness can be overridden per environment and per customer (policy.yaml `resolution`).
 
 | Operation | Kept for | Scope | Notes |
 | --- | --- | --- | --- |
-| `describePage` | `P30D` | shared | read back by reference |
+| `describePage` | `P30D` | shared | read back by reference, raw URL key inputs `url` from `/url` |
 | `generateLlmsTxt` | `P30D` | shared |  |
 | `validateLlmsTxt` | `P30D` | shared |  |
 <!-- GENERATED:cache END -->
@@ -123,6 +120,9 @@ the returned model ID check.
 - [`LlmUsageList`](../../packages/contracts/openapi/common.yaml) (schemas); also used by answer-analysis, engine-query.
 - [`LlmsTxtValidation`](../../packages/contracts/openapi/common.yaml) (schemas); also used by content-auditor.
 - [`PageMetadata`](../../packages/contracts/openapi/common.yaml) (schemas); also used by content-extractor.
+- [`ProviderModel`](../../packages/contracts/openapi/common.yaml) (schemas); also used by answer-analysis, engine-query.
+- [`model`](../../packages/contracts/openapi/common.yaml) (properties); also used by orchestrator.
+- [`provider`](../../packages/contracts/openapi/common.yaml) (properties); also used by orchestrator.
 - [`Url`](../../packages/contracts/openapi/common.yaml) (schemas); also used by citation-extractor, content-auditor, content-extractor, orchestrator, schema-generator, sitemap-extractor.
 <!-- GENERATED:shared END -->
 

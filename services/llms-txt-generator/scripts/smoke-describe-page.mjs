@@ -42,8 +42,8 @@ try {
   for (const [mode, payload, description, usage] of [
     ["extractive", { ...request, summarizer: "extractive" }, request.content.text, []],
     [
-      "default LLM",
-      request,
+      "default LLM mode with an explicit pair",
+      { ...request, provider: "openai", model: "gpt-6-luna" },
       "Run setup before starting the service.",
       [
         {

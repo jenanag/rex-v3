@@ -36,7 +36,14 @@ try {
     "Query",
     18081,
     "/v1/engine-answers",
-    { engine: "chatgpt", webSearch: true, locale: "en-CA", country: "CA", prompt },
+    {
+      provider: "openai",
+      model: "gpt-6-luna",
+      webSearch: true,
+      locale: "en-CA",
+      country: "CA",
+      prompt,
+    },
     ({ answer, usage }) => {
       assert.ok(
         typeof answer?.text === "string" && answer.text.trim(),

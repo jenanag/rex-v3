@@ -3,7 +3,7 @@
 openapi: 3.1.0
 info:
   title: REx answer-analysis tool
-  version: 2.1.1
+  version: 3.0.0
   description: |
     Stateless tool: finds tracked brands in one answer text and returns, per
     mentioned brand, its position, occurrences, a snippet and sentiment. Brands are
@@ -71,8 +71,9 @@ paths:
         '200':
           description: |
             Available analyzers, deterministic ones first. Deployments with Luna
-            enabled advertise `llm:openai/gpt-6-luna` with kind `llm` and
-            language support `["*"]`, including undetermined language.
+            enabled advertise the openai / gpt-6-luna selector with kind `llm`
+            and language support `["*"]`, including undetermined language.
+            The id remains the analyzer result identifier.
           content:
             application/json:
               schema:
@@ -93,14 +94,16 @@ paths:
         llm: optional
         llmCallTimeout: PT60S
         outboundFetch: none
-        notes: 'LLM only for llm: analyzers; each adds one batched call'
+        notes: LLM only for provider/model selectors; each adds one batched call
       summary: Detect brand mentions and position, and classify sentiment with one or more analyzers
       description: |
         Synchronous. Results follow request order and use the same deterministic
         brand mentions. Omitted `sentiment` defaults to `det:lexicon`; an explicit
         empty `analyzers` list disables sentiment but still resolves the language.
-        In enabled deployments, select `llm:openai/gpt-6-luna` explicitly to run
-        one batched call for the mentioned brands. If none are mentioned the
+        In enabled deployments, select the provider/model object for OpenAI Luna
+        to run one batched call for the mentioned brands. Deterministic selectors
+        are strings. Duplicate selectors, including objects with reordered keys,
+        fail schema validation. Analyzer result IDs remain unchanged. If none are mentioned the
         tool makes no call and returns empty mentions and usage.
 
         A failed secondary LLM analyzer is reported as `failed` with null per-brand
@@ -116,7 +119,7 @@ paths:
         After transport and schema validation, semantic errors are checked in
         this order: `duplicate_brand_key` (exact duplicate key),
         `invalid_primary` (primary is not in the effective list),
-        `unsupported_analyzer` (ID is not advertised by `listAnalyzers`),
+        `unsupported_analyzer` (selector is not advertised by `listAnalyzers`),
         and `unsupported_language`
         (policy is `error` and an analyzer does not support the given or detected
         language). The 422 detail identifies the first offending field in
@@ -154,6 +157,15 @@ components:
         `llm:openai/gpt-4o-mini`). The available set comes from `listAnalyzers`.
       pattern: ^(det:[a-z][a-z0-9_]*|llm:[a-z][a-z0-9_-]*/[A-Za-z0-9._:-]+)$
       maxLength: 120
+    AnalyzerSelector:
+      oneOf:
+        - type: string
+          pattern: ^det:[a-z][a-z0-9_]*$
+          maxLength: 120
+        - type: object
+          allOf:
+            - $ref: '#/components/schemas/ProviderModel'
+          unevaluatedProperties: false
     AnalyzerKind:
       type: string
       enum:
@@ -163,12 +175,15 @@ components:
       type: object
       required:
         - id
+        - selector
         - kind
         - languages
         - description
       properties:
         id:
           $ref: '#/components/schemas/AnalyzerId'
+        selector:
+          $ref: '#/components/schemas/AnalyzerSelector'
         kind:
           $ref: '#/components/schemas/AnalyzerKind'
         languages:
@@ -191,10 +206,10 @@ components:
           default:
             - det:lexicon
           items:
-            $ref: '#/components/schemas/AnalyzerId'
+            $ref: '#/components/schemas/AnalyzerSelector'
         primary:
           description: 'Analyzer whose result fills `sentiment` and `sentimentScore`; must be in `analyzers` (otherwise 422 `invalid_primary`). Default: the first deterministic analyzer that supports the language, else the first analyzer that does.'
-          $ref: '#/components/schemas/AnalyzerId'
+          $ref: '#/components/schemas/AnalyzerSelector'
         language:
           description: 'Language of the text. Default: detected deterministically from the text.'
           $ref: '#/components/schemas/LanguageTag'
@@ -491,6 +506,19 @@ components:
           description: Field-level errors; present for `validation_failed`.
           items:
             $ref: '#/components/schemas/FieldError'
+    ProviderModel:
+      type: object
+      description: Exact provider and native model identifiers from the target tool's catalog.
+      required:
+        - provider
+        - model
+      properties:
+        provider:
+          type: string
+          minLength: 1
+        model:
+          type: string
+          minLength: 1
     BrandKind:
       type: string
       description: Each project has exactly one `primary` brand; all others are `competitor`.

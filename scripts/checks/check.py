@@ -944,7 +944,11 @@ for _,_,op in ops(xs):
 _xv=tuple(int(x) for x in str(xs.get('info',{}).get('version','0.0.0')).split('.')[:3])
 if _xv<(2,0,0): errs.append('content-extractor: info.version must be at least 2.0.0 (discovery removed, ADR 0023)')
 _osc=specs['orchestrator']['components']['schemas']
-_ls=[b_ for b_ in (_osc.get('LlmsTxtSettings',{}).get('allOf') or []) if isinstance(b_,dict) and 'properties' in b_]
+_ls_parts=_osc.get('LlmsTxtSettings',{}).get('allOf') or []
+_crawl_options_ref='#/components/schemas/LlmsTxtCrawlAndAssemblyOptions'
+if any(part.get('$ref')==_crawl_options_ref for part in _ls_parts):
+    _ls_parts=_osc.get('LlmsTxtCrawlAndAssemblyOptions',{}).get('allOf') or []
+_ls=[b_ for b_ in _ls_parts if isinstance(b_,dict) and 'properties' in b_]
 _lp=_ls[0]['properties'] if _ls else {}
 _rr=_lp.get('respectRobotsTxt') or {}
 if _rr.get('type')!='boolean' or 'default' in _rr or 'Default: true' not in flat(_rr.get('description','')): errs.append('orchestrator LlmsTxtSettings.respectRobotsTxt: boolean with no schema default (resolved: request, org setting, true)')
@@ -1037,7 +1041,7 @@ if sorted(_br)!=['content-extractor.extractContent','llms-txt-generator.describe
 # cache policy: sitemap URL lists and page entries, shared, TTL DEFAULT (per customer), entries archived
 _pol=yaml.safe_load(ptxt)
 _dp=(((_pol.get('tools') or {}).get('llms-txt-generator') or {}).get('operations') or {}).get('describePage') or {}
-if _dp.get('scope')!='shared' or _dp.get('archiveTo')!='data-aggregator' or not re.search(r'describePage:\s*\{[^}]*\}\s*# DEFAULT',ptxt): errs.append('policy: llms-txt-generator describePage must be shared, archiveTo data-aggregator, ttl DEFAULT')
+if _dp.get('scope')!='shared' or _dp.get('archiveTo')!='data-aggregator' or not re.search(r'describePage:(?:\s*\{[^}]*\}\s*# DEFAULT|\n\s+ttl: \S+\s+# DEFAULT)',ptxt): errs.append('policy: llms-txt-generator describePage must be shared, archiveTo data-aggregator, ttl DEFAULT')
 _se=((_pol.get('external') or {}).get('sitemap-extractor') or {})
 _sx=(_se.get('operations') or {}).get('extractSitemapUrls') or {}
 if _se.get('callers')!=['workers'] or _sx.get('scope')!='shared' or not re.search(r'extractSitemapUrls:[^\n]*\n?[^\n]*ttl: \S+\s+# DEFAULT',ptxt): errs.append('policy: external sitemap-extractor extractSitemapUrls must be workers-only, shared, ttl DEFAULT')

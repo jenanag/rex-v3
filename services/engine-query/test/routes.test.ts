@@ -2,15 +2,14 @@ import { expect, test, vi } from "vitest";
 import { createLlm } from "../src/llm/adapter.js";
 import { checkResponse, postAnswer as post, tool } from "./support.js";
 
-const query = { engine: "chatgpt", prompt: "What is the Discovery Pass?" };
+const luna = { provider: "openai", model: "gpt-6-luna" };
+const gemini = { provider: "google", model: "gemini-3.5-flash-lite" };
+const query = { ...luna, webSearch: true, prompt: "What is the Discovery Pass?" };
 const expectedEngine = {
-  id: "chatgpt",
   displayName: "ChatGPT",
   provider: "openai",
   model: "gpt-6-luna",
-  allowedModels: ["gpt-6-luna"],
   webSearch: true,
-  enabled: true,
 };
 
 const search = { type: "web_search_call", status: "completed", action: { type: "search" } };
@@ -60,34 +59,26 @@ test("discovery and ineligible requests make no provider request", async () => {
       data: [
         expectedEngine,
         {
-          id: "gemini",
           displayName: "Gemini",
           provider: "google",
           model: "gemini-3.5-flash-lite",
-          allowedModels: ["gemini-3.5-flash-lite"],
           webSearch: false,
-          enabled: true,
         },
       ],
     });
     checkResponse("GET", "/v1/engines", 200, "application/json", list.json());
 
-    for (const engine of ["claude", "perplexity", "grok"]) {
-      const { body } = await post(app, { ...query, engine }, 422);
+    const { body: legacy } = await post(app, { ...query, engine: "chatgpt" }, 400);
+    expect(legacy).toMatchObject({ code: "validation_failed", errors: [{ pointer: "/engine" }] });
+    for (const field of ["provider", "model", "webSearch", "prompt"] as const) {
+      const missing = { ...query, [field]: undefined };
+      const { body } = await post(app, missing, 400);
       expect(body).toMatchObject({
-        code: "unsupported_engine",
-        detail: expect.stringContaining("/engine"),
+        code: "validation_failed",
+        errors: expect.arrayContaining([expect.objectContaining({ pointer: "/" + field })]),
       });
     }
-    const { body: invalid } = await post(app, { ...query, engine: "unknown" }, 400);
-    expect(invalid).toMatchObject({ code: "validation_failed", errors: [{ pointer: "/engine" }] });
-    const { body: missing } = await post(app, { engine: "chatgpt" }, 400);
-    expect(missing).toMatchObject({ code: "validation_failed", errors: [{ pointer: "/prompt" }] });
-    const { body: unsupported } = await post(
-      app,
-      { ...query, engine: "gemini", webSearch: true },
-      422,
-    );
+    const { body: unsupported } = await post(app, { ...query, ...gemini }, 422);
     expect(unsupported).toMatchObject({
       code: "unsupported_web_search",
       detail: expect.stringContaining("/webSearch"),
@@ -103,7 +94,7 @@ test("discovery and ineligible requests make no provider request", async () => {
   }
 });
 
-test("unlisted, cross-engine and schema-invalid models fail before provider transport", async () => {
+test("unlisted, cross-provider and schema-invalid selections fail before provider transport", async () => {
   const transport = vi.fn(async () => {
     throw new Error("Unexpected provider traffic");
   });
@@ -115,14 +106,14 @@ test("unlisted, cross-engine and schema-invalid models fail before provider tran
     }),
   );
   try {
-    for (const [engine, model] of [
-      ["chatgpt", "not-listed"],
-      ["chatgpt", "GPT-6-LUNA"],
-      ["chatgpt", "gpt-6-luna "],
-      ["chatgpt", "gemini-3.5-flash-lite"],
-      ["gemini", "gpt-6-luna"],
+    for (const [providerId, model] of [
+      ["openai", "not-listed"],
+      ["openai", "GPT-6-LUNA"],
+      ["openai", "gpt-6-luna "],
+      ["openai", "gemini-3.5-flash-lite"],
+      ["google", "gpt-6-luna"],
     ]) {
-      const { body } = await post(app, { ...query, engine, model }, 422);
+      const { body } = await post(app, { ...query, provider: providerId, model }, 422);
       expect(body).toMatchObject({
         code: "unsupported_model",
         detail: expect.stringContaining("/model"),
@@ -141,12 +132,12 @@ test("unlisted, cross-engine and schema-invalid models fail before provider tran
   }
 });
 
-test("ChatGPT omitted and explicit default models send identical requests", async () => {
+test("ChatGPT omitted and explicit locale and country defaults send identical requests", async () => {
   const transport = vi.fn<typeof globalThis.fetch>(async () => Response.json(completion));
   const app = tool({}, provider(transport));
   try {
     const { body: omitted } = await post(app, query, 200);
-    const { body: explicit } = await post(app, { ...query, model: expectedEngine.model }, 200);
+    const { body: explicit } = await post(app, { ...query, locale: "en-US", country: "US" }, 200);
     expect(explicit).toEqual({
       answer: { ...omitted.answer, model: expectedEngine.model, latencyMs: expect.any(Number) },
       usage: [expectedUsage],
@@ -178,7 +169,7 @@ test("registered defaults and explicit hints map verbatim prompts to one Respons
       const { body } = await post(app, { ...query, prompt, ...hints }, 200);
       expect(body).toEqual({
         answer: {
-          engine: "chatgpt",
+          provider: "openai",
           model: "gpt-6-luna",
           text: "Synthetic answer.",
           sources: [],
@@ -460,7 +451,8 @@ test("mock route replays the recorded Parks Canada answer", async () => {
     const { body } = await post(
       app,
       {
-        engine: "chatgpt",
+        ...luna,
+        webSearch: true,
         locale: "en-CA",
         country: "CA",
         prompt:
@@ -470,7 +462,7 @@ test("mock route replays the recorded Parks Canada answer", async () => {
     );
     expect(body).toEqual({
       answer: {
-        engine: "chatgpt",
+        provider: "openai",
         model: "gpt-6-luna",
         text: [
           "The **Parks Canada Discovery Pass** covers unlimited **daily admission** for 12 months to ",

@@ -25,25 +25,19 @@ assert.equal(discovery.status, 200, "GET /v1/engines must return HTTP 200");
 const { data: engines } = await discovery.json();
 assert.ok(Array.isArray(engines), "GET /v1/engines must return an engine list");
 assert.deepEqual(
-  engines.filter(({ enabled }) => enabled === true),
+  engines,
   [
     {
-      id: "chatgpt",
       displayName: "ChatGPT",
       provider: "openai",
       model: "gpt-6-luna",
-      allowedModels: ["gpt-6-luna"],
       webSearch: true,
-      enabled: true,
     },
     {
-      id: "gemini",
       displayName: "Gemini",
       provider: "google",
       model: "gemini-3.5-flash-lite",
-      allowedModels: ["gemini-3.5-flash-lite"],
       webSearch: false,
-      enabled: true,
     },
   ],
   "GET /v1/engines must list ChatGPT with search capability and text-only Gemini",
@@ -54,7 +48,9 @@ const response = await fetch(base + "/v1/engine-answers", {
   method: "POST",
   headers: { "content-type": "application/json" },
   body: JSON.stringify({
-    engine: "chatgpt",
+    provider: "openai",
+    model: "gpt-6-luna",
+    webSearch: true,
     model: "gpt-6-luna",
     locale: "en-CA",
     country: "CA",
@@ -65,7 +61,7 @@ const response = await fetch(base + "/v1/engine-answers", {
 });
 assert.equal(response.status, 200, "POST /v1/engine-answers must return HTTP 200");
 const { answer, usage } = await response.json();
-assert.equal(answer?.engine, "chatgpt", "Expected the ChatGPT answer");
+assert.equal(answer?.provider, "openai", "Expected the ChatGPT answer");
 assert.equal(answer.model, "gpt-6-luna", "Expected the recorded GPT-6 Luna model");
 assert.equal(answer.text, recordedText.text, "Expected the recorded answer Markdown");
 assert.deepEqual(

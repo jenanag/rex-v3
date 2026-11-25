@@ -79,26 +79,38 @@ function requiredUrl(
   pointer: string,
   lookup: ReturnType<typeof resolver>,
 ): boolean {
-  for (const part of pointer.slice(1).split("/")) {
-    // These pointers select required object properties. No array wildcards or
-    // optional branches can supply a cache key input.
-    const seen = new Set<string>();
-    while (schema?.$ref) {
-      const identity = file + ":" + schema.$ref;
-      if (seen.has(identity)) return false;
-      seen.add(identity);
-      ({ file, value: schema } = lookup(file, schema.$ref));
-    }
-    const key = part.replaceAll("~1", "/").replaceAll("~0", "~");
-    if (!schema?.required?.includes(key) || !Object.hasOwn(schema.properties ?? {}, key))
-      return false;
-    schema = schema.properties[key];
+  const path = pointer
+    .slice(1)
+    .split("/")
+    .map((part) => part.replaceAll("~1", "/").replaceAll("~0", "~"));
+  function visit(
+    current: { file: string; value: Document } | undefined,
+    index: number,
+    seen: ReadonlySet<string>,
+  ): boolean {
+    if (!current?.value) return false;
+    const { file, value } = current;
+    const ref = value.$ref;
+    const referenced = ref ? lookup(file, ref) : undefined;
+    if (index === path.length)
+      return referenced?.file === commonFile && ref.endsWith("#/components/schemas/Url");
+
+    const key = path[index];
+    // A required branch in allOf constrains every instance. Optional branches
+    // in anyOf or oneOf cannot promise that the field is always present.
+    if (value.required?.includes(key) && Object.hasOwn(value.properties ?? {}, key))
+      if (visit({ file, value: value.properties[key] }, index + 1, new Set())) return true;
+
+    const identity = file + ":" + ref;
+    return (
+      (referenced !== undefined &&
+        !seen.has(identity) &&
+        visit(referenced, index, new Set([...seen, identity]))) ||
+      (value.allOf?.some((option: Document) => visit({ file, value: option }, index, seen)) ??
+        false)
+    );
   }
-  return Boolean(
-    schema?.$ref &&
-    lookup(file, schema.$ref).file === commonFile &&
-    schema.$ref.endsWith("#/components/schemas/Url"),
-  );
+  return schema !== undefined && visit({ file, value: schema }, 0, new Set());
 }
 
 function checkRawUrlKeyInputs(
@@ -112,9 +124,10 @@ function checkRawUrlKeyInputs(
 ) {
   const mapping = entry.rawUrlKeyInputs;
   const crawler = service === "content-auditor" && id === "checkCrawlerAccess";
+  const pageEntry = service === "llms-txt-generator" && id === "describePage";
   const problem = (message: string) =>
     report("cache-policy", policyFile, service + "." + id + ": rawUrlKeyInputs " + message);
-  if (!Object.hasOwn(entry, "rawUrlKeyInputs") && !crawler) return;
+  if (!Object.hasOwn(entry, "rawUrlKeyInputs") && !crawler && !pageEntry) return;
   if (
     !mapping ||
     typeof mapping !== "object" ||
@@ -131,6 +144,8 @@ function checkRawUrlKeyInputs(
       Object.keys(mapping).length !== 2)
   )
     problem("must map siteUrl to /siteUrl and robotsTxtUrl to /robotsTxt/url");
+  if (pageEntry && (mapping.url !== "/url" || Object.keys(mapping).length !== 1))
+    problem("must map url to /url");
   const targets = new Set<string>();
   for (const [alias, pointer] of Object.entries(mapping)) {
     if (!/^[a-zA-Z][a-zA-Z0-9]*$/.test(alias) || entry.extraKeyInputs?.includes(alias))

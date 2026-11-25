@@ -1,7 +1,7 @@
 asyncapi: 3.1.0
 info:
   title: REx bus messages
-  version: 3.0.0
+  version: 4.0.0
   description: |
     Single source of truth for every message on the RabbitMQ bus: routing key,
     version, producer and payload. Jobs flow orchestrator -> workers
@@ -300,7 +300,9 @@ components:
           unevaluatedProperties: false
     PageAuditJob:
       type: object
-      description: One page of the llms.txt pipeline (ADR 0023). Not a content-auditor audit.
+      description: |
+        One page of the llms.txt pipeline (ADR 0023). The orchestrator resolves
+        and sends the provider/model pair in entry for LLM mode; extractive jobs omit it.
       unevaluatedProperties: false
       required: [extraction, entry]
       properties:
@@ -363,9 +365,13 @@ components:
               version: {const: 1}
               data:
                 type: object
-                required: [query, analysis]
+                required: [engine, query, analysis]
                 properties:
+                  engine:
+                    $ref: '../openapi/common.yaml#/components/schemas/EngineId'
+                    description: Platform tracking engine, separate from the tool's provider/model selection.
                   query:
+                    description: The resolved provider, model and explicit webSearch setting for the tool call.
                     $ref: '../openapi/services/engine-query.yaml#/components/schemas/EngineQuery'
                   analysis:
                     description: answer-analysis input minus the text; its brands also feed citation-extractor.
@@ -384,8 +390,11 @@ components:
               version: {const: 1}
               data:
                 type: object
-                required: [capture, analysis, citations, cache]
+                required: [engine, capture, analysis, citations, cache]
                 properties:
+                  engine:
+                    $ref: '../openapi/common.yaml#/components/schemas/EngineId'
+                    description: Platform tracking engine, separate from the tool's provider/model selection.
                   cache:
                     $ref: '../openapi/common.yaml#/components/schemas/ToolCallCacheList'
                   capture:
