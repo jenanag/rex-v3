@@ -32,6 +32,7 @@ interface RequestBody {
 interface Operation {
   operationId: string;
   requestBody?: RequestBody;
+  "x-rex-limits"?: { maxDuration?: string };
 }
 
 export interface OperationContract {
@@ -81,7 +82,7 @@ function branchMatcher(contract: OperationContract) {
   return matches;
 }
 
-export function findOperationSchema(contract: OperationContract, operationId: string) {
+export function findOperation(contract: OperationContract, operationId: string) {
   if (!contract.openapi.startsWith("3.1.")) throw new Error("Expected an OpenAPI 3.1 bundle");
   const operations: Operation[] = [];
   for (const path of Object.values(contract.paths)) {
@@ -92,7 +93,11 @@ export function findOperationSchema(contract: OperationContract, operationId: st
     }
   }
   if (operations.length !== 1) throw new Error("Expected one matching OpenAPI operation");
-  let body = operations[0].requestBody;
+  return operations[0];
+}
+
+export function findOperationSchema(contract: OperationContract, operationId: string) {
+  let body = findOperation(contract, operationId).requestBody;
   if (!body) return undefined;
   if (body.$ref) body = resolveReference(contract, body.$ref) as RequestBody;
   const schema = body.content?.["application/json"]?.schema;
