@@ -420,6 +420,10 @@ key derivation. The coordinated [ADR 0041](adr/0041-standardize-tool-provider-mo
 cutover applies them directly to the new request shapes, with offline acceptance
 cases. Platform vendoring activation, registry setup, and publishing remain later work.
 
+[Proposed ADR 0042](adr/0042-cache-window-expiry-and-single-flight-deadlines.md)
+records the window expiry and single-flight deadline rules for the next cache
+runtime step, pending Jay's acceptance.
+
 - Private npm registry (GitHub Packages, scope `@rex`) and Changesets releases.
 - `@rex/cache` (`packages/cache`, published, [ADR 0019](adr/0019-internal-packages.md)) implementing [policy.yaml](../packages/contracts/cache/policy.yaml)
   (key derivation, scopes, override resolution, modes, store rules, single-flight)
@@ -551,7 +555,7 @@ in Phases 1 and 2 depends on them.
 | Sidecar mTLS (service mesh) in front of tools | NetworkPolicy only; tools have no auth | Phase 8 |
 | Route loader for tools (`fastify-openapi-glue` or a template loader) | decided in [ADR 0020](adr/0020-fastify-openapi-validation.md) | Phase 1 |
 | `rascal` under `@rex/bus` | plain `amqplib` | Phase 4 |
-| Caller timeout for tool operations without `maxDuration` in `x-rex-limits` (in-memory operations, public ones included; `analyzeAnswer` with several LLM analyzers) | none stated; public operations have a p99 target only, LLM analyzers `llmCallTimeout` | Phase 3 |
+| Caller timeout for tool operations without `maxDuration` in `x-rex-limits` (in-memory operations, public ones included; `analyzeAnswer` with several LLM analyzers) | Deadline resolution in [Proposed ADR 0042](adr/0042-cache-window-expiry-and-single-flight-deadlines.md) awaits acceptance. Concrete gateway and worker timeout values remain open. | Phase 3 caller integration |
 | content-extractor and sitemap-extractor tuning: fetch timeouts, size caps, redirects, sitemap file count, durations | DEFAULT values in [content-extractor.yaml](../packages/contracts/openapi/services/content-extractor.yaml) and [sitemap-extractor.yaml](../packages/contracts/openapi/services/sitemap-extractor.yaml) (Jay tunes them; not a contract change) | Phase 5 |
 | Page freshness (`extractContent` TTL) | `PT1H` DEFAULT in [policy.yaml](../packages/contracts/cache/policy.yaml), configurable per environment and customer | Phase 5 (tune with real hit ratios) |
 | Membership tiers (scope drift, deferred by Jay): per-tier llms.txt page limits (500-page crawls on the enterprise tier) and queue fairness between large crawls (`rex.workers.page-audit`) and audits (`rex.workers.content-extraction`), which share the content-extractor | no tiers: no page limit (`maxPages` optional, no default), one queue with prefetch only; tier limits plug into the orchestrator's [job settings resolution](services/orchestrator.md#dependencies) | with Phase 6 billing (plans) |
