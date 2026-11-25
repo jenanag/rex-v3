@@ -14,9 +14,11 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "node --test test/*.test.mjs"
+    "test": "node --test test/*.test.mjs",
+    "test:redis": "node --test test/redis.integration.mjs"
   },
   "dependencies": {
+    "@redis/client": "5.11.0",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1"
   },

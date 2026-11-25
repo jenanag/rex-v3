@@ -34,6 +34,22 @@ jobs:
           npm ci --prefix packages/cache --no-audit --no-fund
           npm run build --prefix packages/cache
           npm test --prefix packages/cache
+      - name: Test cache against disposable Redis 7.4.8
+        shell: bash
+        run: |
+          fixture=$(mktemp -d)
+          container=$(docker run --detach --rm --network none --user "$(id -u):$(id -g)" \
+            --volume "$fixture:/fixture" \
+            redis:7.4.8-alpine@sha256:7aec734b2bb298a1d769fd8729f13b8514a41bf90fcdd1f38ec52267fbaa8ee6 \
+            redis-server --port 0 --unixsocket /fixture/redis.sock --unixsocketperm 600 \
+            --save "" --appendonly no --dir /fixture)
+          trap 'docker stop "$container" >/dev/null' EXIT
+          for attempt in {1..50}; do
+            if [[ -S "$fixture/redis.sock" ]]; then break; fi
+            sleep 0.1
+          done
+          test -S "$fixture/redis.sock"
+          REX_CACHE_TEST_REDIS_SOCKET="$fixture/redis.sock" npm run test:redis --prefix packages/cache
       - name: Install ADR 0020 validation spike
         run: npm ci --prefix spikes/openapi-validation/ts --no-audit --no-fund
       - name: Measure ADR 0020 request validation
