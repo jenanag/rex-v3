@@ -13,10 +13,12 @@
     "check:contracts": "scripts/check-contracts",
     "test:contracts": "tsx --test scripts/test/*.test.ts",
     "vendor:contracts": "scripts/vendor-contracts",
-    "gen:docs": "scripts/gen-docs"
+    "gen:docs": "scripts/gen-docs",
+    "test:cache-release": "node scripts/check-cache-release.mjs"
   },
   "devDependencies": {
     "@asyncapi/cli": "6.3.1",
+    "@changesets/cli": "3.0.3",
     "@redocly/cli": "2.82.0",
     "dependency-cruiser": "18.8.0",
     "jscpd": "5.4.3",

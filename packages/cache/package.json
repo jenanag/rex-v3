@@ -2,7 +2,16 @@
   "name": "@rex/cache",
   "version": "0.0.0",
   "private": true,
+  "description": "Cache policy, call lifecycle, and Redis backend for REx callers",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jenanag/rex-v3.git",
+    "directory": "packages/cache"
+  },
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
