@@ -34,7 +34,13 @@ try {
   }
 
   const plan = join(scratch, "plan.json");
-  run(changeset, ["status", "--since=HEAD", "--output", plan], checkout);
+  const firstChangeset = run(
+    "git",
+    ["log", "-1", "--diff-filter=A", "--format=%H", "--", ".changeset/cache-first-release.md"],
+    checkout,
+  );
+  assert.ok(firstChangeset, "The initial changeset must be committed");
+  run(changeset, ["status", `--since=${firstChangeset}^`, "--output", plan], checkout);
   assert.deepEqual(
     json(plan).releases.map(({ name, type, oldVersion, newVersion }) => ({
       name,
