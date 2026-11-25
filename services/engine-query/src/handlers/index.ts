@@ -5,7 +5,7 @@ import { validators, type ToolSpec } from "../contract.js";
 import { renderAnswer } from "../domain/citations.js";
 import { ToolProblem } from "../errors.js";
 import { createLlm } from "../llm/adapter.js";
-import { deployment } from "../llm/catalog.js";
+import { modelCatalog } from "../llm/catalog.js";
 
 type Query = components["schemas"]["EngineQuery"] & { locale: string; country: string };
 
@@ -15,7 +15,7 @@ export function createHandlers(spec: ToolSpec, call = createLlm()): Handlers {
   const validUrl = validators(spec, false)(urlSchema);
   return {
     listEngines: async () => ({
-      data: deployment.map(({ displayName, webSearch, provider, model }) => ({
+      data: modelCatalog.map(({ displayName, webSearch, provider, model }) => ({
         displayName,
         webSearch,
         provider,
@@ -24,7 +24,7 @@ export function createHandlers(spec: ToolSpec, call = createLlm()): Handlers {
     }),
     queryEngine: async (request) => {
       const { provider, model, prompt, locale, country, webSearch } = request.body as Query;
-      const selected = deployment.find(
+      const selected = modelCatalog.find(
         (allowed) => allowed.provider === provider && allowed.model === model,
       );
       if (!selected)

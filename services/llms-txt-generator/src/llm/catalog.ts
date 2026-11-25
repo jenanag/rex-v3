@@ -1,5 +1,5 @@
 // Standard text rates, verified against the provider's published table.
-export const pricedModels = [
+export const modelCatalog = [
   {
     provider: "openai" as const,
     model: "gpt-6-luna",

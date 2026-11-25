@@ -1,8 +1,8 @@
 import { expect, test } from "vitest";
 import { createLlm, fixtureKey } from "../src/llm/adapter.js";
-import { deployment } from "../src/llm/catalog.js";
+import { modelCatalog } from "../src/llm/catalog.js";
 
-const entry = deployment[0];
+const entry = modelCatalog[0];
 const { model } = entry;
 const prompt = "What is the Discovery Pass?";
 
