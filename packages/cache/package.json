@@ -10,7 +10,8 @@
     "directory": "packages/cache"
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "exports": {
     ".": {
