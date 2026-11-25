@@ -73,10 +73,14 @@ REX_CACHE_TEST_REDIS_SOCKET=/path/to/fixture/redis.sock npm run test:redis --pre
 The initial [Changeset](../../.changeset/cache-first-release.md) proposes
 `@rex/cache@0.1.0`. From the repo root, after installing root and cache
 dependencies, run `npm run test:cache-release` on Node 26.13.1. The check uses a
-disposable checkout of the current commit, verifies the release plan, generates
-the version and changelog, and builds and packs the candidate. It installs the
-tarball in a separate consumer to verify its JavaScript exports and declarations.
-The source manifest stays private while release preparation is in review.
+disposable checkout of the current commit. While the package is at `0.0.0`, it
+requires the initial Changeset, verifies that only `@rex/cache@0.1.0` is planned,
+and generates the version and changelog in that checkout. After versioning, it
+uses the committed package version and matching changelog entry.
+
+Both paths build and inspect the tarball, then install it in a separate consumer
+to verify its JavaScript exports and TypeScript declarations. The source
+manifest stays private while release preparation is in review.
 
 ### GitHub Packages decision
 

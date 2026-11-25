@@ -1,6 +1,14 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -11,7 +19,6 @@ const checkout = join(scratch, "checkout");
 const cache = join(checkout, "packages/cache");
 const consumer = join(scratch, "consumer");
 const changeset = join(root, "node_modules/.bin/changeset");
-const version = "0.1.0";
 
 function run(command, args, cwd = root) {
   return execFileSync(command, args, {
@@ -33,29 +40,47 @@ try {
     symlinkSync(join(root, path), join(checkout, path), "dir");
   }
 
-  const plan = join(scratch, "plan.json");
-  const firstChangeset = run(
-    "git",
-    ["log", "-1", "--diff-filter=A", "--format=%H", "--", ".changeset/cache-first-release.md"],
-    checkout,
+  const manifest = join(cache, "package.json");
+  const committed = json(manifest);
+  assert.equal(committed.private, true);
+  const pendingFirstRelease = committed.version === "0.0.0";
+  const version = pendingFirstRelease ? "0.1.0" : committed.version;
+  if (pendingFirstRelease) {
+    const initialChangeset = ".changeset/cache-first-release.md";
+    assert.ok(
+      existsSync(join(checkout, initialChangeset)),
+      "The unversioned cache requires the initial changeset",
+    );
+    const firstChangeset = run(
+      "git",
+      ["log", "-1", "--diff-filter=A", "--format=%H", "--", initialChangeset],
+      checkout,
+    );
+    assert.ok(firstChangeset, "The initial changeset must be committed");
+    const plan = join(scratch, "plan.json");
+    run(changeset, ["status", `--since=${firstChangeset}^`, "--output", plan], checkout);
+    assert.deepEqual(
+      json(plan).releases.map(({ name, type, oldVersion, newVersion }) => ({
+        name,
+        type,
+        oldVersion,
+        newVersion,
+      })),
+      [{ name: "@rex/cache", type: "minor", oldVersion: committed.version, newVersion: version }],
+    );
+    run(changeset, ["version"], checkout);
+    console.log(`Changesets planned only @rex/cache@${version} and generated its changelog`);
+  } else {
+    console.log(`Checking committed @rex/cache@${version} and its changelog`);
+  }
+  assert.equal(json(manifest).version, version);
+  const changelog = readFileSync(join(cache, "CHANGELOG.md"), "utf8");
+  assert.ok(
+    changelog.split(/\r?\n/).includes(`## ${version}`),
+    `Missing changelog entry for ${version}`,
   );
-  assert.ok(firstChangeset, "The initial changeset must be committed");
-  run(changeset, ["status", `--since=${firstChangeset}^`, "--output", plan], checkout);
-  assert.deepEqual(
-    json(plan).releases.map(({ name, type, oldVersion, newVersion }) => ({
-      name,
-      type,
-      oldVersion,
-      newVersion,
-    })),
-    [{ name: "@rex/cache", type: "minor", oldVersion: "0.0.0", newVersion: version }],
-  );
-  run(changeset, ["version"], checkout);
-  assert.equal(json(join(cache, "package.json")).version, version);
-  assert.match(readFileSync(join(cache, "CHANGELOG.md"), "utf8"), /^## 0\.1\.0$/m);
-  assert.match(readFileSync(join(cache, "CHANGELOG.md"), "utf8"), /Redis 7 backend/);
+  if (pendingFirstRelease) assert.match(changelog, /Redis 7 backend/);
   assert.equal(run("git", ["tag", "--list"], checkout), "");
-  console.log(`Changesets planned only @rex/cache@${version} and generated its changelog`);
 
   run("npm", ["run", "build"], cache);
   const [pack] = JSON.parse(
@@ -104,6 +129,10 @@ try {
   );
   const installed = json(join(consumer, "node_modules/@rex/cache/package.json"));
   assert.equal(installed.version, version);
+  assert.equal(
+    readFileSync(join(consumer, "node_modules/@rex/cache/CHANGELOG.md"), "utf8"),
+    changelog,
+  );
   assert.equal(installed.private, true);
   assert.equal(installed.engines.node, "26.13.1");
   assert.deepEqual(installed.repository, {
