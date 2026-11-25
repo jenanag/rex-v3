@@ -8,6 +8,7 @@
 - **Amended:** 2026-11-22: tool portability ([ADR 0018](0018-tool-portability.md)) and internal packages ([ADR 0019](0019-internal-packages.md))
 - **Amended:** 2026-11-22, at Jay's request: content extraction ([ADR 0021](0021-content-extraction.md))
 - **Amended:** 2026-11-22, at Jay's request: pages are archived before they are cached ([ADR 0022](0022-page-archive.md))
+- **Amended by:** [0042](0042-cache-window-expiry-and-single-flight-deadlines.md), 2026-11-25 (accepted by Jay), for the single-flight guarantee under **Redelivery**.
 
 ## Context
 
