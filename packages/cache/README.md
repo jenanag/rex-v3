@@ -67,3 +67,57 @@ redis-server --port 0 --unixsocket /path/to/fixture/redis.sock --unixsocketperm 
   --save "" --appendonly no
 REX_CACHE_TEST_REDIS_SOCKET=/path/to/fixture/redis.sock npm run test:redis --prefix packages/cache
 ```
+
+## First release
+
+The initial [Changeset](../../.changeset/cache-first-release.md) proposes
+`@rex/cache@0.1.0`. From the repo root, after installing root and cache
+dependencies, run `npm run test:cache-release` on Node 26.13.1. The check uses a
+disposable checkout of the current commit. While the package is at `0.0.0`, it
+requires the initial Changeset, verifies that only `@rex/cache@0.1.0` is planned,
+and generates the version and changelog in that checkout. After versioning, it
+uses the committed package version and matching changelog entry.
+
+Both paths build and inspect the tarball, then install it in a separate consumer
+to verify its JavaScript exports and TypeScript declarations. The source
+manifest stays private while release preparation is in review.
+
+### GitHub Packages decision
+
+Read-only GitHub checks on 2026-11-25 confirmed that `jenanag/rex-v3` is public and
+`rex` is a separate personal account. The available credential identifies as
+`jenanag` and has source repository access. Package lookup returned 404 and the
+package list required `read:packages`. These checks leave control of `@rex`,
+package availability, and intended consumer access unverified.
+
+GitHub's npm registry uses the owner account for the package scope. GitHub
+Packages supports private package permissions independent of repository
+visibility. Repository permission inheritance or an Actions grant on a public
+repository can expose a private package to forks. Keep the future package
+private with explicit grants to trusted consumers and verify the build
+repository can use those grants before relying on its workflow token.
+[GitHub npm registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-npm-registry)
+and [package access controls](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility).
+
+Before publication, Jay must confirm an authorized publisher under `rex` and
+approve where the gateway and worker builds will get authenticated read access.
+If control of `@rex` cannot be established, publication stays blocked pending a
+separate decision amending ADR 0019.
+
+Once approved, a release-only configuration can set
+`publishConfig.registry` to `https://npm.pkg.github.com`. Use a GitHub personal
+access token (classic) with `write:packages` from an authorized publisher, or a
+`GITHUB_TOKEN` only in a trusted release repository with confirmed write access.
+For approved consumer builds, configure the scope and inject a read-only
+credential at install time:
+
+```ini
+@rex:registry=https://npm.pkg.github.com
+//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+```
+
+Use an authorized classic token with `read:packages` or a workflow token with
+an explicit read grant. Pin `"@rex/cache": "0.1.0"` and commit the consumer
+lockfile after the release is available. Keep credentials out of the repo and
+public PR workflows. The current check uses no GitHub Packages credentials or
+registry write permissions.

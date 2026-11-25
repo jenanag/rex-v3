@@ -411,9 +411,10 @@ a real prompt.
 **Current phase:** 3
 
 **Status:** Started with Jay's approval on 2026-11-25. The
-[`@rex/cache` deterministic core](../packages/cache/README.md) derives keys and
-resolves overrides using the [cache policy](../packages/contracts/cache/policy.yaml).
-Redis and caller integration remain pending.
+[`@rex/cache`](../packages/cache/README.md) deterministic core, call lifecycle,
+and Redis backend are merged and tested against the [cache policy](../packages/contracts/cache/policy.yaml).
+Private publication and gateway integration remain pending. Phase 2 acceptance
+remains pending.
 Jay accepted [ADR 0040](adr/0040-llm-model-and-analyzer-cache-eligibility.md)
 on 2026-11-25. It defines model selection and analyzer eligibility rules for
 key derivation. The coordinated [ADR 0041](adr/0041-standardize-tool-provider-model-selection.md)
@@ -421,14 +422,11 @@ cutover applies them directly to the new request shapes, with offline acceptance
 cases. Platform vendoring activation, registry setup, and publishing remain later work.
 
 [Accepted ADR 0042](adr/0042-cache-window-expiry-and-single-flight-deadlines.md)
-defines window expiry and single-flight deadlines for the next cache runtime step.
-Implementation remains pending.
+defines the implemented window expiry and single-flight deadlines.
+The data-aggregator archive adapter remains deferred.
 
-- Private npm registry (GitHub Packages, scope `@rex`) and Changesets releases.
-- `@rex/cache` (`packages/cache`, published, [ADR 0019](adr/0019-internal-packages.md)) implementing [policy.yaml](../packages/contracts/cache/policy.yaml)
-  (key derivation, scopes, override resolution, modes, store rules, single-flight)
-  against self-hosted Redis (`redis-cache`); golden tests for key derivation and
-  resolution.
+- Private npm registry access and publication under [ADR 0019](adr/0019-internal-packages.md),
+  pending the [cache namespace and access decision](../packages/cache/README.md#github-packages-decision).
 - `orchestrator` modules `identity` and `catalog`, HTTP idempotency, its data layer and
   migrations, signing keys and JWKS, service-token issuing (gateway only).
 - Platform services vendor their contracts ([vendoring.yaml](../packages/contracts/vendoring.yaml)
