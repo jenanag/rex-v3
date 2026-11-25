@@ -16,10 +16,7 @@ under [ADR 0040](../../docs/adr/0040-llm-model-and-analyzer-cache-eligibility.md
 and [ADR 0041](../../docs/adr/0041-standardize-tool-provider-model-selection.md).
 Pass the validated body with original URL strings so raw URL inputs can be
 captured. The package applies schema defaults to the key input without changing
-the original request. It uses the policy's eligible arrays and compares their
-[RFC 8785 canonical JSON](https://www.rfc-editor.org/rfc/rfc8785) element strings
-in UTF-16 order after normalization. URL normalization preserves path and query
-spelling, including an empty path and a bare query delimiter.
+the original request. See the policy for canonical input and key format.
 
 A cacheable result contains the key, canonical UTF-8 bytes, effective scope
 and TTL in seconds or window, and override diagnostics. Invalid override fields
