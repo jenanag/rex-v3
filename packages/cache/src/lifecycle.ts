@@ -71,6 +71,8 @@ export interface ArchiveCapture<T> extends Attempt {
   key: string;
   cachedAt: number;
   response: ToolResponse<T>;
+  /** When present, the adapter must verify live ownership atomically with acceptance. */
+  lease?: Readonly<CacheLease>;
 }
 
 export type CacheMode = "use" | "refresh" | "bypass";
@@ -340,8 +342,9 @@ export async function callWithCache<T>(options: CacheCallOptions<T>): Promise<Ca
             key: pinned.key,
             cachedAt: capturedAt,
             response,
+            ...(owner && { lease: { ...owner.lease } }),
           },
-          deadline,
+          Math.min(deadline, owner?.lease.expiresAt ?? Infinity),
         ));
       if (!archived && byReference) throw new CacheArchiveError();
       if (!archived) return result;

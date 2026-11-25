@@ -32,6 +32,12 @@ callback, and optional archive callback. The clock and backend agree on epoch
 milliseconds. The tool callback receives an absolute deadline and abort signal.
 Callers supply the archive callback for operations that require one. It returns
 true only after the archive accepts the capture under the supplied key.
+For a lock-owned call, the callback receives the lease token and expiry in
+`lease`, and its deadline and abort signal are bounded by that lease. The
+archive adapter must verify that the token still owns an unexpired lease
+atomically with accepting a write to the shared archive key. Cancellation
+alone cannot prevent a late callback from writing. The data-aggregator adapter
+and its wire contract remain deferred.
 The result's optional key identifies a cache entry or an accepted archive
 capture. By-reference archive failures throw a retryable `CacheArchiveError`.
 

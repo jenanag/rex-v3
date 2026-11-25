@@ -246,11 +246,12 @@ test("by-reference bypass is refresh and archives before cache write", async () 
   const calls = [];
   const result = await invoke(async () => answer("page"), {
     mode: "bypass",
-    archive: async ({ key, archiveTo, response, cachedAt, deadline }) => {
+    archive: async ({ key, archiveTo, response, cachedAt, deadline, lease }) => {
       assert.equal(archiveTo, "data-aggregator");
       assert.deepEqual(response, answer("page"));
       assert.equal(cachedAt, epoch);
       assert.equal(deadline, epoch + 30_000);
+      assert.equal(lease, undefined);
       assert.deepEqual(backend.events, []);
       calls.push(key);
       return true;
@@ -289,6 +290,70 @@ test("oversized or backend-fallback page remains readable by its accepted archiv
   assert.equal(fallback.outcome, "uncacheable");
   assert.equal(fallback.key, key());
   assert.deepEqual(archive.get(fallback.key), fallback.response);
+});
+
+test("a by-reference owner loses its archive deadline at lease expiry and cannot replace the successor", async () => {
+  const { invoke, clock, backend, key } = setup({
+    tool: "content-extractor",
+    operationId: "extractContent",
+    request: { url: "https://example.org/" },
+  });
+  const archive = new Map();
+  const holdFirstWrite = Promise.withResolvers();
+  const lateDecision = Promise.withResolvers();
+  let firstCapture;
+  let abortedAt;
+  const original = answer("original capture");
+  const replacement = answer("successor capture");
+  const accept = ({ key, lease, response }) => {
+    if (!lease || clock.now() >= lease.expiresAt || backend.activeLock(key)?.token !== lease.token)
+      return false;
+    archive.set(key, response);
+    return true;
+  };
+  const capture = async (request) => {
+    if (request.response === original) {
+      firstCapture = request;
+      request.signal.addEventListener(
+        "abort",
+        () => {
+          abortedAt = clock.now();
+        },
+        { once: true },
+      );
+      // Simulate an adapter that finishes the write attempt after cancellation.
+      await holdFirstWrite.promise;
+      const accepted = accept(request);
+      lateDecision.resolve(accepted);
+      return accepted;
+    }
+    return accept(request);
+  };
+  const first = assert.rejects(
+    invoke(async () => original, { mode: "use", deadline: epoch + 100_000, archive: capture }),
+    (error) => error instanceof CacheArchiveError && error.retryable && error.key === undefined,
+  );
+  await clock.advance(29_999);
+  const sharedKey = key();
+  assert.deepEqual(firstCapture.lease, backend.activeLock(sharedKey));
+  assert.equal(firstCapture.lease.expiresAt, epoch + 30_000);
+  assert.equal(firstCapture.deadline, epoch + 30_000);
+  assert.equal(firstCapture.signal.aborted, false);
+
+  const successor = invoke(async () => replacement, { mode: "use", archive: capture });
+  await clock.advance(1);
+  await first;
+  assert.equal(abortedAt, epoch + 30_000);
+  const result = await successor;
+  assert.equal(result.outcome, "miss");
+  assert.equal(result.key, sharedKey);
+
+  holdFirstWrite.resolve();
+  assert.equal(await lateDecision.promise, false);
+  assert.deepEqual(archive.get(result.key), replacement);
+  const hit = await invoke(noCall);
+  assert.equal(hit.key, result.key);
+  assert.deepEqual(hit.response, replacement);
 });
 
 test("rejected archive fails a by-reference capture retryably and suppresses other stores", async () => {
