@@ -1,4 +1,4 @@
-export const deployment = [
+export const modelCatalog = [
   {
     displayName: "ChatGPT",
     webSearch: true,
@@ -19,6 +19,6 @@ export const deployment = [
   },
 ] as const;
 
-export type EngineModel = (typeof deployment)[number];
+export type EngineModel = (typeof modelCatalog)[number];
 export type OpenAiModel = Extract<EngineModel, { provider: "openai" }>;
 export type GeminiModel = Extract<EngineModel, { provider: "google" }>;

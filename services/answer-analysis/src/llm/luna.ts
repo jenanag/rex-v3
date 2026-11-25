@@ -4,29 +4,20 @@ import { firstAt } from "../domain/context.js";
 import type { findMentionOccurrences, Span } from "../domain/mentions.js";
 import { ToolProblem } from "../errors.js";
 import type { LlmRequest } from "./adapter.js";
+import { modelCatalog } from "./catalog.js";
 
 type Schemas = components["schemas"];
 type Mentions = ReturnType<typeof findMentionOccurrences>;
 export type LunaVerdict = Pick<Schemas["AnalyzerSentiment"], "label" | "score" | "rationale">;
 
-const lunaModel = {
-  provider: "openai",
-  model: "gpt-6-luna",
-  // OpenAI Standard, short context. See the answer-analysis service doc.
-  price: {
-    inputMicrosPerMillion: 100_000,
-    cachedInputMicrosPerMillion: 10_000,
-    cacheWriteMicrosPerMillion: 125_000,
-    outputMicrosPerMillion: 500_000,
-  },
-} as const satisfies Pick<LlmRequest, "provider" | "model" | "price">;
+const [{ provider, model, price, languages, description }] = modelCatalog;
 
 export const luna = {
-  id: `llm:${lunaModel.provider}/${lunaModel.model}`,
-  selector: { provider: lunaModel.provider, model: lunaModel.model },
+  id: `llm:${provider}/${model}`,
+  selector: { provider, model },
   kind: "llm",
-  languages: ["*"],
-  description: "Classifies sentiment for mentioned brands with OpenAI GPT-6 Luna.",
+  languages: [...languages],
+  description,
 } satisfies Schemas["Analyzer"];
 
 const promptVersion = "answer-analysis-luna-v1";
@@ -117,7 +108,7 @@ export function buildLunaBatch(text: string, language: string | null, mentions: 
   const chat: NonNullable<LlmRequest["openAiChat"]> = {
     promptVersion,
     body: {
-      model: lunaModel.model,
+      model,
       reasoning_effort: "none",
       service_tier: "default",
       store: false,
@@ -148,7 +139,9 @@ export function buildLunaBatch(text: string, language: string | null, mentions: 
   }
 
   const request: LlmRequest = {
-    ...lunaModel,
+    provider,
+    model,
+    price,
     operation: "classify_sentiment",
     prompt: instructions,
     maxOutputTokens,

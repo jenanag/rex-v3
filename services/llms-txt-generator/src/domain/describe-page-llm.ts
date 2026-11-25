@@ -1,7 +1,7 @@
 import type { components } from "../../contract/types.js";
 import { ToolProblem } from "../errors.js";
 import type { createLlm } from "../llm/adapter.js";
-import { pricedModels } from "../llm/models.js";
+import { modelCatalog } from "../llm/catalog.js";
 import {
   describePageExtractively,
   limitDescription,
@@ -67,7 +67,7 @@ export async function describePageWithLlm(
   request: Request,
   llm: ReturnType<typeof createLlm>,
 ): Promise<Result> {
-  const model = pricedModels.find(
+  const model = modelCatalog.find(
     ({ provider, model }) => provider === request.provider && model === request.model,
   );
   if (!model)
