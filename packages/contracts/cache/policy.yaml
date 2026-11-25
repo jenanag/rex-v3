@@ -82,6 +82,7 @@ storeRules:
   - The operation's `skipWhen` (JSON Pointer with `*` wildcards, equals value) does not match.
   - The serialized value is at most backend.maxValueBytes.
   - An operation with `archiveTo` was accepted by that archive first (ADR 0022).
+  - A windowed result is written under the key pinned at dispatch and expires at the next UTC bucket boundary. At or after that boundary, return a timely result without storing it under either bucket (ADR 0042).
 
 byReference:
   # Results that a later job reads by key instead of receiving them in a message
@@ -96,9 +97,17 @@ byReference:
   - llms-txt-generator.describePage
 
 singleFlight:
-  # Identical concurrent misses (e.g. a redelivered job racing its original) call
-  # the tool once: SET NX `<key>:lock` PX <operation timeout>; others poll the key
-  # every 500 ms until the lock expires, then call the tool themselves.
+  # ADR 0042. The caller's absolute deadline wins. Otherwise use wrapper entry
+  # plus x-rex-limits.maxDuration. This budget includes waits and takeover.
+  # Hits may be served without either source. Every outbound dispatch, including
+  # refresh, bypass and backend fallback, requires a finite remaining budget.
+  # The lease and outbound attempt use the remaining budget, capped at maxDuration
+  # if declared. Bound each poll delay by the waiter deadline and lease expiry.
+  # Before the next lookup or lock attempt, a waiter rechecks the UTC bucket.
+  # After lease expiry, recheck the cache and acquire a new lock before dispatch.
+  # Coalesce use misses with one current owner per key. An expired owner's
+  # upstream call may still finish.
+  # Check ownership atomically with publication and release.
   enabled: true
   pollMs: 500
 

@@ -1,8 +1,9 @@
 # @rex/cache
 
-The deterministic core of the caller cache for workers and the gateway implements
+The caller cache for workers and the gateway implements
 [the cache policy](../contracts/cache/policy.yaml) under [ADR 0016](../../docs/adr/0016-cache-first.md)
-and [ADR 0019](../../docs/adr/0019-internal-packages.md).
+and [ADR 0019](../../docs/adr/0019-internal-packages.md). Its call lifecycle follows
+[ADR 0042](../../docs/adr/0042-cache-window-expiry-and-single-flight-deadlines.md).
 
 `deriveCacheKey` takes a parsed policy, the caller's bundled OpenAPI 3.1 contract,
 the service name, the exact operation ID, and the request body. Pass the timestamp
@@ -24,7 +25,27 @@ fall through to the next layer for that field. Out-of-range TTLs clamp to the
 policy limits. Windows outside the allowed set produce a diagnostic and fall
 through. An unsafe key input or tenant request without an organization ID returns
 `uncacheable`. Keep canonical bytes within the caller because they can contain
-request content. Redis, caller integration, and publishing remain deferred.
+request content.
+
+`callWithCache` extends these inputs with an injected clock, cache backend, tool
+callback, and optional archive callback. The clock and backend agree on epoch
+milliseconds. The tool callback receives an absolute deadline and abort signal.
+Callers supply the archive callback for operations that require one. It returns
+true only after the archive accepts the capture under the supplied key.
+For a lock-owned call, the callback receives the lease token and expiry in
+`lease`, and its deadline and abort signal are bounded by that lease. The
+archive adapter must verify that the token still owns an unexpired lease
+atomically with accepting a write to the shared archive key. Cancellation
+alone cannot prevent a late callback from writing. The data-aggregator adapter
+and its wire contract remain deferred.
+The result's optional key identifies a cache entry or an accepted archive
+capture. By-reference archive failures throw a retryable `CacheArchiveError`.
+
+The backend owns transport timeouts and compression. The wrapper checks the
+uncompressed serialized response size before publication. A backend must
+atomically honor the lease token and write deadline, and bound its own read
+when no caller deadline is available. Redis, caller integration, and publishing
+remain deferred.
 
 From the repo root on the Node version in `.nvmrc` run:
 

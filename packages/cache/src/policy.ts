@@ -11,6 +11,8 @@ export interface OperationPolicy {
   extraKeyInputs?: readonly string[];
   normalize?: Record<string, "collapse-whitespace">;
   preserveArrayOrder?: readonly string[];
+  skipWhen?: { pointer: string; equals: unknown };
+  archiveTo?: string;
 }
 
 interface ServicePolicy {
@@ -42,7 +44,7 @@ const fields = ["scope", "ttl", "window"] as const;
 type Field = (typeof fields)[number];
 const windows: readonly CacheWindow[] = ["PT1H", "P1D", "P7D"];
 
-function seconds(value: unknown): number {
+export function seconds(value: unknown): number {
   const match =
     typeof value === "string" &&
     /^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+(?:\.\d+)?)S)?)?$/.exec(value);
@@ -138,14 +140,27 @@ export function resolveSettings(
     : { scope: effectiveScope, window: (resolved.window ?? defaults.window) as CacheWindow };
 }
 
-export function utcBucket(timestamp: number, window?: CacheWindow): string {
+function bucketStart(timestamp: number, window: CacheWindow): Date {
   const date = new Date(timestamp);
   if (!Number.isFinite(date.getTime())) throw new RangeError("Invalid cache timestamp");
-  if (!window) return "-";
-  if (window === "PT1H") return date.toISOString().slice(0, 13).toLowerCase();
-  if (window === "P7D") {
-    date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
-    return "p7d-" + date.toISOString().slice(0, 10);
+  if (window === "PT1H") date.setUTCMinutes(0, 0, 0);
+  else date.setUTCHours(0, 0, 0, 0);
+  if (window === "P7D") date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+  return date;
+}
+
+export function utcBucket(timestamp: number, window?: CacheWindow): string {
+  if (!window) {
+    if (!Number.isFinite(new Date(timestamp).getTime()))
+      throw new RangeError("Invalid cache timestamp");
+    return "-";
   }
-  return date.toISOString().slice(0, 10);
+  const start = bucketStart(timestamp, window).toISOString();
+  if (window === "PT1H") return start.slice(0, 13).toLowerCase();
+  return (window === "P7D" ? "p7d-" : "") + start.slice(0, 10);
+}
+
+export function bucketExpiry(timestamp: number, window: CacheWindow): number {
+  const hours = { PT1H: 1, P1D: 24, P7D: 168 }[window];
+  return bucketStart(timestamp, window).getTime() + hours * 60 * 60 * 1000;
 }
