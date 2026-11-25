@@ -29,7 +29,7 @@ key:
     specMajor: major of the called service's spec info.version (from the caller's vendored copy of the tool or external spec).
     keyVersion: '`tools.<tool>.keyVersion` (or `external.<service>.keyVersion`) below. Bump it in the same PR whenever a tool change alters the output for the same input (prompt template, engine-to-model mapping, scoring weights, lexicon).'
     scope: '`shared` when the effective scope is `shared`; `t-{orgId}` (envelope orgId, lowercased) when it is `tenant`. The tenant id is folded into the key only for tenant-scoped calls.'
-    window: '`-`, or for operations with a `window` the UTC start of the current effective window as ISO 8601 (P1D: `2026-11-22`; PT1H: `2026-11-22t06`).'
+    window: '`-`, or a label for the UTC start of the effective window (P1D: UTC midnight, e.g. `2026-11-22`; PT1H: UTC hour, e.g. `2026-11-22t06`; P7D: Monday at 00:00 UTC as `p7d-YYYY-MM-DD`, e.g. `p7d-2026-11-23`).'
     variant: 'CacheDirective.variant from the job message (default 0). Answer capture sets the sample index so samples stay independent.'
     inputHash: lowercase hex SHA-256 of the canonical input (below).
   canonicalInput:
